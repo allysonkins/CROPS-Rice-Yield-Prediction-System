@@ -1,0 +1,58 @@
+# Laravel specific
+/vendor/
+/node_modules/
+.env
+.env.backup
+.env.production
+.env.local
+/storage/*.key
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*.log
+/public/storage
+/public/hot
+/public/build
+/bootstrap/cache/*.php
+.idea
+.vscode
+/.vagrant
+Homestead.json
+Homestead.yaml
+.DS_Store
+Thumbs.db
+*.log
+
+# Python specific
+ml-service/venv/
+ml-service/__pycache__/
+ml-service/*.pyc
+ml-service/.env
+ml-service/.venv
+ml-service/env/
+ml-service/venv.bak/
+
+# XAMPP specific
+*.sql
+*.sqlite
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Composer
+composer.phar
+composer.lock
+
+# NPM
+package-lock.json
+yarn.lock
+npm-debug.log
+yarn-error.log
