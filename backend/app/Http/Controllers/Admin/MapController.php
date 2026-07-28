@@ -10,28 +10,31 @@ class MapController extends Controller
 {
     public function index()
     {
-        // Get all farms with their latest predictions
-        $farms = Farm::with(['user', 'farmRecords.predictions'])->get();
-        
-        // Prepare data for the map
+        // Get ALL farms with their user (farmer) data
+        $farms = Farm::with('user')->get();
+
         $farmData = $farms->map(function($farm) {
-            // Get the latest Ensemble prediction for this farm
-            $latestPrediction = $farm->farmRecords
-                ->flatMap(function($record) {
-                    return $record->predictions->where('model_type', 'Ensemble');
-                })
-                ->last();
-            
+            // Get the latest Ensemble prediction for this farm (if any)
+            $latestPrediction = null;
+            foreach ($farm->farmRecords as $record) {
+                foreach ($record->predictions as $prediction) {
+                    if ($prediction->model_type === 'Ensemble') {
+                        $latestPrediction = $prediction;
+                        break 2;
+                    }
+                }
+            }
+
             return [
                 'id' => $farm->id,
                 'name' => $farm->name,
                 'barangay' => $farm->barangay,
-                'farmer' => $farm->user->name ?? 'Unknown',
+                'farmer' => $farm->user->name ?? 'Unassigned',
                 'lat' => $farm->latitude,
                 'lng' => $farm->longitude,
-                'yield' => $latestPrediction ? round($latestPrediction->predicted_yield_tons_ha, 2) : null,
                 'land_area' => $farm->land_area_ha,
                 'soil_type' => $farm->soil_type,
+                'yield' => $latestPrediction ? round($latestPrediction->predicted_yield_tons_ha, 2) : null,
             ];
         });
 

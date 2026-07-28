@@ -3,182 +3,429 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CROPS - @yield('title', 'Dashboard')</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>CROPS — @yield('title', 'Dashboard')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🌾</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>
+        /* ─── Root Variables ─── */
         :root {
-            --primary-green: #1a4d2e;
-            --secondary-green: #2e7d32;
-            --light-green: #4caf50;
-            --bg-gray: #f4f7f9;
-            --text-dark: #1e293b;
+            --green: #0f4c2b;
+            --green-light: #eaf6ee;
+            --green-dark: #0a381f;
+            --gold: #b8860b;
+            --gold-light: #f5e6c8;
+            --red: #b22222;
+            --red-light: #fde8e8;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.07);
+            --shadow-lg: 0 10px 30px rgba(0,0,0,0.08);
+            --radius: 12px;
+            --radius-lg: 16px;
         }
-        * { font-family: 'Inter', sans-serif; }
-        body { background: var(--bg-gray); }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-800);
+            -webkit-font-smoothing: antialiased;
+        }
 
+        /* ─── Scrollbar ─── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 8px; }
+
+        /* ─── Sidebar ─── */
         .sidebar {
-            height: 100vh;
-            width: 260px;
             position: fixed;
             top: 0;
             left: 0;
-            background: var(--primary-green);
-            color: white;
-            padding: 20px 0;
-            transition: all 0.3s;
-            z-index: 1030;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            width: 260px;
+            height: 100vh;
+            background: var(--green);
+            padding: 24px 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 1050;
+            transition: transform 0.3s ease;
         }
-        .sidebar .brand {
-            font-size: 24px;
-            font-weight: 700;
-            padding: 0 20px 20px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .sidebar .brand i { color: var(--light-green); }
-        .sidebar .nav-link {
-            color: #cbd5e1;
-            padding: 12px 20px;
-            margin: 4px 10px;
-            border-radius: 10px;
-            transition: all 0.2s;
+        .sidebar-brand {
+            padding: 0 24px 20px 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
             display: flex;
             align-items: center;
             gap: 12px;
-            text-decoration: none;
         }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active {
-            background: var(--secondary-green);
+        .sidebar-brand .logo {
+            width: 36px;
+            height: 36px;
+            background: rgba(255,255,255,0.10);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gold);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .sidebar-brand h1 {
+            font-size: 18px;
+            font-weight: 700;
+            color: white;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+        .sidebar-brand h1 span { color: var(--gold); }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 12px 0;
+            overflow-y: auto;
+        }
+        .sidebar-nav .nav-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: rgba(255,255,255,0.25);
+            padding: 12px 12px 6px;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            color: rgba(255,255,255,0.65);
+            font-size: 13.5px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            text-decoration: none;
+            margin-bottom: 1px;
+            border-left: 3px solid transparent;
+        }
+        .sidebar-nav a:hover {
+            background: rgba(255,255,255,0.07);
             color: white;
         }
-        .sidebar .nav-link i { font-size: 20px; width: 24px; }
+        .sidebar-nav a.active {
+            background: rgba(255,255,255,0.09);
+            color: white;
+            border-left-color: var(--gold);
+        }
+        .sidebar-nav a i {
+            font-size: 17px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .sidebar-nav a.active i { color: var(--gold); }
+        .sidebar-divider {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            margin: 12px 16px;
+        }
+        .sidebar-footer {
+            padding: 0 12px 16px;
+        }
+        .sidebar-footer a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            color: rgba(255,255,255,0.45);
+            font-size: 13.5px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .sidebar-footer a:hover {
+            background: rgba(255,255,255,0.06);
+            color: white;
+        }
+        .sidebar-footer a i { font-size: 17px; width: 20px; text-align: center; }
 
+        /* ─── Main Content ─── */
         .main-content {
             margin-left: 260px;
-            padding: 25px 35px;
+            min-height: 100vh;
+            padding: 24px 32px 40px;
         }
-        .top-nav {
-            background: white;
-            padding: 15px 25px;
-            border-radius: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            margin-bottom: 25px;
+
+        /* ─── Top Bar ─── */
+        .topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--gray-200);
         }
-        .top-nav .page-title { font-weight: 600; color: var(--text-dark); margin: 0; }
-        .top-nav .user-badge {
-            background: var(--bg-gray);
-            padding: 8px 16px;
-            border-radius: 30px;
+        .topbar h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin: 0;
+            letter-spacing: -0.3px;
+        }
+        .topbar h2 i { color: var(--green); margin-right: 8px; }
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .topbar .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-700);
+            background: white;
+            padding: 6px 16px 6px 6px;
+            border-radius: 50px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--gray-200);
+        }
+        .topbar .user-badge .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+
+        /* ─── Toast / Flash ─── */
+        .alert {
+            border: none;
+            border-radius: var(--radius);
+            padding: 14px 20px;
             font-size: 14px;
             font-weight: 500;
+            box-shadow: var(--shadow-md);
         }
+        .alert-success { background: var(--green-light); color: var(--green); border-left: 4px solid var(--green); }
+        .alert-warning { background: var(--gold-light); color: #7a6200; border-left: 4px solid var(--gold); }
+        .alert-danger { background: var(--red-light); color: var(--red); border-left: 4px solid var(--red); }
 
-        .stat-card {
-            background: white;
-            padding: 20px 25px;
-            border-radius: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border-left: 5px solid var(--secondary-green);
-            transition: transform 0.2s;
-        }
-        .stat-card:hover { transform: translateY(-4px); }
-        .stat-card .label { color: #64748b; font-size: 14px; font-weight: 500; }
-        .stat-card .value { font-size: 28px; font-weight: 700; color: var(--text-dark); }
-        .stat-card .icon { float: right; font-size: 32px; color: var(--light-green); opacity: 0.6; }
-
+        /* ─── Cards ─── */
         .card-custom {
             background: white;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: none;
-            height: 100%;
+            border-radius: var(--radius-lg);
+            padding: 22px 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-200);
+            transition: box-shadow 0.2s ease;
         }
+        .card-custom:hover { box-shadow: var(--shadow-md); }
         .card-custom .card-title {
+            font-size: 15px;
             font-weight: 600;
-            margin-bottom: 15px;
-            color: var(--text-dark);
-        }
-
-        .list-group-item-custom {
+            color: var(--gray-800);
+            margin-bottom: 16px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #f1f5f9;
+            gap: 10px;
         }
-        .list-group-item-custom:last-child { border-bottom: none; }
-        .badge-low { background: #fee2e2; color: #b91c1c; padding: 4px 12px; border-radius: 30px; font-weight: 500; }
-        .badge-normal { background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 30px; font-weight: 500; }
+        .card-custom .card-title i { color: var(--green); font-size: 18px; }
 
+        /* ─── Stat Cards ─── */
+        .stat-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 20px 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: box-shadow 0.2s ease;
+        }
+        .stat-card:hover { box-shadow: var(--shadow-md); }
+        .stat-card .stat-info .label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-500);
+            margin-bottom: 4px;
+        }
+        .stat-card .stat-info .value {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--gray-900);
+            line-height: 1.2;
+            letter-spacing: -0.5px;
+        }
+        .stat-card .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        .stat-card:nth-child(1) .stat-icon { background: #eaf6ee; color: var(--green); }
+        .stat-card:nth-child(2) .stat-icon { background: #eef2ff; color: #4f46e5; }
+        .stat-card:nth-child(3) .stat-icon { background: #faf3e4; color: var(--gold); }
+        .stat-card:nth-child(4) .stat-icon { background: #fde8e8; color: var(--red); }
+
+        /* ─── Badges ─── */
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 14px 4px 10px;
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--gray-100);
+            color: var(--gray-700);
+            border: 1px solid var(--gray-200);
+        }
+        .badge-status .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .badge-status.high .dot { background: var(--green); }
+        .badge-status.medium .dot { background: var(--gold); }
+        .badge-status.low .dot { background: var(--red); }
+
+        /* ─── Table ─── */
+        .table thead th {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--gray-500);
+            border-bottom: 2px solid var(--gray-200);
+            padding: 12px 12px;
+        }
+        .table td {
+            font-size: 13px;
+            padding: 12px 12px;
+            vertical-align: middle;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .table tbody tr:hover { background: var(--gray-50); }
+
+        /* ─── Responsive ─── */
         @media (max-width: 768px) {
-            .sidebar { width: 70px; }
-            .sidebar .brand span { display: none; }
-            .sidebar .nav-link span { display: none; }
-            .main-content { margin-left: 70px; padding: 15px; }
+            .sidebar { transform: translateX(-100%); width: 280px; }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 16px; }
+            .topbar { flex-wrap: wrap; gap: 10px; }
+            .stat-card .stat-info .value { font-size: 20px; }
         }
     </style>
 </head>
 <body>
 
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-        <div class="brand">
-            <i class="bi bi-tree"></i> <span>CROPS</span>
-        </div>
-        <div class="mt-3">
-    <a href="/admin/dashboard" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-        <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
-    </a>
-    <a href="/admin/predictions" class="nav-link {{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}">
-        <i class="bi bi-graph-up"></i> <span>Predictions</span>
-    </a>
-    <a href="/admin/rice-varieties" class="nav-link {{ request()->routeIs('admin.rice-varieties.*') ? 'active' : '' }}">
-        <i class="bi bi-flower1"></i> <span>Rice Varieties</span>
-    </a>
-    
-    @if(auth()->check() && auth()->user()->role === 'admin')
-    <a href="/admin/users" class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-        <i class="bi bi-people"></i> <span>User Management</span>
-    </a>
-    @endif
+        <!-- ─── SIDEBAR ─── -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <div class="logo"><i class="bi bi-tree-fill"></i></div>
+        <h1>CROPS</h1>
+    </div>
 
-    <a href="/admin/map" class="nav-link {{ request()->routeIs('admin.map') ? 'active' : '' }}">
-        <i class="bi bi-map"></i> <span>Farm Map</span>
-    </a>
-    <a href="/admin/advisories" class="nav-link {{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
-        <i class="bi bi-megaphone"></i> <span>Advisories</span>
-    </a>
-    <a href="/admin/reports" class="nav-link {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
-        <i class="bi bi-file-earmark-pdf"></i> <span>Reports</span>
-    </a>
-</div>
-        <hr style="border-color: rgba(255,255,255,0.1); margin: 20px;">
-        <a href="/logout" class="nav-link" style="color: #f87171;">
-            <i class="bi bi-box-arrow-right"></i> <span>Logout</span>
+    <nav class="sidebar-nav">
+        <!-- Main -->
+        <div class="nav-label">Main</div>
+        <a href="/admin/dashboard" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+        <a href="/admin/predictions" class="{{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}">
+            <i class="bi bi-graph-up"></i> Predictions
+        </a>
+        <a href="/admin/rice-varieties" class="{{ request()->routeIs('admin.rice-varieties.*') ? 'active' : '' }}">
+            <i class="bi bi-flower1"></i> Rice Varieties
+        </a>
+
+        <!-- People -->
+        <div class="nav-label" style="margin-top:12px;">People</div>
+
+        @if(auth()->check() && auth()->user()->role === 'admin')
+            <a href="/admin/users" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+                <i class="bi bi-person-badge"></i> Staff Accounts
+            </a>
+        @endif
+
+        <a href="/admin/farmers" class="{{ request()->routeIs('admin.farmers.*') ? 'active' : '' }}">
+            <i class="bi bi-person-lines-fill"></i> Farmers List
+        </a>
+
+        <!-- Land -->
+<div class="nav-label" style="margin-top:12px;">Land</div>
+<a href="/admin/map" class="{{ request()->routeIs('admin.map') ? 'active' : '' }}">
+    <i class="bi bi-map"></i> Farms & Map
+</a>
+<a href="/admin/farms" class="{{ request()->routeIs('admin.farms.*') ? 'active' : '' }}">
+    <i class="bi bi-list-ul"></i> Manage Farms
+</a>
+<a href="/admin/farm-records" class="{{ request()->routeIs('admin.farm-records.*') ? 'active' : '' }}">
+    <i class="bi bi-clipboard-data-fill"></i> Farm Records
+</a>
+
+        <!-- Alerts & Reports -->
+        <div class="nav-label" style="margin-top:12px;">Alerts & Reports</div>
+        <a href="/admin/advisories" class="{{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
+            <i class="bi bi-megaphone"></i> Advisories
+        </a>
+        <a href="/admin/reports" class="{{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
+            <i class="bi bi-file-earmark-pdf"></i> Reports
+        </a>
+    </nav>
+
+    <hr class="sidebar-divider">
+
+    <div class="sidebar-footer">
+        <a href="/logout">
+            <i class="bi bi-box-arrow-right"></i> Logout
         </a>
     </div>
+</aside>
 
-    <!-- MAIN CONTENT -->
-    <div class="main-content">
-        <!-- Top Nav -->
-        <div class="top-nav">
-            <h5 class="page-title">@yield('title', 'Admin Panel')</h5>
-            <div>
+    <!-- ─── MAIN ─── -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <h2><i class="bi bi-tree"></i> @yield('title', 'Dashboard')</h2>
+            <div class="topbar-right">
                 <span class="user-badge">
-                    <i class="bi bi-person-circle me-1"></i> 
+                    <span class="avatar"><i class="bi bi-person-fill"></i></span>
                     {{ auth()->user()->name ?? 'Guest' }}
                 </span>
+                <!-- Mobile toggle button -->
+                <button class="btn btn-light border d-md-none" type="button" onclick="document.getElementById('sidebar').classList.toggle('open')">
+                    <i class="bi bi-list"></i>
+                </button>
             </div>
-        </div>
+        </header>
+
 
         @yield('content')
-    </div>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

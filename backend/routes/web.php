@@ -8,8 +8,10 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Admin\MapController;
 use App\Http\Controllers\Admin\AdvisoryController;
-use App\Http\Controllers\Admin\ReportController;
+// use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\PredictionController;
+use App\Http\Controllers\Admin\FarmRecordController;
+use App\Http\Controllers\Admin\FarmController;  // <-- ADD THIS LINE
 
 Route::get('/', function () {
     return redirect('/login');
@@ -31,9 +33,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/farmer/dashboard', [FarmerDashboardController::class, 'index'])->name('farmer.dashboard');
 
     // ============================================================
-    // 2. PREDICTIONS
+    // 2. PREDICTIONS (Web View)
     // ============================================================
     Route::get('/admin/predictions', [PredictionController::class, 'index'])->name('admin.predictions.index');
+    Route::get('/admin/predictions/create', [PredictionController::class, 'create'])->name('admin.predictions.create');
+    Route::post('/admin/predictions', [PredictionController::class, 'store'])->name('admin.predictions.store');
+    Route::put('/admin/predictions/{id}', [PredictionController::class, 'update'])->name('admin.predictions.update');
+    Route::get('/admin/predictions/{id}', [PredictionController::class, 'show'])->name('admin.predictions.show');
 
     // ============================================================
     // 3. RICE VARIETIES (Full CRUD)
@@ -65,14 +71,23 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/map', [MapController::class, 'index'])->name('admin.map');
 
     // ============================================================
-    // 6. ADVISORIES (Full CRUD using Route::resource)
+    // 6. FARMS (Full CRUD)
+    // ============================================================
+    Route::resource('/admin/farms', FarmController::class)->names('admin.farms');
+
+    // ============================================================
+    // 7. FARM RECORDS (Full CRUD)
+    // ============================================================
+    Route::resource('/admin/farm-records', FarmRecordController::class)->names('admin.farm-records');
+
+    // ============================================================
+    // 8. ADVISORIES (Full CRUD using Route::resource)
     // ============================================================
     Route::resource('/admin/advisories', AdvisoryController::class);
 
     // ============================================================
-    // 7. REPORTS
+    // 9. REPORTS (Commented out for now)
     // ============================================================
-    Route::get('/admin/reports', [ReportController::class, 'index'])->name('admin.reports.index');
-    Route::get('/admin/reports/generate', [ReportController::class, 'generate'])->name('admin.reports.generate');
-
+    // Route::get('/admin/reports', [ReportController::class, 'index'])->name('admin.reports.index');
+    // Route::get('/admin/reports/generate', [ReportController::class, 'generate'])->name('admin.reports.generate');
 });
