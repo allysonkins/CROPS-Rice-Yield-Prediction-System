@@ -1,0 +1,22 @@
+<div class="modal fade" id="advisoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--green); color: white;">
+                <h5 class="modal-title" id="advisoryModalLabel">
+                    <i class="bi bi-megaphone"></i> 
+                    <span id="modalTitle">New Advisory</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="advisoryModalBody">
+                <div class="text-center py-4" id="modalLoading">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading form...</p>
+                </div>
+                <div id="modalContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>

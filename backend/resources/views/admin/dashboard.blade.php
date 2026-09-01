@@ -46,19 +46,19 @@
     </div>
 
     <!-- ============================================================ -->
-    <!-- CHART + MONTHLY TRENDS ROW -->
+    <!-- RANDOM FOREST PERFORMANCE + MONTHLY TRENDS ROW -->
     <!-- ============================================================ -->
     <div class="row g-2 mb-3">
-        <!-- Model Comparison Chart -->
+        <!-- Random Forest Performance -->
         <div class="col-12 col-lg-6">
             <div class="card-custom" style="height: 100%;">
                 <div class="card-title">
-                    <i class="bi bi-bar-chart-fill"></i> Model Comparison
-                    <span class="badge bg-light text-muted ms-1" style="font-weight: 400; font-size: 10px;">RF · XGB · Ensemble</span>
+                    <i class="bi bi-bar-chart-fill"></i> Random Forest Performance
+                    <span class="badge bg-light text-muted ms-1" style="font-weight: 400; font-size: 10px;">RF Predictions</span>
                 </div>
                 <canvas id="yieldChart" height="140"></canvas>
                 <div class="mt-1 text-muted small" style="font-size: 11px;">
-                    Average yield predictions across farms.
+                    Random Forest yield predictions across farms.
                 </div>
             </div>
         </div>
@@ -72,7 +72,7 @@
                 </div>
                 <canvas id="trendChart" height="140"></canvas>
                 <div class="mt-1 text-muted small" style="font-size: 11px;">
-                    Average Ensemble yield over time.
+                    Average Random Forest yield over time.
                 </div>
             </div>
         </div>
@@ -91,7 +91,7 @@
                 </div>
                 @php
                     $topFarms = \App\Models\Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-                        ->where('model_type', 'Ensemble')
+                        ->where('model_type', 'RandomForest')
                         ->orderBy('predicted_yield_tons_ha', 'desc')
                         ->limit(5)
                         ->get();
@@ -122,16 +122,16 @@
             </div>
         </div>
 
-        <!-- Rice Variety Performance -->
+        <!-- Rice Variety Performance (Random Forest only) -->
         <div class="col-12 col-lg-6">
             <div class="card-custom" style="height: 100%;">
                 <div class="card-title">
                     <i class="bi bi-flower1"></i> Variety Performance
-                    <span class="badge bg-light text-muted ms-1" style="font-weight: 400; font-size: 10px;">By average yield</span>
+                    <span class="badge bg-light text-muted ms-1" style="font-weight: 400; font-size: 10px;">By average RF yield</span>
                 </div>
                 @php
                     $varietyPerformance = \App\Models\Prediction::with(['farmRecord.riceVariety'])
-                        ->where('model_type', 'Ensemble')
+                        ->where('model_type', 'RandomForest')
                         ->get()
                         ->groupBy(function($item) {
                             return $item->farmRecord->riceVariety->name ?? 'Unknown';
@@ -197,17 +197,17 @@
             </div>
         </div>
 
-        <!-- Recent Predictions (Read-only, NO Actions) -->
+        <!-- Recent Predictions (Random Forest only) -->
         <div class="col-12 col-lg-8">
             <div class="card-custom" style="height: 100%;">
                 <div class="card-title">
                     <i class="bi bi-clipboard-data-fill"></i> Recent Predictions
-                    <span class="badge bg-light text-muted ms-1" style="font-weight: 400; font-size: 10px;">Latest Ensemble outputs</span>
+                    <span class="badge bg-light text-muted ms-1" style="font-weight: 400; font-size: 10px;">Latest Random Forest outputs</span>
                 </div>
 
                 @php
                     $recent = \App\Models\Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-                        ->where('model_type', 'Ensemble')
+                        ->where('model_type', 'RandomForest')
                         ->latest('updated_at')
                         ->limit(5)
                         ->get();
@@ -221,9 +221,7 @@
                                 <th>Farm</th>
                                 <th>Variety</th>
                                 <th>Season</th>
-                                <th>Random Forest</th>
-                                <th>XGBoost</th>
-                                <th>Ensemble</th>
+                                <th>Random Forest Yield</th>
                                 <th>Status</th>
                                 <th>Last Updated</th>
                             </tr>
@@ -237,13 +235,6 @@
                                     $season = $pred->farmRecord->season ?? 'N/A';
                                     $yield = $pred->predicted_yield_tons_ha;
 
-                                    $rf = \App\Models\Prediction::where('farm_record_id', $pred->farm_record_id)
-                                        ->where('model_type', 'RandomForest')
-                                        ->first();
-                                    $xgb = \App\Models\Prediction::where('farm_record_id', $pred->farm_record_id)
-                                        ->where('model_type', 'XGBoost')
-                                        ->first();
-
                                     $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
                                     $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
                                 @endphp
@@ -255,9 +246,7 @@
                                     </td>
                                     <td>{{ $variety }}</td>
                                     <td>{{ $season }}</td>
-                                    <td>{{ $rf ? number_format($rf->predicted_yield_tons_ha, 2) : 'N/A' }}</td>
-                                    <td>{{ $xgb ? number_format($xgb->predicted_yield_tons_ha, 2) : 'N/A' }}</td>
-                                    <td><strong style="color: #4f46e5;">{{ number_format($yield, 2) }}</strong></td>
+                                    <td><strong style="color: #0f4c2b;">{{ number_format($yield, 2) }}</strong></td>
                                     <td>
                                         <span class="badge-status {{ $statusClass }}">
                                             <span class="dot"></span> {{ $statusText }}
@@ -267,7 +256,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="text-center py-3 text-muted">
+                                    <td colspan="7" class="text-center py-3 text-muted">
                                         <i class="bi bi-inbox" style="font-size: 22px;"></i>
                                         <p class="mt-1 mb-0" style="font-size: 13px;">No predictions generated yet.</p>
                                     </td>
@@ -292,7 +281,7 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // ─── Model Comparison Chart ───
+        // ─── Random Forest Performance Chart ───
         const ctx1 = document.getElementById('yieldChart').getContext('2d');
         new Chart(ctx1, {
             type: 'bar',
@@ -303,18 +292,6 @@
                         label: 'Random Forest',
                         data: [4.2, 3.8, 5.1, 4.0],
                         backgroundColor: '#0f4c2b',
-                        borderRadius: 3
-                    },
-                    {
-                        label: 'XGBoost',
-                        data: [4.5, 3.9, 4.8, 4.2],
-                        backgroundColor: '#b8860b',
-                        borderRadius: 3
-                    },
-                    {
-                        label: 'Ensemble',
-                        data: [4.3, 3.8, 4.9, 4.1],
-                        backgroundColor: '#4f46e5',
                         borderRadius: 3
                     }
                 ]
@@ -351,7 +328,7 @@
             data: {
                 labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
                 datasets: [{
-                    label: 'Ensemble Yield (t/ha)',
+                    label: 'Random Forest Yield (t/ha)',
                     data: [4.1, 4.3, 4.0, 4.5, 4.7, 4.4],
                     borderColor: '#0f4c2b',
                     backgroundColor: 'rgba(15, 76, 43, 0.08)',

@@ -8,7 +8,6 @@ use App\Models\Prediction;
 use App\Services\WeatherService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 
 class PredictionController extends Controller
 {
@@ -19,91 +18,72 @@ class PredictionController extends Controller
         $this->weatherService = $weatherService;
     }
 
+    /**
+     * Public API endpoint for the Yield Simulator (AJAX calls from frontend)
+     */
     public function predict(Request $request)
     {
-        // Remove or comment out the auth check for testing
-        // if (!auth()->check()) {
-        //     return response()->json([
-        //         'success' => false,
-        //         'error' => 'Unauthorized. Please log in first.'
-        //     ], 401);
-        // }
-
         $request->validate([
-            'farm_record_id' => 'required|exists:farm_records,id',
+            'variety' => 'required|string',
+            'soil_type' => 'required|string',
+            'season' => 'required|string',
+            'seeding_method' => 'required|string',
+            'fertilizer_kg_ha' => 'required|numeric',
+            'temperature_avg' => 'required|numeric',
+            'rainfall_mm' => 'required|numeric',
+            'humidity_avg' => 'required|numeric',
+            'historical_yield_tons_ha' => 'required|numeric',
         ]);
-
-        $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($request->farm_record_id);
-
-        // Fetch real-time weather data
-        $weather = $this->weatherService->getWeather();
 
         // Prepare input for ML service
         $input = [
-            'barangay' => $farmRecord->farm->barangay,
-            'variety' => $farmRecord->riceVariety->name,
-            'soil_type' => $farmRecord->farm->soil_type,
-            'season' => $farmRecord->season,
-            'seeding_method' => $farmRecord->seeding_method ?? 'Transplanted',
-            'fertilizer_kg_ha' => (float) $farmRecord->fertilizer_kg_ha,
-            'temperature_avg' => $weather['temperature'],
-            'rainfall_mm' => $weather['rainfall'],
-            'humidity_avg' => $weather['humidity'],
-            'historical_yield_tons_ha' => (float) ($farmRecord->historical_yield_tons_ha ?? 3.5),
+            'barangay' => 'Calaocan', // Default for simulator
+            'variety' => $request->variety,
+            'soil_type' => $request->soil_type,
+            'season' => $request->season,
+            'seeding_method' => $request->seeding_method,
+            'fertilizer_kg_ha' => (float) $request->fertilizer_kg_ha,
+            'temperature_avg' => (float) $request->temperature_avg,
+            'rainfall_mm' => (float) $request->rainfall_mm,
+            'humidity_avg' => (float) $request->humidity_avg,
+            'historical_yield_tons_ha' => (float) $request->historical_yield_tons_ha,
         ];
 
         try {
             $response = Http::post('http://127.0.0.1:5000/predict', $input);
             $result = $response->json();
 
-            $models = ['RandomForest', 'XGBoost', 'Ensemble'];
-            foreach ($models as $model) {
-                // ✅ UPDATE OR CREATE - This will update existing predictions instead of duplicating
-                DB::table('predictions')
-                    ->updateOrInsert(
-                        [
-                            'farm_record_id' => $farmRecord->id,
-                            'model_type' => $model,
-                        ],
-                        [
-                            'predicted_yield_tons_ha' => $result[$model] ?? 0,
-                            'input_features' => json_encode([
-                                'input' => $input,
-                                'weather' => $weather
-                            ]),
-                            'updated_at' => now(), // ✅ ALWAYS updates the timestamp
-                            'created_at' => DB::raw('created_at'), // Keep original created_at
-                        ]
-                    );
+            // The ML service returns RandomForest, XGBoost, Ensemble.
+            // We only use RandomForest now.
+            $yield = $result['RandomForest'] ?? $result['Ensemble'] ?? null;
+
+            if ($yield !== null) {
+                return response()->json([
+                    'Predicted_Yield' => round($yield, 2),
+                    'success' => true,
+                ]);
+            } else {
+                return response()->json([
+                    'error' => 'Invalid response from ML service.',
+                    'success' => false,
+                ], 500);
             }
-
-            // Get the updated predictions to return
-            $updatedPredictions = Prediction::where('farm_record_id', $farmRecord->id)->get();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Prediction generated successfully!',
-                'data' => $result,
-                'weather' => $weather,
-                'predictions' => $updatedPredictions
-            ]);
-
         } catch (\Exception $e) {
             return response()->json([
+                'error' => 'ML service unavailable: ' . $e->getMessage(),
                 'success' => false,
-                'error' => 'ML service unavailable: ' . $e->getMessage()
             ], 500);
         }
     }
 
+    /**
+     * Get all predictions (for API)
+     */
     public function index()
     {
-        // Get only the latest Ensemble prediction per farm record
         $predictions = Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-            ->where('model_type', 'Ensemble')
-            ->orderBy('updated_at', 'desc')
-            ->get()
-            ->unique('farm_record_id');
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return response()->json($predictions);
     }

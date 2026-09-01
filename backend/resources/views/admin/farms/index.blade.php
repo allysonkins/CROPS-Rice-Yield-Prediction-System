@@ -4,23 +4,31 @@
 
 @section('content')
 @if(session('success'))
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i> {{ session('success') }}
+    <div class="alert alert-success alert-dismissible fade show" role="alert" style="border-left: 4px solid var(--green);">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2" style="color: var(--green);"></i>
+            <strong>Success!</strong> {{ session('success') }}
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 @endif
 
 @if(session('error'))
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-x-circle-fill me-2"></i> {{ session('error') }}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 4px solid var(--red);">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-x-circle-fill me-2" style="color: var(--red);"></i>
+            <strong>Error!</strong> {{ session('error') }}
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 @endif
 
 <div class="d-flex justify-content-end align-items-center mb-4">
-    <a href="{{ route('admin.farms.create') }}" class="btn btn-success">
-        <i class="bi bi-plus-circle"></i> Add Farm
-    </a>
+    @if(auth()->user()->role === 'admin')
+        <button type="button" class="btn btn-success" onclick="openFarmModal()">
+            <i class="bi bi-plus-circle"></i> Add Farm
+        </button>
+    @endif
     <span class="badge bg-secondary ms-2">{{ $farms->count() }} Farms</span>
 </div>
 
@@ -78,7 +86,11 @@
                     <th>Area (ha)</th>
                     <th>Soil Type</th>
                     <th>Coordinates</th>
-                    <th>Actions</th>
+                    @if(auth()->user()->role === 'admin')
+                        <th>Actions</th>
+                    @else
+                        <th>Access</th>
+                    @endif
                 </tr>
             </thead>
             <tbody>
@@ -100,15 +112,19 @@
                             @endif
                         </td>
                         <td>
-                            <a href="{{ route('admin.farms.edit', $farm->id) }}" class="btn btn-sm btn-secondary">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            <form action="{{ route('admin.farms.destroy', $farm->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this farm?')">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-danger">
-                                    <i class="bi bi-trash"></i>
+                            @if(auth()->user()->role === 'admin')
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="editFarm({{ $farm->id }})">
+                                    <i class="bi bi-pencil"></i>
                                 </button>
-                            </form>
+                                <form action="{{ route('admin.farms.destroy', $farm->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this farm?')">
+                                    @csrf @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            @else
+                                <span class="text-muted small">View Only</span>
+                            @endif
                         </td>
                     </tr>
                 @empty
@@ -116,9 +132,11 @@
                         <td colspan="8" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No farms yet.</p>
-                            <a href="{{ route('admin.farms.create') }}" class="btn btn-sm btn-primary mt-2">
-                                <i class="bi bi-plus-circle"></i> Add Farm
-                            </a>
+                            @if(auth()->user()->role === 'admin')
+                                <button type="button" class="btn btn-sm btn-primary mt-2" onclick="openFarmModal()">
+                                    <i class="bi bi-plus-circle"></i> Add Farm
+                                </button>
+                            @endif
                         </td>
                     </tr>
                 @endforelse
@@ -126,4 +144,128 @@
         </table>
     </div>
 </div>
+
+<!-- Include the Modal (only for Admin) -->
+@if(auth()->user()->role === 'admin')
+    @include('admin.farms.partials.modal')
+@endif
+
 @endsection
+
+@push('scripts')
+<script>
+    // Only define functions if user is admin
+    @if(auth()->user()->role === 'admin')
+    function openFarmModal() {
+        document.getElementById('modalTitle').textContent = 'Add Farm';
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalContent').innerHTML = '';
+
+        fetch('{{ route("admin.farms.create") }}')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('modalLoading').style.display = 'none';
+                document.getElementById('modalContent').style.display = 'block';
+                document.getElementById('modalContent').innerHTML = html;
+                
+                const form = document.getElementById('farmForm');
+                if (form) {
+                    form.addEventListener('submit', handleFarmFormSubmit);
+                }
+            })
+            .catch(() => {
+                document.getElementById('modalLoading').style.display = 'none';
+                document.getElementById('modalContent').style.display = 'block';
+                document.getElementById('modalContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Failed to load form. Please try again.
+                    </div>
+                `;
+            });
+
+        var modal = new bootstrap.Modal(document.getElementById('farmModal'));
+        modal.show();
+    }
+
+    function editFarm(id) {
+        document.getElementById('modalTitle').textContent = 'Edit Farm';
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalContent').innerHTML = '';
+
+        fetch('/admin/farms/' + id + '/edit')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('modalLoading').style.display = 'none';
+                document.getElementById('modalContent').style.display = 'block';
+                document.getElementById('modalContent').innerHTML = html;
+                
+                const form = document.getElementById('farmForm');
+                if (form) {
+                    form.addEventListener('submit', handleFarmFormSubmit);
+                }
+            })
+            .catch(() => {
+                document.getElementById('modalLoading').style.display = 'none';
+                document.getElementById('modalContent').style.display = 'block';
+                document.getElementById('modalContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Failed to load form. Please try again.
+                    </div>
+                `;
+            });
+
+        var modal = new bootstrap.Modal(document.getElementById('farmModal'));
+        modal.show();
+    }
+
+    function handleFarmFormSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+        submitBtn.disabled = true;
+
+        const existingErrors = form.querySelector('#formErrors');
+        if (existingErrors) existingErrors.remove();
+
+        fetch(form.action, {
+            method: form.method || 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                var modal = bootstrap.Modal.getInstance(document.getElementById('farmModal'));
+                modal.hide();
+                location.reload();
+            } else {
+                const errorDiv = document.createElement('div');
+                errorDiv.id = 'formErrors';
+                errorDiv.className = 'alert alert-danger mt-3';
+                let errorMsg = data.error || 'An error occurred.';
+                if (data.errors) {
+                    errorMsg = Object.values(data.errors).flat().join('<br>');
+                }
+                errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + errorMsg;
+                form.prepend(errorDiv);
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        })
+        .catch(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+            alert('An error occurred. Please try again.');
+        });
+    }
+    @endif
+</script>
+@endpush

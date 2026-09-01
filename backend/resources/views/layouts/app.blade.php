@@ -44,7 +44,6 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        /* ─── Scrollbar ─── */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 8px; }
@@ -342,69 +341,112 @@
 </head>
 <body>
 
-        <!-- ─── SIDEBAR ─── -->
-<aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand">
-        <div class="logo"><i class="bi bi-tree-fill"></i></div>
-        <h1>CROPS</h1>
-    </div>
+    <!-- ─── SIDEBAR ─── -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="logo"><i class="bi bi-tree-fill"></i></div>
+            <h1>CROPS</h1>
+        </div>
 
-    <nav class="sidebar-nav">
-        <!-- Main -->
-        <div class="nav-label">Main</div>
-        <a href="/admin/dashboard" class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-        <a href="/admin/predictions" class="{{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}">
-            <i class="bi bi-graph-up"></i> Predictions
-        </a>
-        <a href="/admin/rice-varieties" class="{{ request()->routeIs('admin.rice-varieties.*') ? 'active' : '' }}">
-            <i class="bi bi-flower1"></i> Rice Varieties
-        </a>
+        <nav class="sidebar-nav">
+            <!-- Main -->
+            <div class="nav-label">Main</div>
 
-        <!-- People -->
-        <div class="nav-label" style="margin-top:12px;">People</div>
-
-        @if(auth()->check() && auth()->user()->role === 'admin')
-            <a href="/admin/users" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                <i class="bi bi-person-badge"></i> Staff Accounts
+            @php
+                $dashboardUrl = '/admin/dashboard';
+                $dashboardRoute = 'admin.dashboard';
+                if (auth()->check()) {
+                    if (auth()->user()->role === 'staff') {
+                        $dashboardUrl = '/staff/dashboard';
+                        $dashboardRoute = 'staff.dashboard';
+                    } elseif (auth()->user()->role === 'farmer') {
+                        $dashboardUrl = '/farmer/dashboard';
+                        $dashboardRoute = 'farmer.dashboard';
+                    }
+                }
+            @endphp
+            <a href="{{ $dashboardUrl }}" class="nav-link {{ request()->routeIs($dashboardRoute) ? 'active' : '' }}">
+                <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
             </a>
-        @endif
 
-        <a href="/admin/farmers" class="{{ request()->routeIs('admin.farmers.*') ? 'active' : '' }}">
-            <i class="bi bi-person-lines-fill"></i> Farmers List
-        </a>
+            @if(auth()->check() && auth()->user()->role !== 'farmer')
+                <a href="/admin/predictions" class="{{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}">
+                    <i class="bi bi-graph-up"></i> <span>Predictions</span>
+                </a>
+            @endif
 
-        <!-- Land -->
-<div class="nav-label" style="margin-top:12px;">Land</div>
-<a href="/admin/map" class="{{ request()->routeIs('admin.map') ? 'active' : '' }}">
-    <i class="bi bi-map"></i> Farms & Map
-</a>
-<a href="/admin/farms" class="{{ request()->routeIs('admin.farms.*') ? 'active' : '' }}">
-    <i class="bi bi-list-ul"></i> Manage Farms
-</a>
-<a href="/admin/farm-records" class="{{ request()->routeIs('admin.farm-records.*') ? 'active' : '' }}">
-    <i class="bi bi-clipboard-data-fill"></i> Farm Records
-</a>
+            {{-- Farmer only: My Predictions --}}
+            @if(auth()->check() && auth()->user()->role === 'farmer')
+                <a href="/farmer/predictions" class="{{ request()->routeIs('farmer.predictions.*') ? 'active' : '' }}">
+                    <i class="bi bi-graph-up"></i> <span>My Predictions</span>
+                </a>
+            @endif
 
-        <!-- Alerts & Reports -->
-        <div class="nav-label" style="margin-top:12px;">Alerts & Reports</div>
-        <a href="/admin/advisories" class="{{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
-            <i class="bi bi-megaphone"></i> Advisories
-        </a>
-        <a href="/admin/reports" class="{{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
-            <i class="bi bi-file-earmark-pdf"></i> Reports
-        </a>
-    </nav>
+            <a href="/admin/rice-varieties" class="{{ request()->routeIs('admin.rice-varieties.*') ? 'active' : '' }}">
+                <i class="bi bi-flower1"></i> <span>Rice Varieties</span>
+            </a>
 
-    <hr class="sidebar-divider">
+            <!-- People -->
+            <div class="nav-label" style="margin-top:12px;">People</div>
 
-    <div class="sidebar-footer">
-        <a href="/logout">
-            <i class="bi bi-box-arrow-right"></i> Logout
-        </a>
-    </div>
-</aside>
+            @if(auth()->check() && auth()->user()->role === 'admin')
+                <a href="/admin/users" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+                    <i class="bi bi-person-badge"></i> <span>Staff Accounts</span>
+                </a>
+            @endif
+
+            @if(auth()->check() && auth()->user()->role !== 'farmer')
+                <a href="/admin/farmers" class="{{ request()->routeIs('admin.farmers.*') ? 'active' : '' }}">
+                    <i class="bi bi-person-lines-fill"></i> <span>Farmers List</span>
+                </a>
+            @endif
+
+            <!-- Land -->
+            <div class="nav-label" style="margin-top:12px;">Land</div>
+            <a href="/admin/map" class="{{ request()->routeIs('admin.map') ? 'active' : '' }}">
+                <i class="bi bi-map"></i> <span>Farms & Map</span>
+            </a>
+
+            @if(auth()->check() && auth()->user()->role === 'admin')
+                <a href="/admin/farms" class="{{ request()->routeIs('admin.farms.*') ? 'active' : '' }}">
+                    <i class="bi bi-list-ul"></i> <span>Manage Farms</span>
+                </a>
+            @endif
+
+            <a href="/admin/farm-records" class="{{ request()->routeIs('admin.farm-records.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-data-fill"></i> <span>Farm Records</span>
+            </a>
+
+            <!-- Alerts & Reports -->
+            <div class="nav-label" style="margin-top:12px;">Alerts & Reports</div>
+            <a href="/admin/advisories" class="{{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
+                <i class="bi bi-megaphone"></i> <span>Advisories</span>
+            </a>
+
+            {{-- Reports — HIDDEN for farmers --}}
+            @if(auth()->check() && auth()->user()->role !== 'farmer')
+                <a href="/admin/reports" class="{{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
+                    <i class="bi bi-file-earmark-pdf"></i> <span>Reports</span>
+                </a>
+            @endif
+
+            <!-- Farmer Profile -->
+            @if(auth()->check() && auth()->user()->role === 'farmer')
+                <div class="nav-label" style="margin-top:12px;">Account</div>
+                <a href="{{ route('farmer.profile.edit') }}" class="{{ request()->routeIs('farmer.profile.*') ? 'active' : '' }}">
+                    <i class="bi bi-person"></i> <span>My Profile</span>
+                </a>
+            @endif
+        </nav>
+
+        <hr class="sidebar-divider">
+
+        <div class="sidebar-footer">
+            <a href="/logout">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
+        </div>
+    </aside>
 
     <!-- ─── MAIN ─── -->
     <main class="main-content">
@@ -416,13 +458,21 @@
                     <span class="avatar"><i class="bi bi-person-fill"></i></span>
                     {{ auth()->user()->name ?? 'Guest' }}
                 </span>
-                <!-- Mobile toggle button -->
                 <button class="btn btn-light border d-md-none" type="button" onclick="document.getElementById('sidebar').classList.toggle('open')">
                     <i class="bi bi-list"></i>
                 </button>
             </div>
         </header>
 
+        @if(session('success'))
+            <div class="alert alert-success">{{ session('success') }}</div>
+        @endif
+        @if(session('warning'))
+            <div class="alert alert-warning">{{ session('warning') }}</div>
+        @endif
+        @if(session('error'))
+            <div class="alert alert-danger">{{ session('error') }}</div>
+        @endif
 
         @yield('content')
     </main>

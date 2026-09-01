@@ -69,7 +69,22 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="text-center text-muted">No farms registered yet.</td></tr>
+                            <tr>
+                                <td colspan="6" class="text-center py-4 text-muted">
+                                    @if(auth()->user()->role === 'farmer')
+                                        <i class="bi bi-geo-alt" style="font-size: 36px; color: var(--gray-400);"></i>
+                                        <p class="mt-3 mb-1" style="font-size: 16px;">No farms assigned to you yet.</p>
+                                        <p class="text-muted small">Please contact the City Agriculture Office to register your farms.</p>
+                                    @else
+                                        <i class="bi bi-inbox" style="font-size: 36px; color: var(--gray-400);"></i>
+                                        <p class="mt-3 mb-1" style="font-size: 16px;">No farms registered yet.</p>
+                                        <p class="text-muted small">Add farms to see them on the map.</p>
+                                        @if(auth()->user()->role !== 'farmer')
+                                            <a href="/admin/farms/create" class="btn btn-sm btn-success mt-2">Add Farm</a>
+                                        @endif
+                                    @endif
+                                </td>
+                            </tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -163,7 +178,9 @@
                             ${getStatus(farm.yield)}
                         </span>
                     </div>
-                    <a href="/admin/farms/${farm.id}/edit" class="btn btn-sm btn-outline-primary mt-2" style="font-size: 11px;">Edit</a>
+                    @if(auth()->user()->role !== 'farmer')
+                        <a href="/admin/farms/${farm.id}/edit" class="btn btn-sm btn-outline-primary mt-2" style="font-size: 11px;">Edit</a>
+                    @endif
                 </div>
             `;
 
@@ -177,7 +194,7 @@
             }).addTo(map).bindPopup(popupContent);
         });
 
-        // Fit bounds
+        // Fit bounds to show all markers
         if (hasCoords.length > 1) {
             var group = L.featureGroup();
             hasCoords.forEach(function(f) {
@@ -188,7 +205,7 @@
             map.setZoom(15);
         }
 
-        // Legend
+        // Add legend
         var legend = L.control({ position: 'bottomright' });
         legend.onAdd = function() {
             var div = L.DomUtil.create('div', 'legend');
@@ -205,15 +222,22 @@
         };
         legend.addTo(map);
 
-        // Fallback
+        // Fallback message if no farms have coordinates
         if (hasCoords.length === 0) {
+            var message = @if(auth()->user()->role === 'farmer') 
+                'No farms assigned to you yet. Please contact the City Agriculture Office.'
+            @else 
+                'No farm locations available. Add coordinates when creating farms to see them here.'
+            @endif;
+
             L.popup()
                 .setLatLng([16.6889, 121.5484])
                 .setContent(`
                     <div style="text-align: center; padding: 15px;">
-                        <p style="color: #6b7280; font-size: 14px; margin: 0;">No farm locations available.</p>
-                        <p style="color: #9ca3af; font-size: 12px;">Add coordinates when creating farms to see them here.</p>
-                        <a href="/admin/farms/create" class="btn btn-sm btn-success mt-2">Add Farm</a>
+                        <p style="color: #6b7280; font-size: 14px; margin: 0;">${message}</p>
+                        @if(auth()->user()->role !== 'farmer')
+                            <a href="/admin/farms/create" class="btn btn-sm btn-success mt-2">Add Farm</a>
+                        @endif
                     </div>
                 `)
                 .openOn(map);

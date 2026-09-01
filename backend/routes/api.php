@@ -14,5 +14,5 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 // });
 
 // TEMPORARY ROUTES FOR TESTING (No authentication)
-Route::post('/predict', [PredictionController::class, 'predict']);
+Route::post('/predict', [PredictionApiController::class, 'predict'])->name('api.predict');
 Route::get('/predictions', [PredictionController::class, 'index']);

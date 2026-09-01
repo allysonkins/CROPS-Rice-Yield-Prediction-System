@@ -1,32 +1,32 @@
 ﻿# ml-service/app.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pandas as pd
-import numpy as np
 import joblib
-import os
 
 app = Flask(__name__)
 CORS(app)
 
-print("🔄 Loading ML models...")
+print("🔄 Loading ML model...")
 
-# Load models and preprocessors
+# Load models
 try:
-    rf_model = joblib.load('model_rf.pkl')
-    xgb_model = joblib.load('model_xgb.pkl')
+    model = joblib.load('model_rf.pkl')
     scaler = joblib.load('scaler.pkl')
     label_encoders = joblib.load('label_encoders.pkl')
     feature_names = joblib.load('feature_names.pkl')
-    print("✅ Models loaded successfully!")
+    print("✅ Model loaded successfully!")
 except FileNotFoundError:
-    print("❌ Model files not found. Run train_models.py first.")
-    rf_model = None
-    xgb_model = None
+    print("❌ Model files not found. Run train_rf.py first.")
+    model = None
 
 def preprocess_input(data):
-    """Convert JSON to model-ready DataFrame"""
+    import pandas as pd
     df = pd.DataFrame([data])
+    
+    # Remove any synthetic columns if accidentally sent
+    for col in ['barangay', 'farm_id']:
+        if col in df.columns:
+            df = df.drop(columns=[col])
     
     # Encode categorical variables
     for col, le in label_encoders.items():
@@ -54,8 +54,8 @@ def predict():
     try:
         data = request.get_json()
         
-        # Check required fields
-        required = ['barangay', 'variety', 'soil_type', 'season', 'seeding_method',
+        # Required fields (No barangay)
+        required = ['variety', 'soil_type', 'season', 'seeding_method',
                     'fertilizer_kg_ha', 'temperature_avg', 'rainfall_mm', 
                     'humidity_avg', 'historical_yield_tons_ha']
         
@@ -63,23 +63,17 @@ def predict():
             if field not in data:
                 return jsonify({"error": f"Missing field: {field}"}), 400
         
-        # Preprocess and predict
         input_vector = preprocess_input(data)
         
-        if rf_model is not None and xgb_model is not None:
-            rf_pred = rf_model.predict(input_vector)[0]
-            xgb_pred = xgb_model.predict(input_vector)[0]
-            ensemble_pred = (rf_pred + xgb_pred) / 2
+        if model is not None:
+            prediction = model.predict(input_vector)[0]
         else:
-            # Fallback dummy
-            rf_pred = 4.0 + np.random.uniform(-0.5, 0.5)
-            xgb_pred = 4.0 + np.random.uniform(-0.5, 0.5)
-            ensemble_pred = (rf_pred + xgb_pred) / 2
+            import random
+            prediction = 4.0 + random.uniform(-0.5, 0.5)
         
         return jsonify({
-            "RandomForest": round(float(rf_pred), 2),
-            "XGBoost": round(float(xgb_pred), 2),
-            "Ensemble": round(float(ensemble_pred), 2)
+            "Predicted_Yield": round(float(prediction), 2),
+            "Model": "Random Forest"
         })
     
     except Exception as e:

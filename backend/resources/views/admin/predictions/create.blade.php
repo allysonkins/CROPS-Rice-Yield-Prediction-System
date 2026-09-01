@@ -55,8 +55,6 @@
                 <h6><i class="bi bi-info-circle"></i> How It Works</h6>
                 <ul class="text-muted small mb-0">
                     <li><strong>Random Forest</strong> — Captures complex non-linear interactions in the data</li>
-                    <li><strong>XGBoost</strong> — Uses regularized gradient boosting to prevent overfitting</li>
-                    <li><strong>Ensemble</strong> — Averages both models for the most accurate prediction</li>
                     <li class="mt-2"><i class="bi bi-cloud-sun"></i> <strong>Weather Data</strong> — Real-time weather from OpenWeatherMap is used as input</li>
                 </ul>
             </div>

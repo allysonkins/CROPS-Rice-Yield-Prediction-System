@@ -8,13 +8,11 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
-    // Show the login form
     public function showLoginForm()
     {
         return view('auth.login');
     }
 
-    // Handle the login request
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -25,7 +23,6 @@ class AuthController extends Controller
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
 
-            // Redirect based on role
             $role = Auth::user()->role;
 
             if ($role === 'admin') {
@@ -42,7 +39,6 @@ class AuthController extends Controller
         ])->onlyInput('email');
     }
 
-    // Handle logout
     public function logout(Request $request)
     {
         Auth::logout();

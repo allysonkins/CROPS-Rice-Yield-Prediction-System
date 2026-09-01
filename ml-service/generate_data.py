@@ -14,12 +14,9 @@ soil_types = ['Clay Loam', 'Silty Clay', 'Sandy Loam', 'Clay']
 soil_multiplier = {'Clay Loam': 1.0, 'Silty Clay': 0.95, 'Sandy Loam': 0.85, 'Clay': 0.90}
 seeding_methods = ['Transplanted', 'Direct Seeded']
 seasons = ['Wet', 'Dry']
-barangays = ['Calaocan', 'Santiago East', 'Santiago West', 'Calaocan West', 'Santiago North']
 
-# Generate data
+# Generate data (NO barangay, NO farm_id)
 data = {
-    'farm_id': np.random.choice(range(1, 301), NUM_RECORDS),
-    'barangay': np.random.choice(barangays, NUM_RECORDS),
     'variety': np.random.choice(varieties, NUM_RECORDS),
     'soil_type': np.random.choice(soil_types, NUM_RECORDS),
     'season': np.random.choice(seasons, NUM_RECORDS),
@@ -38,7 +35,7 @@ df['historical_yield_tons_ha'] = np.random.uniform(2.5, 5.5, NUM_RECORDS)
 
 # Calculate target yield
 def calculate_yield(row):
-    y = 3.5  # base
+    y = 3.5
     y += variety_bonus.get(row['variety'], 0)
     y += soil_multiplier.get(row['soil_type'], 1.0) * 0.3
     fert_effect = (row['fertilizer_kg_ha'] / 120) * 0.5
@@ -58,5 +55,6 @@ df['yield_tons_ha'] = df.apply(calculate_yield, axis=1)
 
 # Save
 df.to_csv('synthetic_rice_data.csv', index=False)
-print(f"✅ Generated {len(df)} records")
-print(f"Average Yield: {df['yield_tons_ha'].mean():.2f} t/ha")
+print(f"✅ Generated {len(df)} records (No barangay, No farm_id)")
+print(f"   Features: {df.columns.tolist()}")
+print(f"   Average Yield: {df['yield_tons_ha'].mean():.2f} t/ha")

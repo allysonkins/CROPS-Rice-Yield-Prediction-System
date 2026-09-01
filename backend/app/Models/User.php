@@ -29,4 +29,13 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    
+    /**
+     * Get the farms owned by this user (farmer).
+     */
+    public function farms()
+    {
+        return $this->hasMany(Farm::class, 'user_id');
+    }
 }

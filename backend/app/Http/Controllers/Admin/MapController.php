@@ -10,15 +10,22 @@ class MapController extends Controller
 {
     public function index()
     {
-        // Get ALL farms with their user (farmer) data
-        $farms = Farm::with('user')->get();
+        $user = auth()->user();
+
+        // If farmer, only show their farms
+        if ($user->role === 'farmer') {
+            $farms = Farm::with('user')
+                ->where('user_id', $user->id)
+                ->get();
+        } else {
+            $farms = Farm::with('user')->get();
+        }
 
         $farmData = $farms->map(function($farm) {
-            // Get the latest Ensemble prediction for this farm (if any)
             $latestPrediction = null;
             foreach ($farm->farmRecords as $record) {
                 foreach ($record->predictions as $prediction) {
-                    if ($prediction->model_type === 'Ensemble') {
+                    if ($prediction->model_type === 'RandomForest') {
                         $latestPrediction = $prediction;
                         break 2;
                     }

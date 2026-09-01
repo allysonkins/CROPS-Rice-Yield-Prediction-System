@@ -8,10 +8,14 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Admin\MapController;
 use App\Http\Controllers\Admin\AdvisoryController;
-// use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\PredictionController;
 use App\Http\Controllers\Admin\FarmRecordController;
-use App\Http\Controllers\Admin\FarmController;  // <-- ADD THIS LINE
+use App\Http\Controllers\Admin\FarmController;
+use App\Http\Controllers\Admin\LogController;
+use App\Http\Controllers\Admin\FarmerController;
+use App\Http\Controllers\Admin\ReportController;
+use App\Http\Controllers\Farmer\ProfileController;
+use App\Http\Controllers\Farmer\PredictionController as FarmerPredictionController;
 
 Route::get('/', function () {
     return redirect('/login');
@@ -22,18 +26,17 @@ Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// Protected Routes (Logged in users only)
 Route::middleware(['auth'])->group(function () {
 
     // ============================================================
-    // 1. DASHBOARDS (by role)
+    // 1. DASHBOARDS
     // ============================================================
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('/staff/dashboard', [StaffDashboardController::class, 'index'])->name('staff.dashboard');
     Route::get('/farmer/dashboard', [FarmerDashboardController::class, 'index'])->name('farmer.dashboard');
 
     // ============================================================
-    // 2. PREDICTIONS (Web View)
+    // 2. PREDICTIONS
     // ============================================================
     Route::get('/admin/predictions', [PredictionController::class, 'index'])->name('admin.predictions.index');
     Route::get('/admin/predictions/create', [PredictionController::class, 'create'])->name('admin.predictions.create');
@@ -42,19 +45,22 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/predictions/{id}', [PredictionController::class, 'show'])->name('admin.predictions.show');
 
     // ============================================================
-    // 3. RICE VARIETIES (Full CRUD)
-    // ============================================================
-    Route::prefix('admin/rice-varieties')->group(function () {
-        Route::get('/', [RiceVarietyController::class, 'index'])->name('admin.rice-varieties.index');
-        Route::get('/create', [RiceVarietyController::class, 'create'])->name('admin.rice-varieties.create');
-        Route::post('/', [RiceVarietyController::class, 'store'])->name('admin.rice-varieties.store');
-        Route::get('/{id}/edit', [RiceVarietyController::class, 'edit'])->name('admin.rice-varieties.edit');
-        Route::put('/{id}', [RiceVarietyController::class, 'update'])->name('admin.rice-varieties.update');
-        Route::delete('/{id}', [RiceVarietyController::class, 'destroy'])->name('admin.rice-varieties.destroy');
-    });
+// 3. RICE VARIETIES (updated)
+// ============================================================
+Route::prefix('admin/rice-varieties')->group(function () {
+    Route::get('/', [RiceVarietyController::class, 'index'])->name('admin.rice-varieties.index');
+    Route::get('/create', [RiceVarietyController::class, 'create'])->name('admin.rice-varieties.create');
+    Route::post('/', [RiceVarietyController::class, 'store'])->name('admin.rice-varieties.store');
+    Route::get('/{id}/edit', [RiceVarietyController::class, 'edit'])->name('admin.rice-varieties.edit');
+    Route::put('/{id}', [RiceVarietyController::class, 'update'])->name('admin.rice-varieties.update');
+    Route::delete('/{id}', [RiceVarietyController::class, 'destroy'])->name('admin.rice-varieties.destroy');
+
+    // NEW: Get yield for a variety by seeding method
+    Route::get('/{id}/yield', [RiceVarietyController::class, 'getYield'])->name('admin.rice-varieties.yield');
+});
 
     // ============================================================
-    // 4. USER MANAGEMENT (ADMIN ONLY)
+    // 4. STAFF ACCOUNTS (ADMIN ONLY)
     // ============================================================
     Route::middleware(['role:admin'])->prefix('admin/users')->group(function () {
         Route::get('/', [UserController::class, 'index'])->name('admin.users.index');
@@ -71,23 +77,46 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/map', [MapController::class, 'index'])->name('admin.map');
 
     // ============================================================
-    // 6. FARMS (Full CRUD)
+    // 6. FARMS (ADMIN ONLY)
     // ============================================================
     Route::resource('/admin/farms', FarmController::class)->names('admin.farms');
 
     // ============================================================
-    // 7. FARM RECORDS (Full CRUD)
+    // 7. FARM RECORDS
     // ============================================================
     Route::resource('/admin/farm-records', FarmRecordController::class)->names('admin.farm-records');
 
     // ============================================================
-    // 8. ADVISORIES (Full CRUD using Route::resource)
+    // 8. ADVISORIES
     // ============================================================
-    Route::resource('/admin/advisories', AdvisoryController::class);
+    Route::resource('/admin/advisories', AdvisoryController::class)->names('admin.advisories');
 
     // ============================================================
-    // 9. REPORTS (Commented out for now)
+    // 9. FARMERS LIST
     // ============================================================
-    // Route::get('/admin/reports', [ReportController::class, 'index'])->name('admin.reports.index');
-    // Route::get('/admin/reports/generate', [ReportController::class, 'generate'])->name('admin.reports.generate');
+    Route::resource('/admin/farmers', FarmerController::class)->names('admin.farmers');
+
+    // ============================================================
+    // 10. ACTIVITY LOGS (ADMIN ONLY)
+    // ============================================================
+    Route::middleware(['role:admin'])->group(function () {
+        Route::get('/admin/logs', [LogController::class, 'index'])->name('admin.logs.index');
+    });
+
+    // ============================================================
+    // 11. REPORTS
+    // ============================================================
+    Route::get('/admin/reports', [ReportController::class, 'index'])->name('admin.reports.index');
+    Route::get('/admin/reports/generate', [ReportController::class, 'generate'])->name('admin.reports.generate');
+
+    // ============================================================
+    // 12. FARMER PROFILE
+    // ============================================================
+    Route::get('/farmer/profile', [ProfileController::class, 'edit'])->name('farmer.profile.edit');
+    Route::put('/farmer/profile', [ProfileController::class, 'update'])->name('farmer.profile.update');
+
+    // ============================================================
+    // 13. FARMER PREDICTIONS
+    // ============================================================
+    Route::get('/farmer/predictions', [FarmerPredictionController::class, 'index'])->name('farmer.predictions.index');
 });

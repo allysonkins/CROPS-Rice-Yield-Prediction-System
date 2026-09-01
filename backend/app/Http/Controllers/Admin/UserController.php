@@ -9,160 +9,110 @@ use Illuminate\Support\Facades\Hash;
 
 class UserController extends Controller
 {
-    // List all users (Admin only)
+    /**
+     * Display a listing of staff accounts only.
+     */
     public function index()
     {
-        $users = User::orderBy('name')->get();
+        // ✅ Only show staff accounts
+        $users = User::where('role', 'staff')->orderBy('name')->get();
         return view('admin.users.index', compact('users'));
     }
 
-    // Show create form with role restrictions
+    /**
+     * Show the form for creating a new staff account.
+     */
     public function create()
     {
-        $user = auth()->user();
-
-        // Determine which roles can be created
-        if ($user->role === 'admin') {
-            $allowedRoles = ['admin', 'staff', 'farmer'];
-        } elseif ($user->role === 'staff') {
-            $allowedRoles = ['farmer']; // Staff can only add farmers
-        } else {
-            abort(403, 'You are not authorized to create users.');
-        }
-
-        return view('admin.users.create', compact('allowedRoles'));
+        return view('admin.users.create');
     }
 
-    // Store new user with permission checks
+    /**
+     * Store a newly created staff account.
+     */
     public function store(Request $request)
     {
-        $user = auth()->user();
-
-        // Validate based on role
-        $rules = [
+        $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8',
-            'role' => 'required|in:admin,staff,farmer',
-        ];
-
-        // Staff can only create farmers
-        if ($user->role === 'staff' && $request->role !== 'farmer') {
-            return back()->with('error', 'Staff can only create Farmer accounts.');
-        }
-
-        // If user is not admin, they cannot create admin or staff
-        if ($user->role !== 'admin' && in_array($request->role, ['admin', 'staff'])) {
-            return back()->with('error', 'You do not have permission to create Admin or Staff accounts.');
-        }
-
-        $request->validate($rules);
+        ]);
 
         User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role' => $request->role,
+            'role' => 'staff', // ✅ Always staff
         ]);
 
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Staff account created successfully!'
+            ]);
+        }
+
         return redirect()->route('admin.users.index')
-            ->with('success', 'User created successfully! 👤');
+            ->with('success', 'Staff account created successfully!');
     }
 
-    // Show edit form with restrictions
+    /**
+     * Show the form for editing a staff account.
+     */
     public function edit($id)
     {
-        $userToEdit = User::findOrFail($id);
-        $currentUser = auth()->user();
-
-        // Staff can only edit farmers
-        if ($currentUser->role === 'staff' && $userToEdit->role !== 'farmer') {
-            abort(403, 'Staff can only edit Farmer accounts.');
-        }
-
-        // Staff cannot edit their own role to admin/staff
-        if ($currentUser->role === 'staff' && $currentUser->id === $userToEdit->id) {
-            // Allow editing your own profile, but limit role options
-            $allowedRoles = ['staff']; // Staff can only stay as staff
-            return view('admin.users.edit', compact('userToEdit', 'allowedRoles'));
-        }
-
-        // Admin can edit anyone
-        if ($currentUser->role === 'admin') {
-            $allowedRoles = ['admin', 'staff', 'farmer'];
-            return view('admin.users.edit', compact('userToEdit', 'allowedRoles'));
-        }
-
-        // Staff editing a farmer - only allow farmer role
-        if ($currentUser->role === 'staff' && $userToEdit->role === 'farmer') {
-            $allowedRoles = ['farmer'];
-            return view('admin.users.edit', compact('userToEdit', 'allowedRoles'));
-        }
-
-        abort(403, 'You do not have permission to edit this user.');
+        $user = User::where('role', 'staff')->findOrFail($id);
+        return view('admin.users.edit', compact('user'));
     }
 
-    // Update user with permission checks
+    /**
+     * Update the specified staff account.
+     */
     public function update(Request $request, $id)
     {
-        $userToEdit = User::findOrFail($id);
-        $currentUser = auth()->user();
-
-        // Staff can only update farmers
-        if ($currentUser->role === 'staff' && $userToEdit->role !== 'farmer') {
-            return back()->with('error', 'Staff can only edit Farmer accounts.');
-        }
-
-        // Staff cannot change a farmer to admin/staff
-        if ($currentUser->role === 'staff' && $request->role !== 'farmer') {
-            return back()->with('error', 'Staff can only assign the Farmer role.');
-        }
-
-        // Non-admin cannot create admin/staff
-        if ($currentUser->role !== 'admin' && in_array($request->role, ['admin', 'staff'])) {
-            return back()->with('error', 'You cannot assign Admin or Staff roles.');
-        }
+        $user = User::where('role', 'staff')->findOrFail($id);
 
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
-            'role' => 'required|in:admin,staff,farmer',
             'password' => 'nullable|min:8',
         ]);
 
-        $userToEdit->name = $request->name;
-        $userToEdit->email = $request->email;
-        $userToEdit->role = $request->role;
+        $user->name = $request->name;
+        $user->email = $request->email;
 
         if ($request->filled('password')) {
-            $userToEdit->password = Hash::make($request->password);
+            $user->password = Hash::make($request->password);
         }
 
-        $userToEdit->save();
+        $user->save();
+
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Staff account updated successfully!'
+            ]);
+        }
 
         return redirect()->route('admin.users.index')
-            ->with('success', 'User updated successfully! 🔄');
+            ->with('success', 'Staff account updated successfully!');
     }
 
-    // Delete user with restrictions
+    /**
+     * Remove the specified staff account.
+     */
     public function destroy($id)
     {
-        $userToDelete = User::findOrFail($id);
-        $currentUser = auth()->user();
+        $user = User::where('role', 'staff')->findOrFail($id);
 
-        // Staff can only delete farmers
-        if ($currentUser->role === 'staff' && $userToDelete->role !== 'farmer') {
-            return back()->with('error', 'Staff can only delete Farmer accounts.');
+        if ($user->id === auth()->id()) {
+            return redirect()->route('admin.users.index')
+                ->with('error', 'You cannot delete your own account!');
         }
 
-        // Prevent deleting your own account
-        if ($userToDelete->id === $currentUser->id) {
-            return back()->with('error', 'You cannot delete your own account!');
-        }
-
-        $userToDelete->delete();
+        $user->delete();
 
         return redirect()->route('admin.users.index')
-            ->with('success', 'User deleted successfully! 🗑️');
+            ->with('success', 'Staff account deleted successfully!');
     }
 }
