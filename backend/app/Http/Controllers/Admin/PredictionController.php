@@ -62,13 +62,16 @@ class PredictionController extends Controller
 
     public function create()
     {
-        $farmRecords = FarmRecord::with(['farm', 'riceVariety'])->get();
+        // Only show vegetative farm records for prediction
+        $farmRecords = FarmRecord::with(['farm', 'riceVariety'])
+            ->where('status', 'Vegetative')
+            ->get();
         $weather = $this->weatherService->getWeather();
         return view('admin.predictions.create', compact('farmRecords', 'weather'));
     }
 
     /**
-     * Generate a new prediction (only Random Forest).
+     * Generate a new prediction (only for Vegetative records).
      */
     public function store(Request $request)
     {
@@ -77,6 +80,18 @@ class PredictionController extends Controller
         ]);
 
         $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($request->farm_record_id);
+
+        // ===== STATUS CHECK =====
+        if ($farmRecord->status !== 'Vegetative') {
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Cannot generate a prediction for a harvested farm record. Only vegetative (growing) records can be predicted.'
+                ], 400);
+            }
+            return redirect()->route('admin.predictions.index')
+                ->with('error', 'Cannot generate a prediction for a harvested farm record.');
+        }
 
         $existing = Prediction::where('farm_record_id', $farmRecord->id)
             ->where('model_type', 'RandomForest')
@@ -112,7 +127,6 @@ class PredictionController extends Controller
             $response = Http::post('http://127.0.0.1:5000/predict', $input);
             $result = $response->json();
 
-            // Expecting { "Predicted_Yield": 4.73, "Model": "Random Forest" }
             $yield = $result['Predicted_Yield'] ?? $result['RandomForest'] ?? null;
 
             if ($yield === null) {
@@ -152,11 +166,17 @@ class PredictionController extends Controller
     }
 
     /**
-     * Regenerate an existing prediction (only Random Forest).
+     * Regenerate an existing prediction (only for Vegetative records).
      */
     public function update(Request $request, $id)
     {
         $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
+
+        // ===== STATUS CHECK =====
+        if ($farmRecord->status !== 'Vegetative') {
+            return redirect()->back()
+                ->with('error', 'Cannot regenerate a prediction for a harvested farm record.');
+        }
 
         $weather = $this->weatherService->getWeather();
 
@@ -183,7 +203,6 @@ class PredictionController extends Controller
                 throw new \Exception('ML service did not return a valid yield.');
             }
 
-            // Update or create the RandomForest prediction
             Prediction::updateOrCreate(
                 [
                     'farm_record_id' => $farmRecord->id,

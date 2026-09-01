@@ -4,7 +4,6 @@
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0"><i class="bi bi-graph-up" style="color: var(--green);"></i> My Predictions</h4>
     <span class="badge bg-secondary">{{ $stats['total'] }} Predictions</span>
 </div>
 
@@ -61,6 +60,7 @@
                     <th>Season</th>
                     <th>RF Yield</th>
                     <th>Status</th>
+                    <th>Crop Status</th>
                     <th>Updated</th>
                     <th>Action</th>
                 </tr>
@@ -71,19 +71,27 @@
                         $yield = $pred->predicted_yield_tons_ha;
                         $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
                         $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
+                        $farmRecord = $pred->farmRecord;
+                        $cropStatus = $farmRecord->status ?? 'N/A';
                     @endphp
                     <tr>
                         <td>{{ $index + 1 }}</td>
                         <td>
-                            <strong>{{ $pred->farmRecord->farm->name ?? 'N/A' }}</strong>
-                            <br><small class="text-muted">{{ $pred->farmRecord->farm->barangay ?? '' }}</small>
+                            <strong>{{ $farmRecord->farm->name ?? 'N/A' }}</strong>
+                            <br><small class="text-muted">{{ $farmRecord->farm->barangay ?? '' }}</small>
                         </td>
-                        <td>{{ $pred->farmRecord->riceVariety->name ?? 'N/A' }}</td>
-                        <td>{{ $pred->farmRecord->season ?? 'N/A' }}</td>
+                        <td>{{ $farmRecord->riceVariety->name ?? 'N/A' }}</td>
+                        <td>{{ $farmRecord->season ?? 'N/A' }}</td>
                         <td><strong style="color: #0f4c2b;">{{ number_format($yield, 2) }}</strong></td>
                         <td>
                             <span class="badge-status {{ $statusClass }}">
                                 <span class="dot"></span> {{ $statusText }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge {{ $farmRecord->status_badge_class ?? 'bg-secondary' }}">
+                                <i class="bi {{ $farmRecord->status_icon ?? 'bi-question-circle' }}"></i>
+                                {{ $cropStatus }}
                             </span>
                         </td>
                         <td>{{ $pred->updated_at->diffForHumans() }}</td>
@@ -95,7 +103,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8" class="text-center py-4 text-muted">
+                        <td colspan="9" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No predictions for your farms yet.</p>
                             <small>CAO staff will generate predictions from your farm records.</small>

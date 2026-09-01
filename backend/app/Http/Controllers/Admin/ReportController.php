@@ -17,13 +17,15 @@ class ReportController extends Controller
      */
     public function index()
     {
+        $avgYield = Prediction::where('model_type', 'RandomForest')->avg('predicted_yield_tons_ha');
+
         $stats = [
             'total_farmers' => User::where('role', 'farmer')->count(),
             'total_farms' => Farm::count(),
             'total_varieties' => RiceVariety::count(),
-            'avg_yield' => Prediction::where('model_type', 'Ensemble')->avg('predicted_yield_tons_ha') ?? 'N/A',
+            'avg_yield' => $avgYield ? number_format($avgYield, 2) : 'N/A',
             'total_predictions' => Prediction::count(),
-            'low_yield_count' => Prediction::where('model_type', 'Ensemble')
+            'low_yield_count' => Prediction::where('model_type', 'RandomForest')
                 ->where('predicted_yield_tons_ha', '<', 4.0)
                 ->count(),
         ];
@@ -36,6 +38,8 @@ class ReportController extends Controller
      */
     public function generate()
     {
+        $avgYield = Prediction::where('model_type', 'RandomForest')->avg('predicted_yield_tons_ha');
+
         $data = [
             'farms' => Farm::with(['user', 'farmRecords.predictions'])->get(),
             'generated_at' => now(),
@@ -43,7 +47,7 @@ class ReportController extends Controller
                 'total_farmers' => User::where('role', 'farmer')->count(),
                 'total_farms' => Farm::count(),
                 'total_varieties' => RiceVariety::count(),
-                'avg_yield' => Prediction::where('model_type', 'Ensemble')->avg('predicted_yield_tons_ha') ?? 'N/A',
+                'avg_yield' => $avgYield ? round($avgYield, 2) : null, // keep as number or null
             ],
         ];
 

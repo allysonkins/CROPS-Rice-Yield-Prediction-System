@@ -46,6 +46,13 @@
             <small class="text-muted">Previous season's yield (if available)</small>
         </div>
 
+        <!-- Actual Yield – hidden by default, shown when status = Harvested -->
+        <div class="col-md-6" id="actualYieldContainer" style="display: none;">
+            <label class="form-label fw-semibold">Actual Yield (t/ha)</label>
+            <input type="number" step="0.01" name="actual_yield_tons_ha" class="form-control" placeholder="e.g., 4.8" value="{{ old('actual_yield_tons_ha') }}">
+            <small class="text-muted">Record the actual harvested yield</small>
+        </div>
+
         <div class="col-md-6">
             <label class="form-label fw-semibold">Seeding Method</label>
             <select name="seeding_method" class="form-select">
@@ -53,6 +60,15 @@
                 <option value="Transplanted" {{ old('seeding_method') == 'Transplanted' ? 'selected' : '' }}>Transplanted</option>
                 <option value="Direct Seeded" {{ old('seeding_method') == 'Direct Seeded' ? 'selected' : '' }}>Direct Seeded</option>
             </select>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Current Status <span class="text-danger">*</span></label>
+            <select name="status" class="form-select" required>
+                <option value="Vegetative" {{ old('status') == 'Vegetative' ? 'selected' : '' }}>🌱 Vegetative (Growing)</option>
+                <option value="Harvested" {{ old('status') == 'Harvested' ? 'selected' : '' }}>🌾 Harvested</option>
+            </select>
+            <small class="text-muted">Is the crop still growing or already harvested?</small>
         </div>
 
         <!-- Yield Preview -->
@@ -72,42 +88,68 @@
     </div>
 </form>
 
-<!-- JavaScript for dynamic yield preview -->
 <script>
     (function() {
+        // ============================================================
+        // TOGGLE ACTUAL YIELD FIELD BASED ON STATUS
+        // ============================================================
+        const statusSelect = document.querySelector('select[name="status"]');
+        const actualYieldContainer = document.getElementById('actualYieldContainer');
+        const actualYieldInput = document.querySelector('input[name="actual_yield_tons_ha"]');
+
+        if (statusSelect && actualYieldContainer && actualYieldInput) {
+            function toggleActualYield() {
+                if (statusSelect.value === 'Harvested') {
+                    actualYieldContainer.style.display = 'block';
+                    actualYieldInput.setAttribute('required', 'required');
+                } else {
+                    actualYieldContainer.style.display = 'none';
+                    actualYieldInput.removeAttribute('required');
+                    actualYieldInput.value = ''; // Clear the value when switching away
+                }
+            }
+
+            statusSelect.addEventListener('change', toggleActualYield);
+            // Initial state
+            toggleActualYield();
+        }
+
+        // ============================================================
+        // YIELD PREVIEW (unchanged)
+        // ============================================================
         const varietySelect = document.querySelector('select[name="rice_variety_id"]');
         const methodSelect = document.querySelector('select[name="seeding_method"]');
         const preview = document.getElementById('yieldPreview');
 
-        if (!varietySelect || !methodSelect || !preview) return;
+        if (varietySelect && methodSelect && preview) {
+            function updateYieldPreview() {
+                const varietyId = varietySelect.value;
+                const method = methodSelect.value;
 
-        function updateYieldPreview() {
-            const varietyId = varietySelect.value;
-            const method = methodSelect.value;
+                if (!varietyId || !method) {
+                    preview.innerHTML = 'Select a variety and seeding method to see expected yield.';
+                    return;
+                }
 
-            if (!varietyId || !method) {
-                preview.innerHTML = 'Select a variety and seeding method to see expected yield.';
-                return;
+                fetch(`/admin/rice-varieties/${varietyId}/yield?method=${encodeURIComponent(method)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.avg !== null && data.max !== null) {
+                            preview.innerHTML = `
+                                <span class="fw-bold text-success">${data.avg} t/ha</span>
+                                (max: ${data.max} t/ha)
+                            `;
+                        } else {
+                            preview.innerHTML = '<span class="text-warning">Yield data not available for this method.</span>';
+                        }
+                    })
+                    .catch(() => {
+                        preview.innerHTML = '<span class="text-danger">Error loading yield data.</span>';
+                    });
             }
 
-            fetch(`/admin/rice-varieties/${varietyId}/yield?method=${encodeURIComponent(method)}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.avg !== null && data.max !== null) {
-                        preview.innerHTML = `
-                            <span class="fw-bold text-success">${data.avg} t/ha</span>
-                            (max: ${data.max} t/ha)
-                        `;
-                    } else {
-                        preview.innerHTML = '<span class="text-warning">Yield data not available for this method.</span>';
-                    }
-                })
-                .catch(() => {
-                    preview.innerHTML = '<span class="text-danger">Error loading yield data.</span>';
-                });
+            varietySelect.addEventListener('change', updateYieldPreview);
+            methodSelect.addEventListener('change', updateYieldPreview);
         }
-
-        varietySelect.addEventListener('change', updateYieldPreview);
-        methodSelect.addEventListener('change', updateYieldPreview);
     })();
 </script>

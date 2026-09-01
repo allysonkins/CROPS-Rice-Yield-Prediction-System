@@ -229,4 +229,13 @@ class RiceVarietyController extends Controller
             ], 500);
         }
     }
+
+    /**
+ * Show variety details in a modal (AJAX).
+ */
+public function details($id)
+{
+    $variety = RiceVariety::findOrFail($id);
+    return view('admin.rice-varieties.partials.detail', compact('variety'));
+}
 }

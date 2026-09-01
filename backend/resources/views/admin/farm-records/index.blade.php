@@ -72,6 +72,52 @@
     </div>
 </div>
 
+<!-- ============================================================ -->
+<!-- FILTER CONTROLS (Barangay dropdown, Status buttons)          -->
+<!-- ============================================================ -->
+<div class="row g-2 mb-4">
+    <div class="col-12">
+        <div class="card-custom" style="padding: 12px 20px;">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <!-- Search -->
+                <div style="flex: 1; min-width: 180px;">
+                    <div class="input-group" style="border-radius: 12px; overflow: hidden; border: 1px solid var(--gray-200);">
+                        <span class="input-group-text" style="background: var(--gray-50); border: none; color: var(--gray-400);">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" id="searchFarmRecord" class="form-control" placeholder="Search by farmer, variety, season..." style="border: none; background: var(--gray-50); font-size: 13px;">
+                    </div>
+                </div>
+
+                <!-- Barangay Filter (dropdown) -->
+                <div style="min-width: 160px;">
+                    <select id="filterBarangay" class="form-select" style="border-radius: 12px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none; width: auto; min-width: 140px;">
+                        <option value="all">All Barangays</option>
+                        @foreach($farmRecords->pluck('farm.barangay')->unique()->filter()->values() as $barangay)
+                            <option value="{{ $barangay }}">{{ $barangay }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- Status Filter (button group) -->
+                <div style="min-width: 140px;">
+                    <div class="bg-gray-100 p-1 rounded-xl d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                        <button class="filter-btn status-btn active" data-status="all" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All Statuses</button>
+                        <button class="filter-btn status-btn" data-status="Harvested" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Harvested</button>
+                        <button class="filter-btn status-btn" data-status="Vegetative" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Vegetative</button>
+                    </div>
+                </div>
+
+                @if(auth()->user()->role === 'admin')
+                    <div>
+                        <span class="badge bg-secondary">{{ $farmRecords->count() }} Records</span>
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Farm Records Table -->
 <div class="card-custom">
     <div class="card-title"><i class="bi bi-table"></i> Farm Records</div>
@@ -85,33 +131,52 @@
                     <th>Season</th>
                     <th>Fertilizer (kg/ha)</th>
                     <th>Historical Yield</th>
-                    <th>Expected Yield (t/ha)</th>   <!-- NEW COLUMN -->
+                    <th>Actual Yield</th>
+                    <th>Expected Yield (t/ha)</th>
                     <th>Seeding Method</th>
+                    <th>Status</th>
                     <th>Created</th>
                     @if(auth()->user()->role !== 'farmer')
-                        <th>Actions</th>
+                        <th style="white-space: nowrap; min-width: 140px;">Actions</th>
                     @endif
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="farmRecordsBody">
                 @forelse($farmRecords as $record)
                     @php
-                        // Compute expected yield based on the variety and seeding method
                         $expected = null;
                         if ($record->riceVariety && $record->seeding_method) {
                             $expected = $record->riceVariety->getYieldForMethod($record->seeding_method);
                         }
+                        $searchData = strtolower(
+                            ($record->farm->user->name ?? '') . ' ' .
+                            ($record->riceVariety->name ?? '') . ' ' .
+                            ($record->season ?? '')
+                        );
+                        $barangay = $record->farm->barangay ?? '';
+                        $status = $record->status ?? '';
                     @endphp
-                    <tr>
+                    <tr class="record-row" data-search="{{ $searchData }}" data-barangay="{{ $barangay }}" data-status="{{ $status }}">
                         <td>{{ $loop->iteration }}</td>
                         <td>
                             <strong>{{ $record->farm->name ?? 'N/A' }}</strong>
                             <br><small class="text-muted">{{ $record->farm->barangay ?? '' }}</small>
                         </td>
-                        <td>{{ $record->riceVariety->name ?? 'N/A' }}</td>
+                        <td>
+                            <span class="variety-link" style="cursor: pointer; color: var(--green); text-decoration: underline;" onclick="viewVarietyDetails({{ $record->rice_variety_id }})">
+                                {{ $record->riceVariety->name ?? 'N/A' }}
+                            </span>
+                        </td>
                         <td>{{ $record->season }}</td>
                         <td>{{ number_format($record->fertilizer_kg_ha, 2) }}</td>
                         <td>{{ $record->historical_yield_tons_ha ? number_format($record->historical_yield_tons_ha, 2) : 'N/A' }}</td>
+                        <td>
+                            @if($record->status === 'Harvested')
+                                {{ $record->actual_yield_tons_ha ? number_format($record->actual_yield_tons_ha, 2) : 'N/A' }}
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
                         <td>
                             @if($expected && $expected->avg !== null && $expected->max !== null)
                                 <span class="fw-bold text-success">{{ number_format($expected->avg, 2) }}</span>
@@ -121,15 +186,24 @@
                             @endif
                         </td>
                         <td>{{ $record->seeding_method ?? 'N/A' }}</td>
+                        <td>
+                            <span class="badge {{ $record->status_badge_class }}">
+                                <i class="bi {{ $record->status_icon }}"></i>
+                                {{ $record->status ?? 'N/A' }}
+                            </span>
+                        </td>
                         <td>{{ $record->created_at ? $record->created_at->format('M d, Y') : 'N/A' }}</td>
                         @if(auth()->user()->role !== 'farmer')
-                            <td>
-                                <button type="button" class="btn btn-sm btn-secondary" onclick="editFarmRecord({{ $record->id }})">
+                            <td style="white-space: nowrap;">
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="viewFarmRecord({{ $record->id }})" title="View Details">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-secondary" onclick="editFarmRecord({{ $record->id }})" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 <form action="{{ route('admin.farm-records.destroy', $record->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this record?')">
                                     @csrf @method('DELETE')
-                                    <button type="submit" class="btn btn-sm btn-danger">
+                                    <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
@@ -138,26 +212,9 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 12 : 11 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
-                            <p class="mt-2 mb-0">
-                                @if(auth()->user()->role === 'farmer')
-                                    No farm records for your farms yet.
-                                @else
-                                    No farm records yet.
-                                @endif
-                            </p>
-                            @if(auth()->user()->role === 'farmer')
-                                <small>
-                                    <i class="bi bi-info-circle"></i> 
-                                    Farm records are managed by CAO staff. 
-                                    Please visit the City Agriculture Office to register your farm records.
-                                </small>
-                            @else
-                                <button type="button" class="btn btn-sm btn-primary mt-2" onclick="openFarmRecordModal()">
-                                    <i class="bi bi-plus-circle"></i> Add Farm Record
-                                </button>
-                            @endif
+                            <p class="mt-2 mb-0">No farm records yet.</p>
                         </td>
                     </tr>
                 @endforelse
@@ -166,16 +223,110 @@
     </div>
 </div>
 
-<!-- Include the Modal (Only for Admin & Staff) -->
+<!-- Include the Add/Edit Modal -->
 @if(auth()->user()->role !== 'farmer')
     @include('admin.farm-records.partials.modal')
 @endif
+
+<!-- ============================================================ -->
+<!-- VIEW FARM RECORD DETAILS MODAL                                -->
+<!-- ============================================================ -->
+<div class="modal fade" id="viewFarmRecordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--green); color: white;">
+                <h5 class="modal-title"><i class="bi bi-eye"></i> Farm Record Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="viewFarmRecordModalBody" style="overflow: hidden;">
+                <div class="text-center py-4" id="viewModalLoading">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading record details...</p>
+                </div>
+                <div id="viewModalContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- RICE VARIETY DETAILS MODAL                                    -->
+<!-- ============================================================ -->
+<div class="modal fade" id="varietyDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--green); color: white;">
+                <h5 class="modal-title"><i class="bi bi-flower1"></i> Rice Variety Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="varietyDetailModalBody" style="overflow: hidden;">
+                <div class="text-center py-4" id="varietyDetailLoading">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading variety details...</p>
+                </div>
+                <div id="varietyDetailContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @endsection
 
 @push('scripts')
 @if(auth()->user()->role !== 'farmer')
 <script>
+    // ============================================================
+    // FILTERING (Barangay dropdown + Status buttons)
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchFarmRecord');
+        const barangaySelect = document.getElementById('filterBarangay');
+        const statusBtns = document.querySelectorAll('.status-btn');
+        const rows = document.querySelectorAll('#farmRecordsBody .record-row');
+
+        function filterTable() {
+            const search = searchInput.value.toLowerCase().trim();
+            const barangay = barangaySelect.value;
+            const activeStatus = document.querySelector('.status-btn.active');
+            const status = activeStatus ? activeStatus.dataset.status : 'all';
+
+            rows.forEach(row => {
+                const searchData = row.dataset.search || '';
+                const rowBarangay = row.dataset.barangay || '';
+                const rowStatus = row.dataset.status || '';
+
+                const matchesSearch = searchData.includes(search);
+                const matchesBarangay = barangay === 'all' || rowBarangay === barangay;
+                const matchesStatus = status === 'all' || rowStatus === status;
+
+                row.style.display = (matchesSearch && matchesBarangay && matchesStatus) ? '' : 'none';
+            });
+        }
+
+        searchInput.addEventListener('input', filterTable);
+        barangaySelect.addEventListener('change', filterTable);
+
+        statusBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                statusBtns.forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--gray-600)';
+                    b.classList.remove('active');
+                });
+                this.style.background = 'white';
+                this.style.color = 'var(--gray-900)';
+                this.classList.add('active');
+                filterTable();
+            });
+        });
+
+        document.querySelector('.status-btn[data-status="all"]')?.click();
+    });
+
     // ============================================================
     // OPEN MODAL FOR ADD
     // ============================================================
@@ -247,7 +398,65 @@
     }
 
     // ============================================================
-    // HANDLE FORM SUBMISSION
+    // OPEN MODAL FOR VIEW (Farm Record)
+    // ============================================================
+    function viewFarmRecord(id) {
+        document.getElementById('viewModalLoading').style.display = 'block';
+        document.getElementById('viewModalContent').style.display = 'none';
+        document.getElementById('viewModalContent').innerHTML = '';
+
+        fetch('/admin/farm-records/' + id)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('viewModalLoading').style.display = 'none';
+                document.getElementById('viewModalContent').style.display = 'block';
+                document.getElementById('viewModalContent').innerHTML = html;
+            })
+            .catch(() => {
+                document.getElementById('viewModalLoading').style.display = 'none';
+                document.getElementById('viewModalContent').style.display = 'block';
+                document.getElementById('viewModalContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Failed to load record details. Please try again.
+                    </div>
+                `;
+            });
+
+        var modal = new bootstrap.Modal(document.getElementById('viewFarmRecordModal'));
+        modal.show();
+    }
+
+    // ============================================================
+    // VIEW RICE VARIETY DETAILS
+    // ============================================================
+    function viewVarietyDetails(id) {
+        document.getElementById('varietyDetailLoading').style.display = 'block';
+        document.getElementById('varietyDetailContent').style.display = 'none';
+        document.getElementById('varietyDetailContent').innerHTML = '';
+
+        fetch('/admin/rice-varieties/' + id + '/details')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('varietyDetailLoading').style.display = 'none';
+                document.getElementById('varietyDetailContent').style.display = 'block';
+                document.getElementById('varietyDetailContent').innerHTML = html;
+            })
+            .catch(() => {
+                document.getElementById('varietyDetailLoading').style.display = 'none';
+                document.getElementById('varietyDetailContent').style.display = 'block';
+                document.getElementById('varietyDetailContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Failed to load variety details. Please try again.
+                    </div>
+                `;
+            });
+
+        var modal = new bootstrap.Modal(document.getElementById('varietyDetailModal'));
+        modal.show();
+    }
+
+    // ============================================================
+    // HANDLE FORM SUBMISSION (Add/Edit)
     // ============================================================
     function handleFormSubmit(e) {
         e.preventDefault();

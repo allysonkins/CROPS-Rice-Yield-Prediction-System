@@ -54,6 +54,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/edit', [RiceVarietyController::class, 'edit'])->name('admin.rice-varieties.edit');
         Route::put('/{id}', [RiceVarietyController::class, 'update'])->name('admin.rice-varieties.update');
         Route::delete('/{id}', [RiceVarietyController::class, 'destroy'])->name('admin.rice-varieties.destroy');
+        Route::get('/{id}/details', [RiceVarietyController::class, 'details'])->name('admin.rice-varieties.details');
 
         // Get yield for a variety by seeding method (AJAX)
         Route::get('/{id}/yield', [RiceVarietyController::class, 'getYield'])->name('admin.rice-varieties.yield');
@@ -85,6 +86,7 @@ Route::middleware(['auth'])->group(function () {
     // 7. FARM RECORDS
     // ============================================================
     Route::resource('/admin/farm-records', FarmRecordController::class)->names('admin.farm-records');
+    Route::get('/admin/farm-records/{id}', [FarmRecordController::class, 'show'])->name('admin.farm-records.show');
 
     // ============================================================
     // 8. ADVISORIES

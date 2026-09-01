@@ -104,12 +104,21 @@
                                 $yield = $prediction->predicted_yield_tons_ha;
                                 $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
                                 $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
+                                $varietyId = $prediction->farmRecord->rice_variety_id ?? null;
                             @endphp
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
                                 <td><strong>{{ $farmName }}</strong></td>
                                 <td>{{ $barangay }}</td>
-                                <td>{{ $variety }}</td>
+                                <td>
+                                    @if($varietyId)
+                                        <span class="variety-link" style="cursor: pointer; color: var(--green); text-decoration: underline;" onclick="viewVarietyDetails({{ $varietyId }})">
+                                            {{ $variety }}
+                                        </span>
+                                    @else
+                                        {{ $variety }}
+                                    @endif
+                                </td>
                                 <td>{{ $season }}</td>
                                 <td><strong style="color: #0f4c2b;">{{ number_format($yield, 2) }}</strong></td>
                                 <td>
@@ -197,6 +206,29 @@
         </div>
     </div>
 @endif
+
+<!-- ============================================================ -->
+<!-- RICE VARIETY DETAILS MODAL                                    -->
+<!-- ============================================================ -->
+<div class="modal fade" id="varietyDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--green); color: white;">
+                <h5 class="modal-title"><i class="bi bi-flower1"></i> Rice Variety Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="varietyDetailModalBody" style="overflow: hidden;">
+                <div class="text-center py-4" id="varietyDetailLoading">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading variety details...</p>
+                </div>
+                <div id="varietyDetailContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @endsection
 
@@ -308,6 +340,35 @@
             });
         }
     });
+
+    // ============================================================
+    // VIEW RICE VARIETY DETAILS
+    // ============================================================
+    function viewVarietyDetails(id) {
+        document.getElementById('varietyDetailLoading').style.display = 'block';
+        document.getElementById('varietyDetailContent').style.display = 'none';
+        document.getElementById('varietyDetailContent').innerHTML = '';
+
+        fetch('/admin/rice-varieties/' + id + '/details')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('varietyDetailLoading').style.display = 'none';
+                document.getElementById('varietyDetailContent').style.display = 'block';
+                document.getElementById('varietyDetailContent').innerHTML = html;
+            })
+            .catch(() => {
+                document.getElementById('varietyDetailLoading').style.display = 'none';
+                document.getElementById('varietyDetailContent').style.display = 'block';
+                document.getElementById('varietyDetailContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Failed to load variety details. Please try again.
+                    </div>
+                `;
+            });
+
+        var modal = new bootstrap.Modal(document.getElementById('varietyDetailModal'));
+        modal.show();
+    }
 </script>
 @endif
 @endpush

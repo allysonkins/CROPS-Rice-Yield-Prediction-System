@@ -3,26 +3,6 @@
 @section('title', 'Advisories')
 
 @section('content')
-@if(session('success'))
-    <div class="alert alert-success alert-dismissible fade show" role="alert" style="border-left: 4px solid var(--green);">
-        <div class="d-flex align-items-center">
-            <i class="bi bi-check-circle-fill me-2" style="color: var(--green);"></i>
-            <strong>Success!</strong> {{ session('success') }}
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-@endif
-
-@if(session('error'))
-    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 4px solid var(--red);">
-        <div class="d-flex align-items-center">
-            <i class="bi bi-x-circle-fill me-2" style="color: var(--red);"></i>
-            <strong>Error!</strong> {{ session('error') }}
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-@endif
-
 <div class="d-flex justify-content-end align-items-center mb-4">
     @if(auth()->user()->role !== 'farmer')
         <button type="button" class="btn btn-success" onclick="openAdvisoryModal()">

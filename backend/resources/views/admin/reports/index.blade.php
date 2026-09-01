@@ -23,8 +23,7 @@
     </div>
 @endif
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4 class="mb-0"><i class="bi bi-file-earmark-pdf" style="color: var(--red);"></i> Reports</h4>
+<div class="d-flex justify-content-end align-items-center mb-4">
     <a href="{{ route('admin.reports.generate') }}" class="btn btn-danger">
         <i class="bi bi-file-earmark-pdf"></i> Generate PDF Report
     </a>
@@ -97,26 +96,6 @@
             <a href="{{ route('admin.reports.generate') }}" class="btn btn-danger">
                 <i class="bi bi-file-earmark-pdf"></i> Download PDF
             </a>
-        </div>
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="row g-3">
-    <div class="col-12">
-        <div class="card-custom">
-            <div class="card-title"><i class="bi bi-lightning-fill" style="color: var(--gold);"></i> Quick Actions</div>
-            <div class="d-flex flex-wrap gap-2">
-                <a href="{{ route('admin.reports.generate') }}" class="btn btn-outline-danger">
-                    <i class="bi bi-file-earmark-pdf"></i> Generate Full Report
-                </a>
-                <a href="{{ route('admin.predictions.index') }}" class="btn btn-outline-primary">
-                    <i class="bi bi-graph-up"></i> View Predictions
-                </a>
-                <a href="{{ route('admin.farms.index') }}" class="btn btn-outline-success">
-                    <i class="bi bi-geo-alt"></i> Manage Farms
-                </a>
-            </div>
         </div>
     </div>
 </div>

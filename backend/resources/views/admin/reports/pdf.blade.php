@@ -108,7 +108,9 @@
             <div class="label">Rice Varieties</div>
         </div>
         <div class="stat-box">
-            <div class="number">{{ $stats['avg_yield'] ? number_format($stats['avg_yield'], 2) : 'N/A' }}</div>
+            <div class="number">
+                {{ is_numeric($stats['avg_yield']) ? number_format($stats['avg_yield'], 2) : 'N/A' }}
+            </div>
             <div class="label">Avg Yield (t/ha)</div>
         </div>
     </div>
@@ -121,7 +123,7 @@
                 <th>Barangay</th>
                 <th>Farmer</th>
                 <th>Area (ha)</th>
-                <th>Ensemble Yield</th>
+                <th>Predicted Yield (RF)</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -130,7 +132,7 @@
                 @php
                     $lastPrediction = $farm->farmRecords
                         ->flatMap(function($r) { return $r->predictions; })
-                        ->where('model_type', 'Ensemble')
+                        ->where('model_type', 'RandomForest')
                         ->last();
                     $yield = $lastPrediction ? $lastPrediction->predicted_yield_tons_ha : null;
                     $status = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
