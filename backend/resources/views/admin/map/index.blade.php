@@ -72,7 +72,7 @@
     <div class="row mt-3">
         <div class="col-12">
             <div class="card-custom">
-                <h6 class="mb-2">📋 Farm List</h6>
+                <h6 class="mb-2">Farm List</h6>
                 <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                     <table class="table table-sm table-hover">
                         <thead>
