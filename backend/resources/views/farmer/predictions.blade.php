@@ -62,6 +62,7 @@
                     <th>RF Yield</th>
                     <th>Status</th>
                     <th>Updated</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -86,10 +87,15 @@
                             </span>
                         </td>
                         <td>{{ $pred->updated_at->diffForHumans() }}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#predictionDetailModal" data-prediction-id="{{ $pred->id }}" title="View Details">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-muted">
+                        <td colspan="8" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No predictions for your farms yet.</p>
                             <small>CAO staff will generate predictions from your farm records.</small>
@@ -100,4 +106,63 @@
         </table>
     </div>
 </div>
+
+<!-- ============================================================ -->
+<!-- PREDICTION DETAIL MODAL -->
+<!-- ============================================================ -->
+<div class="modal fade" id="predictionDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--green); color: white;">
+                <h5 class="modal-title"><i class="bi bi-eye"></i> Prediction Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="predictionDetailModalBody" style="overflow: hidden;">
+                <div class="text-center py-4" id="predictionDetailLoading">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading prediction details...</p>
+                </div>
+                <div id="predictionDetailContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('predictionDetailModal');
+        if (!modal) return;
+
+        modal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const predictionId = button.getAttribute('data-prediction-id');
+
+            document.getElementById('predictionDetailLoading').style.display = 'block';
+            document.getElementById('predictionDetailContent').style.display = 'none';
+            document.getElementById('predictionDetailContent').innerHTML = '';
+
+            fetch('/farmer/predictions/' + predictionId)
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('predictionDetailLoading').style.display = 'none';
+                    document.getElementById('predictionDetailContent').style.display = 'block';
+                    document.getElementById('predictionDetailContent').innerHTML = html;
+                })
+                .catch(() => {
+                    document.getElementById('predictionDetailLoading').style.display = 'none';
+                    document.getElementById('predictionDetailContent').style.display = 'block';
+                    document.getElementById('predictionDetailContent').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> Failed to load prediction details. Please try again.
+                        </div>
+                    `;
+                });
+        });
+    });
+</script>
+@endpush

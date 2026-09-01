@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Rice Predictions')
+@section('title', 'Yield Forecasts')
 
 @section('content')
 <!-- ============================================================ -->
@@ -149,7 +149,7 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- GENERATE PREDICTION MODAL -->
+<!-- GENERATE PREDICTION MODAL (green header)                     -->
 <!-- ============================================================ -->
 @if(auth()->user()->role !== 'farmer')
     <div class="modal fade" id="generatePredictionModal" tabindex="-1" aria-hidden="true">
@@ -160,7 +160,6 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="generatePredictionModalBody">
-                    <!-- Content will be loaded via AJAX -->
                     <div class="text-center py-4" id="modalLoading">
                         <div class="spinner-border text-success" role="status">
                             <span class="visually-hidden">Loading...</span>
@@ -175,19 +174,19 @@
 @endif
 
 <!-- ============================================================ -->
-<!-- VIEW PREDICTION MODAL -->
+<!-- VIEW PREDICTION MODAL (green header)                         -->
 <!-- ============================================================ -->
 @if(auth()->user()->role !== 'farmer')
     <div class="modal fade" id="viewPredictionModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header" style="background: #4f46e5; color: white;">
+                <div class="modal-header" style="background: var(--green); color: white;">
                     <h5 class="modal-title"><i class="bi bi-eye"></i> Prediction Details</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="viewPredictionModalBody">
                     <div class="text-center py-4" id="viewModalLoading">
-                        <div class="spinner-border text-primary" role="status">
+                        <div class="spinner-border text-success" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
                         <p class="mt-2">Loading prediction details...</p>

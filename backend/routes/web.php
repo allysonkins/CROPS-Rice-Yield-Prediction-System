@@ -14,8 +14,8 @@ use App\Http\Controllers\Admin\FarmController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\FarmerController;
 use App\Http\Controllers\Admin\ReportController;
-use App\Http\Controllers\Farmer\ProfileController;
 use App\Http\Controllers\Farmer\PredictionController as FarmerPredictionController;
+use App\Http\Controllers\ProfileController; // Unified profile for all roles
 
 Route::get('/', function () {
     return redirect('/login');
@@ -45,19 +45,19 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/predictions/{id}', [PredictionController::class, 'show'])->name('admin.predictions.show');
 
     // ============================================================
-// 3. RICE VARIETIES (updated)
-// ============================================================
-Route::prefix('admin/rice-varieties')->group(function () {
-    Route::get('/', [RiceVarietyController::class, 'index'])->name('admin.rice-varieties.index');
-    Route::get('/create', [RiceVarietyController::class, 'create'])->name('admin.rice-varieties.create');
-    Route::post('/', [RiceVarietyController::class, 'store'])->name('admin.rice-varieties.store');
-    Route::get('/{id}/edit', [RiceVarietyController::class, 'edit'])->name('admin.rice-varieties.edit');
-    Route::put('/{id}', [RiceVarietyController::class, 'update'])->name('admin.rice-varieties.update');
-    Route::delete('/{id}', [RiceVarietyController::class, 'destroy'])->name('admin.rice-varieties.destroy');
+    // 3. RICE VARIETIES
+    // ============================================================
+    Route::prefix('admin/rice-varieties')->group(function () {
+        Route::get('/', [RiceVarietyController::class, 'index'])->name('admin.rice-varieties.index');
+        Route::get('/create', [RiceVarietyController::class, 'create'])->name('admin.rice-varieties.create');
+        Route::post('/', [RiceVarietyController::class, 'store'])->name('admin.rice-varieties.store');
+        Route::get('/{id}/edit', [RiceVarietyController::class, 'edit'])->name('admin.rice-varieties.edit');
+        Route::put('/{id}', [RiceVarietyController::class, 'update'])->name('admin.rice-varieties.update');
+        Route::delete('/{id}', [RiceVarietyController::class, 'destroy'])->name('admin.rice-varieties.destroy');
 
-    // NEW: Get yield for a variety by seeding method
-    Route::get('/{id}/yield', [RiceVarietyController::class, 'getYield'])->name('admin.rice-varieties.yield');
-});
+        // Get yield for a variety by seeding method (AJAX)
+        Route::get('/{id}/yield', [RiceVarietyController::class, 'getYield'])->name('admin.rice-varieties.yield');
+    });
 
     // ============================================================
     // 4. STAFF ACCOUNTS (ADMIN ONLY)
@@ -110,13 +110,20 @@ Route::prefix('admin/rice-varieties')->group(function () {
     Route::get('/admin/reports/generate', [ReportController::class, 'generate'])->name('admin.reports.generate');
 
     // ============================================================
-    // 12. FARMER PROFILE
+    // 12. UNIFIED PROFILE (for all users)
+    // ============================================================
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    // ============================================================
+    // 13. FARMER PROFILE (Backward compatibility – points to unified controller)
     // ============================================================
     Route::get('/farmer/profile', [ProfileController::class, 'edit'])->name('farmer.profile.edit');
     Route::put('/farmer/profile', [ProfileController::class, 'update'])->name('farmer.profile.update');
 
     // ============================================================
-    // 13. FARMER PREDICTIONS
+    // 14. FARMER PREDICTIONS
     // ============================================================
     Route::get('/farmer/predictions', [FarmerPredictionController::class, 'index'])->name('farmer.predictions.index');
+    Route::get('/farmer/predictions/{id}', [FarmerPredictionController::class, 'show'])->name('farmer.predictions.show');
 });

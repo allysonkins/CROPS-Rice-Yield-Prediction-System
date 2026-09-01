@@ -3,13 +3,10 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header" style="background: var(--green); color: white;">
-                <h5 class="modal-title" id="farmModalLabel">
-                    <i class="bi bi-geo-alt-fill"></i> 
-                    <span id="modalTitle">Add Farm</span>
-                </h5>
+                <h5 class="modal-title"><i class="bi bi-geo-alt-fill"></i> <span id="modalTitle">Add Farm</span></h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="farmModalBody">
+            <div class="modal-body" id="farmModalBody" style="overflow: hidden;">
                 <div class="text-center py-4" id="modalLoading">
                     <div class="spinner-border text-success" role="status">
                         <span class="visually-hidden">Loading...</span>

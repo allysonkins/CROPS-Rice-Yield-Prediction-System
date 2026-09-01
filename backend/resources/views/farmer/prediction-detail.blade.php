@@ -58,7 +58,7 @@
     </div>
 </div>
 
-<!-- Prediction Results (only Random Forest) -->
+<!-- Prediction Results (Random Forest) -->
 <div class="row g-3 mb-3">
     <div class="col-12">
         <div class="card" style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200); border-top: 3px solid #4f46e5;">
@@ -107,7 +107,6 @@
                     @php
                         $inputFeatures = json_decode($prediction->input_features, true);
                         $input = $inputFeatures['input'] ?? [];
-                        $weather = $inputFeatures['weather'] ?? [];
                     @endphp
                     <div class="row">
                         <div class="col-md-6">
@@ -137,7 +136,7 @@
     </div>
 </div>
 
-<!-- Buttons -->
+<!-- Close Button -->
 <div class="row mt-3">
     <div class="col-12 text-end">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

@@ -56,33 +56,34 @@
             width: 260px;
             height: 100vh;
             background: var(--green);
-            padding: 24px 0;
+            padding: 20px 0 16px;
             display: flex;
             flex-direction: column;
             z-index: 1050;
             transition: transform 0.3s ease;
+            overflow: hidden; /* Hide scrollbar */
         }
         .sidebar-brand {
-            padding: 0 24px 20px 24px;
+            padding: 0 20px 16px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.06);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
         .sidebar-brand .logo {
-            width: 36px;
-            height: 36px;
+            width: 34px;
+            height: 34px;
             background: rgba(255,255,255,0.10);
-            border-radius: 10px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--gold);
-            font-size: 18px;
+            font-size: 17px;
             flex-shrink: 0;
         }
         .sidebar-brand h1 {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             color: white;
             letter-spacing: -0.3px;
@@ -92,25 +93,33 @@
 
         .sidebar-nav {
             flex: 1;
-            padding: 16px 12px 0;
+            padding: 8px 10px 0;
             overflow-y: auto;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
         }
+        .sidebar-nav::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
         .sidebar-nav .nav-label {
-            font-size: 10px;
+            font-size: 9.5px;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.8px;
             color: rgba(255,255,255,0.25);
-            padding: 12px 12px 6px;
+            padding: 8px 10px 4px;
+            margin-top: 8px;
+        }
+        .sidebar-nav .nav-label:first-of-type {
+            margin-top: 0;
         }
         .sidebar-nav a {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px 14px;
-            border-radius: 10px;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
             color: rgba(255,255,255,0.65);
-            font-size: 13.5px;
+            font-size: 13px;
             font-weight: 500;
             transition: all 0.15s ease;
             text-decoration: none;
@@ -127,28 +136,30 @@
             border-left-color: var(--gold);
         }
         .sidebar-nav a i {
-            font-size: 17px;
-            width: 20px;
+            font-size: 16px;
+            width: 18px;
             text-align: center;
             flex-shrink: 0;
         }
         .sidebar-nav a.active i { color: var(--gold); }
+
         .sidebar-divider {
             border: none;
             border-top: 1px solid rgba(255,255,255,0.06);
-            margin: 12px 16px;
+            margin: 8px 12px;
         }
+
         .sidebar-footer {
-            padding: 0 12px 16px;
+            padding: 0 10px 12px;
         }
         .sidebar-footer a {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 10px 14px;
-            border-radius: 10px;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
             color: rgba(255,255,255,0.45);
-            font-size: 13.5px;
+            font-size: 13px;
             font-weight: 500;
             text-decoration: none;
             transition: all 0.15s ease;
@@ -157,7 +168,7 @@
             background: rgba(255,255,255,0.06);
             color: white;
         }
-        .sidebar-footer a i { font-size: 17px; width: 20px; text-align: center; }
+        .sidebar-footer a i { font-size: 16px; width: 18px; text-align: center; }
 
         /* ─── Main Content ─── */
         .main-content {
@@ -387,7 +398,7 @@
             </a>
 
             <!-- People -->
-            <div class="nav-label" style="margin-top:12px;">People</div>
+            <div class="nav-label" style="margin-top:8px;">People</div>
 
             @if(auth()->check() && auth()->user()->role === 'admin')
                 <a href="/admin/users" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
@@ -402,7 +413,7 @@
             @endif
 
             <!-- Land -->
-            <div class="nav-label" style="margin-top:12px;">Land</div>
+            <div class="nav-label" style="margin-top:8px;">Land</div>
             <a href="/admin/map" class="{{ request()->routeIs('admin.map') ? 'active' : '' }}">
                 <i class="bi bi-map"></i> <span>Farms & Map</span>
             </a>
@@ -418,7 +429,7 @@
             </a>
 
             <!-- Alerts & Reports -->
-            <div class="nav-label" style="margin-top:12px;">Alerts & Reports</div>
+            <div class="nav-label" style="margin-top:8px;">Alerts & Reports</div>
             <a href="/admin/advisories" class="{{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i> <span>Advisories</span>
             </a>
@@ -430,13 +441,11 @@
                 </a>
             @endif
 
-            <!-- Farmer Profile -->
-            @if(auth()->check() && auth()->user()->role === 'farmer')
-                <div class="nav-label" style="margin-top:12px;">Account</div>
-                <a href="{{ route('farmer.profile.edit') }}" class="{{ request()->routeIs('farmer.profile.*') ? 'active' : '' }}">
-                    <i class="bi bi-person"></i> <span>My Profile</span>
-                </a>
-            @endif
+            <!-- ===== My Profile for ALL users ===== -->
+            <div class="nav-label" style="margin-top:8px;">Account</div>
+            <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
+                <i class="bi bi-person"></i> <span>My Profile</span>
+            </a>
         </nav>
 
         <hr class="sidebar-divider">

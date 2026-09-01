@@ -75,7 +75,7 @@
 <!-- ============================================================ -->
 <!-- LOW YIELD AREAS + RECENT PREDICTIONS -->
 <!-- ============================================================ -->
-<div class="row g-2">
+<div class="row g-2 mb-4">
     <!-- Low Yield Areas -->
     <div class="col-12 col-lg-4">
         <div class="card-custom" style="height: 100%;">
@@ -147,7 +147,7 @@
                                 </td>
                                 <td>{{ $pred->farmRecord->riceVariety->name ?? 'N/A' }}</td>
                                 <td>{{ $pred->farmRecord->season ?? 'N/A' }}</td>
-                                <td><strong style="color: #0f4c2b;">{{ number_format($yield, 2) }}</strong></td>
+                                <td><strong style="color: var(--green);">{{ number_format($yield, 2) }}</strong></td>
                                 <td>
                                     <span class="badge-status {{ $statusClass }}">
                                         <span class="dot"></span> {{ $statusText }}
@@ -169,7 +169,7 @@
 
             @if($recentPredictions->count() > 0)
                 <div class="mt-2 text-end">
-                    <a href="{{ route('admin.predictions.index') }}" class="btn btn-sm btn-outline-secondary">
+                    <a href="{{ route('admin.predictions.index') }}" class="btn btn-sm btn-outline-secondary" style="border-radius: 8px;">
                         View All <i class="bi bi-arrow-right"></i>
                     </a>
                 </div>
@@ -178,31 +178,4 @@
     </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- QUICK ACTIONS -->
-<!-- ============================================================ -->
-<div class="row g-3 mt-2">
-    <div class="col-12">
-        <div class="card-custom">
-            <div class="card-title"><i class="bi bi-lightning-fill" style="color: var(--gold);"></i> Quick Actions</div>
-            <div class="d-flex flex-wrap gap-2">
-                <a href="{{ route('admin.farms.index') }}" class="btn btn-outline-success">
-                    <i class="bi bi-geo-alt"></i> Manage Farms
-                </a>
-                <a href="{{ route('admin.farm-records.index') }}" class="btn btn-outline-primary">
-                    <i class="bi bi-clipboard-data"></i> Farm Records
-                </a>
-                <a href="{{ route('admin.advisories.index') }}" class="btn btn-outline-warning">
-                    <i class="bi bi-megaphone"></i> Advisories
-                </a>
-                <a href="{{ route('admin.predictions.index') }}" class="btn btn-outline-info">
-                    <i class="bi bi-graph-up"></i> View Predictions
-                </a>
-                <a href="{{ route('admin.reports.index') }}" class="btn btn-outline-secondary">
-                    <i class="bi bi-file-earmark-pdf"></i> Reports
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
 @endsection

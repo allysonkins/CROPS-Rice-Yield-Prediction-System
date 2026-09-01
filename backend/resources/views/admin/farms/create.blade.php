@@ -44,17 +44,24 @@
             </select>
         </div>
 
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Coordinates (Optional)</label>
+        <!-- ===== MAP SECTION ===== -->
+        <div class="col-12">
+            <label class="form-label fw-semibold">Location</label>
             <div class="row g-2">
                 <div class="col-6">
-                    <input type="number" step="0.00000001" name="latitude" class="form-control" placeholder="Latitude" value="{{ old('latitude') }}">
+                    <input type="number" step="0.00000001" name="latitude" id="latitude" class="form-control" placeholder="Latitude" value="{{ old('latitude') }}">
                 </div>
                 <div class="col-6">
-                    <input type="number" step="0.00000001" name="longitude" class="form-control" placeholder="Longitude" value="{{ old('longitude') }}">
+                    <input type="number" step="0.00000001" name="longitude" id="longitude" class="form-control" placeholder="Longitude" value="{{ old('longitude') }}">
                 </div>
             </div>
-            <small class="text-muted">Used for map visualization</small>
+            <div class="mt-2">
+                <button type="button" id="clearLocation" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-x-circle"></i> Clear
+                </button>
+            </div>
+            <div id="farmMap" style="height:300px; width:100%; border-radius:12px; border:1px solid #ddd; background:#e8ecf1; margin-top:8px;"></div>
+            <small class="text-muted">Click on the map to set coordinates.</small>
         </div>
 
         <div class="col-12">
