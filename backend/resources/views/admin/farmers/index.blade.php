@@ -51,28 +51,28 @@
     <div class="col-6 col-lg-3">
         <div class="stat-card">
             <div class="stat-info">
+                <div class="label">Verified</div>
+                <div class="value">{{ $farmers->whereNotNull('email_verified_at')->count() }}</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-patch-check-fill" style="color: var(--green);"></i></div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-info">
+                <div class="label">Unverified</div>
+                <div class="value">{{ $farmers->whereNull('email_verified_at')->count() }}</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-exclamation-circle-fill" style="color: var(--gold);"></i></div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-info">
                 <div class="label">With Farms</div>
-                <div class="value">{{ $farmers->filter(function($f) { return $f->farms->count() > 0; })->count() }}</div>
+                <div class="value">{{ $farmers->filter(fn($f) => $f->farms->count() > 0)->count() }}</div>
             </div>
             <div class="stat-icon"><i class="bi bi-geo-alt-fill"></i></div>
-        </div>
-    </div>
-    <div class="col-6 col-lg-3">
-        <div class="stat-card">
-            <div class="stat-info">
-                <div class="label">Barangays</div>
-                <div class="value">{{ $farmers->pluck('barangay')->filter()->unique()->count() }}</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-geo"></i></div>
-        </div>
-    </div>
-    <div class="col-6 col-lg-3">
-        <div class="stat-card">
-            <div class="stat-info">
-                <div class="label">Total Farms</div>
-                <div class="value">{{ \App\Models\Farm::count() }}</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-tree"></i></div>
         </div>
     </div>
 </div>
@@ -89,6 +89,7 @@
                     <th>Email</th>
                     <th>Barangay</th>
                     <th>Farms</th>
+                    <th>Verified</th>
                     <th>Joined</th>
                     @if(auth()->user()->role === 'admin')
                         <th>Actions</th>
@@ -103,6 +104,18 @@
                         <td>{{ $farmer->email }}</td>
                         <td>{{ $farmer->barangay ?? 'N/A' }}</td>
                         <td>{{ $farmer->farms->count() }}</td>
+                        <td>
+                            @if($farmer->email_verified_at)
+                                <span class="badge bg-success">
+                                    <i class="bi bi-patch-check-fill"></i> Verified
+                                </span>
+                                <br><small class="text-muted">{{ $farmer->email_verified_at->format('M d, Y') }}</small>
+                            @else
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-hourglass-split"></i> Pending
+                                </span>
+                            @endif
+                        </td>
                         <td>{{ $farmer->created_at->format('M d, Y') }}</td>
                         @if(auth()->user()->role === 'admin')
                             <td>
@@ -126,7 +139,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ auth()->user()->role === 'admin' ? 7 : 6 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ auth()->user()->role === 'admin' ? 8 : 7 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No farmers registered yet.</p>
                             @if(auth()->user()->role === 'admin')
@@ -167,7 +180,7 @@
                 document.getElementById('modalLoading').style.display = 'none';
                 document.getElementById('modalContent').style.display = 'block';
                 document.getElementById('modalContent').innerHTML = html;
-                
+
                 const form = document.getElementById('farmerForm');
                 if (form) {
                     form.addEventListener('submit', handleFarmerFormSubmit);
@@ -202,7 +215,7 @@
                 document.getElementById('modalLoading').style.display = 'none';
                 document.getElementById('modalContent').style.display = 'block';
                 document.getElementById('modalContent').innerHTML = html;
-                
+
                 const form = document.getElementById('farmerForm');
                 if (form) {
                     form.addEventListener('submit', handleFarmerFormSubmit);
@@ -229,7 +242,7 @@
         e.preventDefault();
         const form = e.target;
         const formData = new FormData(form);
-        
+
         const submitBtn = form.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';

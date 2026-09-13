@@ -9,10 +9,6 @@ use Illuminate\Support\Facades\Log;
 
 class AdvisoryController extends Controller
 {
-    /**
-     * Display a listing of advisories.
-     * Admin/Staff: View all. Farmer: View only active advisories for them.
-     */
     public function index()
     {
         $user = auth()->user();
@@ -32,10 +28,6 @@ class AdvisoryController extends Controller
         return view('admin.advisories.index', compact('advisories'));
     }
 
-    /**
-     * Show the form for creating a new advisory.
-     * Accessible to: Admin, Staff only
-     */
     public function create()
     {
         if (auth()->user()->role === 'farmer') {
@@ -45,10 +37,6 @@ class AdvisoryController extends Controller
         return view('admin.advisories.create');
     }
 
-    /**
-     * Store a newly created advisory in storage.
-     * Accessible to: Admin, Staff only
-     */
     public function store(Request $request)
     {
         if (auth()->user()->role === 'farmer') {
@@ -63,13 +51,7 @@ class AdvisoryController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
-        Log::info('Advisory store request:', $request->all());
-
-        $userId = auth()->id();
-        if (!$userId) {
-            Log::warning('No authenticated user found, using fallback user_id = 1');
-            $userId = 1;
-        }
+        $userId = auth()->id() ?? 1;
 
         $advisory = Advisory::create([
             'title' => $request->title,
@@ -79,6 +61,13 @@ class AdvisoryController extends Controller
             'is_active' => $request->is_active ?? true,
             'published_at' => now(),
             'user_id' => $userId,
+        ]);
+
+        // 🔥 LOG: Advisory created
+        log_activity('created', 'Advisory published', $advisory, [
+            'title' => $advisory->title,
+            'target_audience' => $advisory->target_audience,
+            'is_active' => $advisory->is_active,
         ]);
 
         if ($request->ajax()) {
@@ -93,10 +82,6 @@ class AdvisoryController extends Controller
             ->with('success', 'Advisory published successfully!');
     }
 
-    /**
-     * Show the form for editing the specified advisory.
-     * Accessible to: Admin, Staff only
-     */
     public function edit($id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -107,10 +92,6 @@ class AdvisoryController extends Controller
         return view('admin.advisories.edit', compact('advisory'));
     }
 
-    /**
-     * Update the specified advisory in storage.
-     * Accessible to: Admin, Staff only
-     */
     public function update(Request $request, $id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -127,12 +108,20 @@ class AdvisoryController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
+        $oldData = $advisory->only(['title', 'target_audience', 'is_active']);
+
         $advisory->update([
             'title' => $request->title,
             'content' => $request->content,
             'target_audience' => $request->target_audience,
             'expiry_date' => $request->expiry_date,
             'is_active' => $request->is_active ?? $advisory->is_active,
+        ]);
+
+        // 🔥 LOG: Advisory updated
+        log_activity('updated', 'Advisory updated', $advisory, [
+            'old' => $oldData,
+            'new' => $advisory->only(['title', 'target_audience', 'is_active']),
         ]);
 
         if ($request->ajax()) {
@@ -147,10 +136,6 @@ class AdvisoryController extends Controller
             ->with('success', 'Advisory updated successfully!');
     }
 
-    /**
-     * Remove the specified advisory from storage.
-     * Accessible to: Admin, Staff only
-     */
     public function destroy($id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -158,6 +143,12 @@ class AdvisoryController extends Controller
         }
 
         $advisory = Advisory::findOrFail($id);
+
+        // 🔥 LOG: Advisory deleted
+        log_activity('deleted', 'Advisory deleted', $advisory, [
+            'title' => $advisory->title,
+        ]);
+
         $advisory->delete();
 
         return redirect()->route('admin.advisories.index')

@@ -78,14 +78,36 @@
                 @if($prediction)
                     @php
                         $yield = $prediction->predicted_yield_tons_ha;
-                        $status = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
-                        $color = $yield >= 4.5 ? 'success' : ($yield >= 3.5 ? 'warning' : 'danger');
+                        // Compute status relative to variety's max
+                        $maxYield = $farmRecord->riceVariety
+                            ? $farmRecord->riceVariety->getMaxYieldForMethod($farmRecord->seeding_method)
+                            : null;
+                        if ($maxYield !== null && $maxYield > 0) {
+                            $ratio = $yield / $maxYield;
+                            if ($ratio >= 0.9) {
+                                $statusClass = 'success';
+                                $statusText = 'High';
+                            } elseif ($ratio >= 0.7) {
+                                $statusClass = 'warning';
+                                $statusText = 'Medium';
+                            } else {
+                                $statusClass = 'danger';
+                                $statusText = 'Low';
+                            }
+                        } else {
+                            // Fallback to global thresholds
+                            $statusClass = $yield >= 4.5 ? 'success' : ($yield >= 3.5 ? 'warning' : 'danger');
+                            $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
+                        }
                     @endphp
                     <div class="mt-3 text-center">
-                        <span class="badge bg-{{ $color }}" style="font-size: 14px; padding: 6px 16px;">
-                            <i class="bi bi-{{ $yield >= 4.5 ? 'check-circle' : ($yield >= 3.5 ? 'exclamation-triangle' : 'x-circle') }}"></i>
-                            {{ $status }} Yield ({{ number_format($yield, 2) }} t/ha)
+                        <span class="badge bg-{{ $statusClass }}" style="font-size: 14px; padding: 6px 16px;">
+                            <i class="bi bi-{{ $statusClass === 'success' ? 'check-circle' : ($statusClass === 'warning' ? 'exclamation-triangle' : 'x-circle') }}"></i>
+                            {{ $statusText }} Yield ({{ number_format($yield, 2) }} t/ha)
                         </span>
+                        @if($maxYield)
+                            <div class="text-muted small mt-1">Max potential for this variety: {{ number_format($maxYield, 2) }} t/ha</div>
+                        @endif
                     </div>
                 @else
                     <div class="mt-3 text-center text-muted">

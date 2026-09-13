@@ -14,7 +14,6 @@ class UserController extends Controller
      */
     public function index()
     {
-        // ✅ Only show staff accounts
         $users = User::where('role', 'staff')->orderBy('name')->get();
         return view('admin.users.index', compact('users'));
     }
@@ -33,16 +32,22 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users',
             'password' => 'required|min:8',
         ]);
 
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
+        $user = User::create([
+            'name'     => $request->name,
+            'email'    => $request->email,
             'password' => Hash::make($request->password),
-            'role' => 'staff', // ✅ Always staff
+            'role'     => 'staff',
+        ]);
+
+        // Log the creation
+        log_activity('created', 'Staff account created', $user, [
+            'email' => $user->email,
+            'name'  => $user->name,
         ]);
 
         if ($request->ajax()) {
@@ -73,10 +78,12 @@ class UserController extends Controller
         $user = User::where('role', 'staff')->findOrFail($id);
 
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $id,
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email,' . $id,
             'password' => 'nullable|min:8',
         ]);
+
+        $oldData = $user->only(['name', 'email']);
 
         $user->name = $request->name;
         $user->email = $request->email;
@@ -86,6 +93,12 @@ class UserController extends Controller
         }
 
         $user->save();
+
+        // Log the update with changed fields
+        log_activity('updated', 'Staff account updated', $user, [
+            'old' => $oldData,
+            'new' => $user->only(['name', 'email']),
+        ]);
 
         if ($request->ajax()) {
             return response()->json([
@@ -109,6 +122,12 @@ class UserController extends Controller
             return redirect()->route('admin.users.index')
                 ->with('error', 'You cannot delete your own account!');
         }
+
+        // Log before deletion
+        log_activity('deleted', 'Staff account deleted', $user, [
+            'email' => $user->email,
+            'name'  => $user->name,
+        ]);
 
         $user->delete();
 

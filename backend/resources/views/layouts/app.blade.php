@@ -6,7 +6,8 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>CROPS — @yield('title', 'Dashboard')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🌾</text></svg>">
+    <!-- ─── Updated Favicon ─── -->
+    <link rel="icon" type="image/webp" href="{{ asset('images/logo.webp') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>
@@ -61,7 +62,7 @@
             flex-direction: column;
             z-index: 1050;
             transition: transform 0.3s ease;
-            overflow: hidden; /* Hide scrollbar */
+            overflow: hidden;
         }
         .sidebar-brand {
             padding: 0 20px 16px 20px;
@@ -70,16 +71,10 @@
             align-items: center;
             gap: 10px;
         }
-        .sidebar-brand .logo {
-            width: 34px;
-            height: 34px;
-            background: rgba(255,255,255,0.10);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gold);
-            font-size: 17px;
+        .sidebar-brand img {
+            height: 54px;
+            width: auto;
+            border-radius: 6px;
             flex-shrink: 0;
         }
         .sidebar-brand h1 {
@@ -95,10 +90,10 @@
             flex: 1;
             padding: 8px 10px 0;
             overflow-y: auto;
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE/Edge */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
-        .sidebar-nav::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+        .sidebar-nav::-webkit-scrollbar { display: none; }
 
         .sidebar-nav .nav-label {
             font-size: 9.5px;
@@ -355,7 +350,8 @@
     <!-- ─── SIDEBAR ─── -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <div class="logo"><i class="bi bi-tree-fill"></i></div>
+            <!-- ─── Logo Image ─── -->
+            <img src="{{ asset('images/logo.webp') }}" alt="CROPS Logo">
             <h1>CROPS</h1>
         </div>
 
@@ -433,6 +429,13 @@
             <a href="/admin/advisories" class="{{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i> <span>Advisories</span>
             </a>
+
+            {{-- Activity Logs — ADMIN only --}}
+@if(auth()->check() && auth()->user()->role === 'admin')
+    <a href="/admin/logs" class="{{ request()->routeIs('admin.logs.*') ? 'active' : '' }}">
+        <i class="bi bi-clock-history"></i> <span>Activity Logs</span>
+    </a>
+@endif
 
             {{-- Reports — HIDDEN for farmers --}}
             @if(auth()->check() && auth()->user()->role !== 'farmer')

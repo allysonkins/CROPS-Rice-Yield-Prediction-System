@@ -12,56 +12,44 @@ use Illuminate\Database\QueryException;
 
 class FarmRecordController extends Controller
 {
-    /**
-     * Display a listing of farm records.
-     */
     public function index(Request $request)
-{
-    $user = auth()->user();
+    {
+        $user = auth()->user();
 
-    $query = FarmRecord::with(['farm', 'riceVariety']);
+        $query = FarmRecord::with(['farm', 'riceVariety']);
 
-    if ($user->role === 'farmer') {
-        $farmIds = Farm::where('user_id', $user->id)->pluck('id');
-        $query->whereIn('farm_id', $farmIds);
+        if ($user->role === 'farmer') {
+            $farmIds = Farm::where('user_id', $user->id)->pluck('id');
+            $query->whereIn('farm_id', $farmIds);
+        }
+
+        $sort = $request->input('sort', 'created_at');
+        $direction = $request->input('direction', 'desc');
+
+        $allowedSorts = ['season', 'created_at', 'farm_id', 'rice_variety_id', 'fertilizer_kg_ha', 'status'];
+        if (!in_array($sort, $allowedSorts)) {
+            $sort = 'created_at';
+        }
+        if (!in_array($direction, ['asc', 'desc'])) {
+            $direction = 'desc';
+        }
+
+        $query->orderBy($sort, $direction);
+        $farmRecords = $query->get();
+
+        $sortParams = ['sort' => $sort, 'direction' => $direction];
+
+        if ($user->role === 'farmer') {
+            $farms = Farm::where('user_id', $user->id)->get();
+        } else {
+            $farms = Farm::orderBy('name')->get();
+        }
+
+        $varieties = RiceVariety::orderBy('name')->get();
+
+        return view('admin.farm-records.index', compact('farmRecords', 'farms', 'varieties', 'sortParams'));
     }
 
-    // Sorting logic
-    $sort = $request->input('sort', 'created_at');
-    $direction = $request->input('direction', 'desc');
-
-    // Allowed sort columns to prevent SQL injection
-    $allowedSorts = ['season', 'created_at', 'farm_id', 'rice_variety_id', 'fertilizer_kg_ha', 'status'];
-    if (!in_array($sort, $allowedSorts)) {
-        $sort = 'created_at';
-    }
-
-    // Direction must be asc or desc
-    if (!in_array($direction, ['asc', 'desc'])) {
-        $direction = 'desc';
-    }
-
-    $query->orderBy($sort, $direction);
-
-    $farmRecords = $query->get();
-
-    // Pass sort parameters to the view for building sort links
-    $sortParams = ['sort' => $sort, 'direction' => $direction];
-
-    if ($user->role === 'farmer') {
-        $farms = Farm::where('user_id', $user->id)->get();
-    } else {
-        $farms = Farm::orderBy('name')->get();
-    }
-
-    $varieties = RiceVariety::orderBy('name')->get();
-
-    return view('admin.farm-records.index', compact('farmRecords', 'farms', 'varieties', 'sortParams'));
-}
-
-    /**
-     * Show the form for creating a new farm record.
-     */
     public function create()
     {
         if (auth()->user()->role === 'farmer') {
@@ -74,9 +62,6 @@ class FarmRecordController extends Controller
         return view('admin.farm-records.create', compact('farms', 'varieties'));
     }
 
-    /**
-     * Store a newly created farm record.
-     */
     public function store(Request $request)
     {
         if (auth()->user()->role === 'farmer') {
@@ -98,12 +83,20 @@ class FarmRecordController extends Controller
                 'status' => 'required|in:Vegetative,Harvested',
             ]);
 
-            // If status is Vegetative, actual_yield should be null
             if ($validated['status'] === 'Vegetative') {
                 $validated['actual_yield_tons_ha'] = null;
             }
 
             $record = FarmRecord::create($validated);
+
+            //  LOG: Farm record created
+            log_activity('created', 'Farm record created', $record, [
+                'farm' => $record->farm->name,
+                'variety' => $record->riceVariety->name,
+                'season' => $record->season,
+                'fertilizer' => $record->fertilizer_kg_ha,
+                'status' => $record->status,
+            ]);
 
             if ($request->ajax()) {
                 return response()->json([
@@ -146,9 +139,6 @@ class FarmRecordController extends Controller
         }
     }
 
-    /**
-     * Show the form for editing the specified farm record.
-     */
     public function edit($id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -162,9 +152,6 @@ class FarmRecordController extends Controller
         return view('admin.farm-records.edit', compact('farmRecord', 'farms', 'varieties'));
     }
 
-    /**
-     * Update the specified farm record.
-     */
     public function update(Request $request, $id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -188,12 +175,18 @@ class FarmRecordController extends Controller
                 'status' => 'required|in:Vegetative,Harvested',
             ]);
 
-            // If status is Vegetative, actual_yield should be null
             if ($validated['status'] === 'Vegetative') {
                 $validated['actual_yield_tons_ha'] = null;
             }
 
+            $oldData = $farmRecord->only(['season', 'fertilizer_kg_ha', 'status']);
             $farmRecord->update($validated);
+
+            // 🔥 LOG: Farm record updated
+            log_activity('updated', 'Farm record updated', $farmRecord, [
+                'old' => $oldData,
+                'new' => $farmRecord->only(['season', 'fertilizer_kg_ha', 'status']),
+            ]);
 
             if ($request->ajax()) {
                 return response()->json([
@@ -236,9 +229,6 @@ class FarmRecordController extends Controller
         }
     }
 
-    /**
-     * Remove the specified farm record.
-     */
     public function destroy($id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -252,20 +242,22 @@ class FarmRecordController extends Controller
                 ->with('error', 'Cannot delete this record because it has associated predictions.');
         }
 
+        // LOG: Farm record deleted
+        log_activity('deleted', 'Farm record deleted', $farmRecord, [
+            'farm' => $farmRecord->farm->name,
+            'variety' => $farmRecord->riceVariety->name,
+            'season' => $farmRecord->season,
+        ]);
+
         $farmRecord->delete();
 
         return redirect()->route('admin.farm-records.index')
             ->with('success', 'Farm record deleted successfully!');
     }
 
-
-
-        /**
- * Show a farm record details in a modal (AJAX).
- */
-public function show($id)
-{
-    $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
-    return view('admin.farm-records.partials.detail', compact('farmRecord'));
-}
+    public function show($id)
+    {
+        $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
+        return view('admin.farm-records.partials.detail', compact('farmRecord'));
+    }
 }

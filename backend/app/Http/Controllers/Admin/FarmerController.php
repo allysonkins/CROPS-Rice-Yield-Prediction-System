@@ -42,6 +42,13 @@ class FarmerController extends Controller
             'barangay' => $request->barangay,
         ]);
 
+        // 🔥 LOG: Farmer account created
+        log_activity('created', 'Farmer account created', $farmer, [
+            'email' => $farmer->email,
+            'name' => $farmer->name,
+            'barangay' => $farmer->barangay,
+        ]);
+
         if ($request->ajax()) {
             return response()->json([
                 'success' => true,
@@ -71,6 +78,9 @@ class FarmerController extends Controller
             'barangay' => 'nullable|string|max:255',
         ]);
 
+        // Capture old data before changes
+        $oldData = $farmer->only(['name', 'email', 'barangay']);
+
         $farmer->name = $request->name;
         $farmer->email = $request->email;
         $farmer->barangay = $request->barangay;
@@ -80,6 +90,12 @@ class FarmerController extends Controller
         }
 
         $farmer->save();
+
+        // 🔥 LOG: Farmer account updated
+        log_activity('updated', 'Farmer account updated', $farmer, [
+            'old' => $oldData,
+            'new' => $farmer->only(['name', 'email', 'barangay']),
+        ]);
 
         if ($request->ajax()) {
             return response()->json([
@@ -101,6 +117,13 @@ class FarmerController extends Controller
             return redirect()->route('admin.farmers.index')
                 ->with('error', 'You cannot delete your own account!');
         }
+
+        // 🔥 LOG: Capture data before deletion
+        log_activity('deleted', 'Farmer account deleted', $farmer, [
+            'email' => $farmer->email,
+            'name' => $farmer->name,
+            'barangay' => $farmer->barangay,
+        ]);
 
         $farmer->delete();
 

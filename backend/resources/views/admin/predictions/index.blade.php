@@ -102,9 +102,30 @@
                                 $variety = $prediction->farmRecord->riceVariety->name ?? 'N/A';
                                 $season = $prediction->farmRecord->season ?? 'N/A';
                                 $yield = $prediction->predicted_yield_tons_ha;
-                                $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
-                                $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
                                 $varietyId = $prediction->farmRecord->rice_variety_id ?? null;
+
+                                // --- Status based on variety's max yield ---
+                                $maxYield = $prediction->farmRecord->riceVariety
+                                    ? $prediction->farmRecord->riceVariety->getMaxYieldForMethod($prediction->farmRecord->seeding_method)
+                                    : null;
+
+                                if ($maxYield !== null && $maxYield > 0) {
+                                    $ratio = $yield / $maxYield;
+                                    if ($ratio >= 0.9) {
+                                        $statusClass = 'high';
+                                        $statusText = 'High';
+                                    } elseif ($ratio >= 0.7) {
+                                        $statusClass = 'medium';
+                                        $statusText = 'Medium';
+                                    } else {
+                                        $statusClass = 'low';
+                                        $statusText = 'Low';
+                                    }
+                                } else {
+                                    // Fallback to global thresholds if no max yield is defined
+                                    $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
+                                    $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
+                                }
                             @endphp
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
@@ -132,6 +153,9 @@
                                         <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#viewPredictionModal" data-farm-record-id="{{ $prediction->farm_record_id }}" title="View">
                                             <i class="bi bi-eye"></i>
                                         </button>
+                                        <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#historyModal" data-farm-record-id="{{ $prediction->farm_record_id }}" title="History">
+                                            <i class="bi bi-clock-history"></i>
+                                        </button>
                                         <form action="{{ route('admin.predictions.update', $prediction->farm_record_id) }}" method="POST" class="d-inline">
                                             @csrf @method('PUT')
                                             <button type="submit" class="btn btn-sm btn-secondary" title="Regenerate">
@@ -158,7 +182,7 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- GENERATE PREDICTION MODAL (green header)                     -->
+<!-- GENERATE PREDICTION MODAL -->
 <!-- ============================================================ -->
 @if(auth()->user()->role !== 'farmer')
     <div class="modal fade" id="generatePredictionModal" tabindex="-1" aria-hidden="true">
@@ -183,7 +207,7 @@
 @endif
 
 <!-- ============================================================ -->
-<!-- VIEW PREDICTION MODAL (green header)                         -->
+<!-- VIEW PREDICTION MODAL -->
 <!-- ============================================================ -->
 @if(auth()->user()->role !== 'farmer')
     <div class="modal fade" id="viewPredictionModal" tabindex="-1" aria-hidden="true">
@@ -208,7 +232,32 @@
 @endif
 
 <!-- ============================================================ -->
-<!-- RICE VARIETY DETAILS MODAL                                    -->
+<!-- HISTORY MODAL -->
+<!-- ============================================================ -->
+@if(auth()->user()->role !== 'farmer')
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header" style="background: var(--green); color: white;">
+                    <h5 class="modal-title"><i class="bi bi-clock-history"></i> Prediction History</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="historyModalBody">
+                    <div class="text-center py-4" id="historyModalLoading">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading history...</p>
+                    </div>
+                    <div id="historyModalContent" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endif
+
+<!-- ============================================================ -->
+<!-- RICE VARIETY DETAILS MODAL -->
 <!-- ============================================================ -->
 <div class="modal fade" id="varietyDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -252,7 +301,7 @@
                         document.getElementById('modalLoading').style.display = 'none';
                         document.getElementById('modalContent').style.display = 'block';
                         document.getElementById('modalContent').innerHTML = html;
-                        
+
                         const form = document.getElementById('generatePredictionForm');
                         if (form) {
                             form.addEventListener('submit', function(e) {
@@ -316,7 +365,7 @@
             viewModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
                 const farmRecordId = button.getAttribute('data-farm-record-id');
-                
+
                 document.getElementById('viewModalLoading').style.display = 'block';
                 document.getElementById('viewModalContent').style.display = 'none';
                 document.getElementById('viewModalContent').innerHTML = '';
@@ -334,6 +383,60 @@
                         document.getElementById('viewModalContent').innerHTML = `
                             <div class="alert alert-danger">
                                 <i class="bi bi-exclamation-triangle"></i> Failed to load prediction details. Please try again.
+                            </div>
+                        `;
+                    });
+            });
+        }
+    });
+
+    // ============================================================
+    // LOAD HISTORY MODAL (with script re-execution)
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function () {
+        const historyModal = document.getElementById('historyModal');
+        if (historyModal) {
+            historyModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const farmRecordId = button.getAttribute('data-farm-record-id');
+
+                document.getElementById('historyModalLoading').style.display = 'block';
+                document.getElementById('historyModalContent').style.display = 'none';
+                document.getElementById('historyModalContent').innerHTML = '';
+
+                fetch('/admin/predictions/' + farmRecordId + '/history')
+                    .then(response => response.text())
+                    .then(html => {
+                        const container = document.getElementById('historyModalContent');
+
+                        // 1) Extract and remove <script> blocks from the HTML
+                        const scripts = [];
+                        const cleanedHtml = html.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi, function (match, code) {
+                            scripts.push(code);
+                            return '';
+                        });
+
+                        // 2) Insert the cleaned HTML
+                        container.innerHTML = cleanedHtml;
+
+                        // 3) Re-append each script so the browser executes it
+                        scripts.forEach(code => {
+                            const scriptEl = document.createElement('script');
+                            scriptEl.text = code;
+                            document.body.appendChild(scriptEl);
+                            // Optional: remove after execution
+                            scriptEl.remove();
+                        });
+
+                        document.getElementById('historyModalLoading').style.display = 'none';
+                        container.style.display = 'block';
+                    })
+                    .catch(() => {
+                        document.getElementById('historyModalLoading').style.display = 'none';
+                        document.getElementById('historyModalContent').style.display = 'block';
+                        document.getElementById('historyModalContent').innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="bi bi-exclamation-triangle"></i> Failed to load history. Please try again.
                             </div>
                         `;
                     });

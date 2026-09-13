@@ -122,6 +122,7 @@
                 <th>Farm Name</th>
                 <th>Barangay</th>
                 <th>Farmer</th>
+                <th>Variety</th>
                 <th>Area (ha)</th>
                 <th>Predicted Yield (RF)</th>
                 <th>Status</th>
@@ -130,22 +131,69 @@
         <tbody>
             @forelse($farms as $farm)
                 @php
-                    $lastPrediction = $farm->farmRecords
-                        ->flatMap(function($r) { return $r->predictions; })
-                        ->where('model_type', 'RandomForest')
-                        ->last();
+                    // Latest RF prediction for this farm (across all its records)
+                    $latestRecord = $farm->farmRecords
+                        ->sortByDesc('created_at')
+                        ->first();
+
+                    $lastPrediction = null;
+                    foreach ($farm->farmRecords as $record) {
+                        $p = $record->predictions
+                            ->where('model_type', 'RandomForest')
+                            ->sortByDesc('created_at')
+                            ->first();
+                        if ($p && (!$lastPrediction || $p->created_at > $lastPrediction->created_at)) {
+                            $lastPrediction = $p;
+                        }
+                    }
+
                     $yield = $lastPrediction ? $lastPrediction->predicted_yield_tons_ha : null;
-                    $status = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
-                    $badgeClass = $yield >= 4.5 ? 'badge-high' : ($yield >= 3.5 ? 'badge-medium' : 'badge-low');
+
+                    // Variety for that prediction
+                    $varietyName = '—';
+                    $seedingMethod = null;
+                    if ($lastPrediction && $lastPrediction->farmRecord) {
+                        $varietyName = $lastPrediction->farmRecord->riceVariety->name ?? '—';
+                        $seedingMethod = $lastPrediction->farmRecord->seeding_method;
+                    } elseif ($farm->farmRecords->isNotEmpty()) {
+                        $varietyName = $farm->farmRecords->last()->riceVariety->name ?? '—';
+                        $seedingMethod = $farm->farmRecords->last()->seeding_method;
+                    }
+
+                    // Variety‑specific status
+                    $status = 'No Data';
+                    $badgeClass = '';
+                    if ($yield !== null && $lastPrediction && $lastPrediction->farmRecord && $lastPrediction->farmRecord->riceVariety) {
+                        $maxYield = $lastPrediction->farmRecord->riceVariety
+                            ->getMaxYieldForMethod($lastPrediction->farmRecord->seeding_method);
+
+                        if ($maxYield !== null && $maxYield > 0) {
+                            $ratio = $yield / $maxYield;
+                            if ($ratio >= 0.9) {
+                                $status = 'High';
+                                $badgeClass = 'badge-high';
+                            } elseif ($ratio >= 0.7) {
+                                $status = 'Medium';
+                                $badgeClass = 'badge-medium';
+                            } else {
+                                $status = 'Low';
+                                $badgeClass = 'badge-low';
+                            }
+                        } else {
+                            $status = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
+                            $badgeClass = $yield >= 4.5 ? 'badge-high' : ($yield >= 3.5 ? 'badge-medium' : 'badge-low');
+                        }
+                    }
                 @endphp
                 <tr>
                     <td><strong>{{ $farm->name }}</strong></td>
                     <td>{{ $farm->barangay }}</td>
                     <td>{{ $farm->user->name ?? 'Unassigned' }}</td>
+                    <td>{{ $varietyName }}</td>
                     <td>{{ number_format($farm->land_area_ha, 2) }}</td>
-                    <td>{{ $yield ? number_format($yield, 2) : 'N/A' }}</td>
+                    <td>{{ $yield !== null ? number_format($yield, 2) : 'N/A' }}</td>
                     <td>
-                        @if($yield)
+                        @if($yield !== null)
                             <span class="{{ $badgeClass }}">{{ $status }}</span>
                         @else
                             <span style="color: #9ca3af;">No Data</span>
@@ -154,7 +202,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" style="text-align: center; color: #9ca3af;">No farms available.</td>
+                    <td colspan="7" style="text-align: center; color: #9ca3af;">No farms available.</td>
                 </tr>
             @endforelse
         </tbody>

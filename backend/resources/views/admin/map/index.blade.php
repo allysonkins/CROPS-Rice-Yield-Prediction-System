@@ -3,15 +3,21 @@
 @section('title', 'Farm Map')
 
 @section('content')
-    <!-- Leaflet CSS & JS -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
         #farmMap {
             height: 600px;
             border-radius: 16px;
             z-index: 1;
+        }
+        #farmModalMap {
+            height: 300px;
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+            background: #e8ecf1;
         }
         .legend {
             background: white;
@@ -30,17 +36,6 @@
             height: 20px;
             border-radius: 50%;
         }
-        /* Modal styles for edit */
-        #farmEditModal .modal-body {
-            overflow: hidden !important;
-        }
-        #editModalContent #farmMap {
-            width: 100%;
-            height: 350px;
-            min-height: 350px;
-            border-radius: 6px;
-            background: #e8ecf1;
-        }
         .leaflet-control-zoom {
             z-index: 1050 !important;
         }
@@ -48,16 +43,36 @@
             display: flex;
             justify-content: flex-end;
             align-items: center;
+            gap: 8px;
             margin-bottom: 10px;
         }
-        .map-controls .badge {
-            margin-right: 12px;
+
+        /* Empty state popup styling */
+        .empty-farms-popup .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            border: none;
+            padding: 0;
+        }
+        .empty-farms-popup .leaflet-popup-content {
+            margin: 0;
+            padding: 0;
+            width: auto !important;
+        }
+        .empty-farms-popup .leaflet-popup-tip {
+            background: white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
         }
     </style>
 
-    <!-- Controls row: Satellite toggle button on the right, above the map -->
+    <!-- Controls row -->
     <div class="map-controls">
         <span class="badge bg-success">{{ $farmData->count() }} Farms</span>
+        @if(auth()->user()->role === 'admin')
+            <button type="button" class="btn btn-sm btn-success" onclick="openFarmModal()">
+                <i class="bi bi-plus-circle"></i> Add Farm
+            </button>
+        @endif
         <button id="toggleMap" class="btn btn-sm btn-secondary">
             <i class="bi bi-arrow-repeat"></i> Switch to Satellite
         </button>
@@ -68,7 +83,7 @@
         <div id="farmMap"></div>
     </div>
 
-    <!-- Farm list table (unchanged) -->
+    <!-- Farm list table -->
     <div class="row mt-3">
         <div class="col-12">
             <div class="card-custom">
@@ -83,6 +98,9 @@
                                 <th>Area (ha)</th>
                                 <th>Yield (t/ha)</th>
                                 <th>Status</th>
+                                @if(auth()->user()->role === 'admin')
+                                    <th>Action</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -94,35 +112,37 @@
                                     <td>{{ $farm['land_area'] ?? 'N/A' }}</td>
                                     <td>{{ $farm['yield'] ?? 'N/A' }}</td>
                                     <td>
-                                        @if($farm['lat'] && $farm['lng'])
-                                            @if($farm['yield'] && $farm['yield'] >= 4.5)
-                                                <span class="badge bg-success">High</span>
-                                            @elseif($farm['yield'] && $farm['yield'] >= 3.5)
-                                                <span class="badge bg-warning text-dark">Medium</span>
-                                            @elseif($farm['yield'])
-                                                <span class="badge bg-danger">Low</span>
-                                            @else
-                                                <span class="badge bg-info">No Prediction</span>
-                                            @endif
+                                        @if($farm['yield'] && $farm['yield'] >= 4.5)
+                                            <span class="badge bg-success">High</span>
+                                        @elseif($farm['yield'] && $farm['yield'] >= 3.5)
+                                            <span class="badge bg-warning text-dark">Medium</span>
+                                        @elseif($farm['yield'])
+                                            <span class="badge bg-danger">Low</span>
                                         @else
-                                            <span class="badge bg-secondary">No Location</span>
+                                            <span class="badge bg-info">No Prediction</span>
                                         @endif
                                     </td>
+                                    @if(auth()->user()->role === 'admin')
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editFarmFromMap({{ $farm['id'] }})">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </button>
+                                        </td>
+                                    @endif
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">
+                                    <td colspan="{{ auth()->user()->role === 'admin' ? 7 : 6 }}" class="text-center py-4 text-muted">
                                         @if(auth()->user()->role === 'farmer')
                                             <i class="bi bi-geo-alt" style="font-size: 36px; color: var(--gray-400);"></i>
-                                            <p class="mt-3 mb-1" style="font-size: 16px;">No farms assigned to you yet.</p>
-                                            <p class="text-muted small">Please contact the City Agriculture Office to register your farms.</p>
+                                            <p class="mt-3 mb-1">No farms assigned to you yet.</p>
+                                            <p class="text-muted small">Please contact the City Agriculture Office.</p>
                                         @else
                                             <i class="bi bi-inbox" style="font-size: 36px; color: var(--gray-400);"></i>
-                                            <p class="mt-3 mb-1" style="font-size: 16px;">No farms registered yet.</p>
-                                            <p class="text-muted small">Add farms to see them on the map.</p>
-                                            @if(auth()->user()->role !== 'farmer')
-                                                <a href="/admin/farms/create" class="btn btn-sm btn-success mt-2">Add Farm</a>
-                                            @endif
+                                            <p class="mt-3 mb-1">No farms registered yet.</p>
+                                            <button type="button" class="btn btn-sm btn-success mt-2" onclick="openFarmModal()">
+                                                <i class="bi bi-plus-circle"></i> Add Farm
+                                            </button>
                                         @endif
                                     </td>
                                 </tr>
@@ -134,23 +154,21 @@
         </div>
     </div>
 
-    <!-- ===== EDIT FARM MODAL (Admin only) ===== -->
+    <!-- ===== FARM MODAL (create + edit) ===== -->
     @if(auth()->user()->role === 'admin')
-        <div class="modal fade" id="farmEditModal" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="farmModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header" style="background: var(--green); color: white;">
-                        <h5 class="modal-title"><i class="bi bi-geo-alt-fill"></i> <span id="editModalTitle">Edit Farm</span></h5>
+                        <h5 class="modal-title"><i class="bi bi-geo-alt-fill"></i> <span id="modalTitle">Add Farm</span></h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body" id="editModalBody" style="overflow: hidden;">
-                        <div class="text-center py-4" id="editModalLoading">
-                            <div class="spinner-border text-success" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
+                    <div class="modal-body" style="overflow: hidden;">
+                        <div class="text-center py-4" id="modalLoading">
+                            <div class="spinner-border text-success" role="status"></div>
                             <p class="mt-2">Loading form...</p>
                         </div>
-                        <div id="editModalContent" style="display: none;"></div>
+                        <div id="modalContent" style="display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -159,83 +177,261 @@
 @endsection
 
 @push('scripts')
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-    // ============================================================
-    // GLOBAL EDIT MAP VARIABLES & FUNCTIONS (Admin only)
-    // ============================================================
     @if(auth()->user()->role === 'admin')
-    window.editMapInstance = null;
-    window.editMarkerInstance = null;
+    // ============================================================
+    // MODAL MAP VARIABLES
+    // ============================================================
+    let modalMap = null;
+    let modalMarker = null;
 
-    window.editFarmFromMap = function(id) {
-        document.getElementById('editModalTitle').textContent = 'Edit Farm';
-        document.getElementById('editModalLoading').style.display = 'block';
-        document.getElementById('editModalContent').style.display = 'none';
-        document.getElementById('editModalContent').innerHTML = '';
-
-        fetch('/admin/farms/' + id + '/edit')
-            .then(response => response.text())
-            .then(html => {
-                document.getElementById('editModalLoading').style.display = 'none';
-                document.getElementById('editModalContent').style.display = 'block';
-                document.getElementById('editModalContent').innerHTML = html;
-
-                setTimeout(function() {
-                    initEditMap();
-                }, 500);
-
-                const form = document.getElementById('farmForm');
-                if (form) {
-                    form.addEventListener('submit', window.handleEditFormSubmit);
-                }
-            })
-            .catch(() => {
-                document.getElementById('editModalLoading').style.display = 'none';
-                document.getElementById('editModalContent').style.display = 'block';
-                document.getElementById('editModalContent').innerHTML = `
-                    <div class="alert alert-danger">Failed to load form.</div>
-                `;
-            });
-
-        var modal = new bootstrap.Modal(document.getElementById('farmEditModal'));
-        modal.show();
+    const SANTIAGO_BOUNDS = {
+        minLat: 16.65, maxLat: 16.73,
+        minLng: 121.52, maxLng: 121.58
     };
 
-    window.handleEditFormSubmit = function(e) {
-        e.preventDefault();
-        var form = e.target;
-        var formData = new FormData(form);
+    function clampToSantiago(lat, lng) {
+        return {
+            lat: Math.min(Math.max(lat, SANTIAGO_BOUNDS.minLat), SANTIAGO_BOUNDS.maxLat),
+            lng: Math.min(Math.max(lng, SANTIAGO_BOUNDS.minLng), SANTIAGO_BOUNDS.maxLng)
+        };
+    }
 
-        var submitBtn = form.querySelector('button[type="submit"]');
-        var originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+    // ============================================================
+    // OPEN MODAL FOR ADD
+    // ============================================================
+    function openFarmModal() {
+        document.getElementById('modalTitle').textContent = 'Add Farm';
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalContent').innerHTML = '';
+
+        const modalEl = document.getElementById('farmModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        fetch('{{ route("admin.farms.create") }}', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('modalLoading').style.display = 'none';
+            document.getElementById('modalContent').style.display = 'block';
+            document.getElementById('modalContent').innerHTML = html;
+
+            const form = document.getElementById('farmForm');
+            if (form) form.addEventListener('submit', handleSubmit);
+
+            setTimeout(initModalMap, 300);
+        });
+    }
+
+    // ============================================================
+    // OPEN MODAL FOR EDIT
+    // ============================================================
+    function editFarmFromMap(id) {
+        document.getElementById('modalTitle').textContent = 'Edit Farm';
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalContent').innerHTML = '';
+
+        const modalEl = document.getElementById('farmModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        fetch('/admin/farms/' + id + '/edit', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('modalLoading').style.display = 'none';
+            document.getElementById('modalContent').style.display = 'block';
+            document.getElementById('modalContent').innerHTML = html;
+
+            const form = document.getElementById('farmForm');
+            if (form) form.addEventListener('submit', handleSubmit);
+
+            setTimeout(initModalMap, 300);
+        });
+    }
+
+    // ============================================================
+    // INIT MODAL MAP (targets #farmModalMap)
+    // ============================================================
+    function initModalMap() {
+        const container = document.getElementById('farmModalMap');
+        if (!container) {
+            setTimeout(initModalMap, 200);
+            return;
+        }
+
+        if (modalMap) {
+            try { modalMap.off(); modalMap.remove(); } catch(e) {}
+            modalMap = null;
+            modalMarker = null;
+        }
+
+        const latInput = document.getElementById('latitude');
+        const lngInput = document.getElementById('longitude');
+        let lat = latInput && latInput.value ? parseFloat(latInput.value) : 16.6889;
+        let lng = lngInput && lngInput.value ? parseFloat(lngInput.value) : 121.5484;
+        const c = clampToSantiago(lat, lng);
+        lat = c.lat;
+        lng = c.lng;
+
+        modalMap = L.map(container, {
+            center: [lat, lng],
+            zoom: 14,
+            maxBounds: [
+                [SANTIAGO_BOUNDS.minLat - 0.02, SANTIAGO_BOUNDS.minLng - 0.02],
+                [SANTIAGO_BOUNDS.maxLat + 0.02, SANTIAGO_BOUNDS.maxLng + 0.02]
+            ],
+            maxBoundsViscosity: 0.8
+        });
+
+        const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        });
+        const satImg = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' });
+        const satLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' });
+        const satelliteLayer = L.layerGroup([satImg, satLabels]);
+        streetLayer.addTo(modalMap);
+
+        const ToggleControl = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: function (map) {
+                const btn = L.DomUtil.create('button', 'btn btn-sm btn-secondary shadow-sm');
+                btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Satellite';
+                btn.style.margin = '10px';
+                btn.style.pointerEvents = 'auto';
+                L.DomEvent.disableClickPropagation(btn);
+                let isSat = false;
+                L.DomEvent.on(btn, 'click', function(e) {
+                    L.DomEvent.preventDefault(e);
+                    if (isSat) {
+                        map.removeLayer(satelliteLayer);
+                        streetLayer.addTo(map);
+                        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Satellite';
+                        btn.classList.replace('btn-primary', 'btn-secondary');
+                        isSat = false;
+                    } else {
+                        map.removeLayer(streetLayer);
+                        satelliteLayer.addTo(map);
+                        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Street';
+                        btn.classList.replace('btn-secondary', 'btn-primary');
+                        isSat = true;
+                    }
+                });
+                return btn;
+            }
+        });
+        modalMap.addControl(new ToggleControl());
+
+        if (latInput && latInput.value && lngInput && lngInput.value) {
+            modalMarker = L.marker([lat, lng], { draggable: true }).addTo(modalMap);
+            modalMarker.on('dragend', function() {
+                const pos = modalMarker.getLatLng();
+                const cl = clampToSantiago(pos.lat, pos.lng);
+                modalMarker.setLatLng(cl);
+                latInput.value = cl.lat.toFixed(8);
+                lngInput.value = cl.lng.toFixed(8);
+            });
+        }
+
+        modalMap.on('click', function(e) {
+            const cl = clampToSantiago(e.latlng.lat, e.latlng.lng);
+            setModalMarker(cl.lat, cl.lng);
+        });
+
+        setTimeout(() => { if (modalMap) modalMap.invalidateSize(true); }, 300);
+        setTimeout(() => { if (modalMap) modalMap.invalidateSize(true); }, 600);
+    }
+
+    function setModalMarker(lat, lng, pan = true) {
+        const cl = clampToSantiago(lat, lng);
+        lat = cl.lat;
+        lng = cl.lng;
+
+        const latInput = document.getElementById('latitude');
+        const lngInput = document.getElementById('longitude');
+        if (!latInput || !lngInput) return;
+
+        latInput.value = lat.toFixed(8);
+        lngInput.value = lng.toFixed(8);
+
+        if (modalMarker) {
+            modalMarker.setLatLng([lat, lng]);
+        } else if (modalMap) {
+            modalMarker = L.marker([lat, lng], { draggable: true }).addTo(modalMap);
+            modalMarker.on('dragend', function() {
+                const pos = modalMarker.getLatLng();
+                const cl = clampToSantiago(pos.lat, pos.lng);
+                modalMarker.setLatLng(cl);
+                latInput.value = cl.lat.toFixed(8);
+                lngInput.value = cl.lng.toFixed(8);
+            });
+        }
+        if (modalMap && pan) modalMap.setView([lat, lng], modalMap.getZoom());
+    }
+
+    // Clear location
+    document.addEventListener('click', function(e) {
+        if (e.target.id === 'clearLocation' || e.target.closest('#clearLocation')) {
+            const latInput = document.getElementById('latitude');
+            const lngInput = document.getElementById('longitude');
+            if (latInput) latInput.value = '';
+            if (lngInput) lngInput.value = '';
+            if (modalMarker && modalMap) {
+                modalMap.removeLayer(modalMarker);
+                modalMarker = null;
+            }
+        }
+    });
+
+    // Cleanup on modal close
+    document.addEventListener('hidden.bs.modal', function(e) {
+        if (e.target.id === 'farmModal') {
+            if (modalMap) {
+                try { modalMap.off(); modalMap.remove(); } catch(ex) {}
+                modalMap = null;
+                modalMarker = null;
+            }
+        }
+    });
+
+    // Form submission
+    function handleSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
         submitBtn.disabled = true;
 
-        var existingErrors = form.querySelector('#formErrors');
-        if (existingErrors) existingErrors.remove();
+        const existingErrors = form.querySelector('#formErrors');
+        if (existingErrors) existingErrors.innerHTML = '';
 
         fetch(form.action, {
             method: form.method || 'POST',
             body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             if (data.success) {
-                var modal = bootstrap.Modal.getInstance(document.getElementById('farmEditModal'));
-                modal.hide();
+                bootstrap.Modal.getInstance(document.getElementById('farmModal')).hide();
                 location.reload();
             } else {
-                var errorDiv = document.createElement('div');
+                const errorDiv = document.getElementById('formErrors') || document.createElement('div');
                 errorDiv.id = 'formErrors';
-                errorDiv.className = 'alert alert-danger mt-3';
-                var errorMsg = data.error || 'An error occurred.';
-                if (data.errors) {
-                    errorMsg = Object.values(data.errors).flat().join('<br>');
-                }
-                errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + errorMsg;
+                errorDiv.className = 'alert alert-danger mb-3';
+                let msg = data.error || 'An error occurred.';
+                if (data.errors) msg = Object.values(data.errors).flat().join('<br>');
+                errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + msg;
                 form.prepend(errorDiv);
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
@@ -246,164 +442,11 @@
             submitBtn.disabled = false;
             alert('An error occurred. Please try again.');
         });
-    };
-
-    window.initEditMap = function() {
-        var container = document.querySelector('#editModalContent #farmMap');
-        if (!container) {
-            console.warn('Map container not found in modal, retrying...');
-            setTimeout(window.initEditMap, 300);
-            return;
-        }
-
-        if (window.editMapInstance) {
-            window.editMapInstance.off();
-            window.editMapInstance.remove();
-            window.editMapInstance = null;
-            window.editMarkerInstance = null;
-        }
-
-        var latInput = document.getElementById('latitude');
-        var lngInput = document.getElementById('longitude');
-        var lat = latInput && latInput.value ? parseFloat(latInput.value) : 16.6889;
-        var lng = lngInput && lngInput.value ? parseFloat(lngInput.value) : 121.5484;
-
-        window.editMapInstance = L.map(container).setView([lat, lng], 14);
-
-        var editStreetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        });
-
-        var editSatImg = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; Esri'
-        });
-
-        var editSatLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; Esri'
-        });
-
-        var editSatelliteLayer = L.layerGroup([editSatImg, editSatLabels]);
-        editStreetLayer.addTo(window.editMapInstance);
-
-        const EditToggleControl = L.Control.extend({
-            options: { position: 'topright' },
-            onAdd: function (map) {
-                const btn = L.DomUtil.create('button', 'btn btn-sm btn-secondary shadow-sm');
-                btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Switch to Satellite';
-                btn.style.margin = '10px';
-                btn.style.pointerEvents = 'auto';
-                
-                L.DomEvent.disableClickPropagation(btn);
-                let isSat = false;
-                
-                L.DomEvent.on(btn, 'click', function(e) {
-                    L.DomEvent.preventDefault(e);
-                    if (isSat) {
-                        map.removeLayer(editSatelliteLayer);
-                        editStreetLayer.addTo(map);
-                        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Switch to Satellite';
-                        btn.classList.replace('btn-primary', 'btn-secondary');
-                        isSat = false;
-                    } else {
-                        map.removeLayer(editStreetLayer);
-                        editSatelliteLayer.addTo(map);
-                        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Switch to Street';
-                        btn.classList.replace('btn-secondary', 'btn-primary');
-                        isSat = true;
-                    }
-                });
-                return btn;
-            }
-        });
-        window.editMapInstance.addControl(new EditToggleControl());
-
-        if (latInput && latInput.value && lngInput && lngInput.value) {
-            window.editMarkerInstance = L.marker([lat, lng], { draggable: true }).addTo(window.editMapInstance);
-            window.editMarkerInstance.on('dragend', function() {
-                var pos = window.editMarkerInstance.getLatLng();
-                latInput.value = pos.lat.toFixed(8);
-                lngInput.value = pos.lng.toFixed(8);
-            });
-        }
-
-        window.editMapInstance.on('click', function(e) {
-            window.setEditMarker(e.latlng.lat, e.latlng.lng);
-        });
-
-        setTimeout(function() {
-            if (window.editMapInstance) window.editMapInstance.invalidateSize(true);
-        }, 300);
-        setTimeout(function() {
-            if (window.editMapInstance) window.editMapInstance.invalidateSize(true);
-        }, 600);
-
-        if (latInput && lngInput) {
-            const updateFromInputs = () => {
-                const typedLat = parseFloat(latInput.value);
-                const typedLng = parseFloat(lngInput.value);
-                if (!isNaN(typedLat) && !isNaN(typedLng)) {
-                    window.setEditMarker(typedLat, typedLng, false);
-                }
-            };
-            latInput.addEventListener('input', updateFromInputs);
-            lngInput.addEventListener('input', updateFromInputs);
-        }
-    };
-
-    window.setEditMarker = function(lat, lng, pan = true) {
-        var latInput = document.getElementById('latitude');
-        var lngInput = document.getElementById('longitude');
-        if (!latInput || !lngInput) return;
-        latInput.value = lat.toFixed(8);
-        lngInput.value = lng.toFixed(8);
-
-        if (window.editMarkerInstance) {
-            window.editMarkerInstance.setLatLng([lat, lng]);
-        } else if (window.editMapInstance) {
-            window.editMarkerInstance = L.marker([lat, lng], { draggable: true }).addTo(window.editMapInstance);
-            window.editMarkerInstance.on('dragend', function() {
-                var pos = window.editMarkerInstance.getLatLng();
-                latInput.value = pos.lat.toFixed(8);
-                lngInput.value = pos.lng.toFixed(8);
-            });
-        }
-        if (window.editMapInstance && pan) {
-            window.editMapInstance.setView([lat, lng], window.editMapInstance.getZoom());
-        }
-    };
-
-    document.addEventListener('click', function(e) {
-        if (e.target.id === 'clearLocation' || e.target.closest('#clearLocation')) {
-            const latInput = document.getElementById('latitude');
-            const lngInput = document.getElementById('longitude');
-            if (latInput) latInput.value = '';
-            if (lngInput) lngInput.value = '';
-            if (window.editMarkerInstance && window.editMapInstance) {
-                window.editMapInstance.removeLayer(window.editMarkerInstance);
-                window.editMarkerInstance = null;
-            }
-            if (window.editMapInstance) {
-                window.editMapInstance.setView([16.6889, 121.5484], 13);
-            }
-        }
-    });
-
-    document.addEventListener('hidden.bs.modal', function(e) {
-        if (e.target.id === 'farmEditModal') {
-            if (window.editMapInstance) {
-                try {
-                    window.editMapInstance.off();
-                    window.editMapInstance.remove();
-                } catch (ex) {}
-                window.editMapInstance = null;
-                window.editMarkerInstance = null;
-            }
-        }
-    });
+    }
     @endif
 
     // ============================================================
-    // MAIN MAP (for all roles)
+    // MAIN PAGE MAP (targets #farmMap — separate from modal)
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         var map = L.map('farmMap').setView([16.6889, 121.5484], 13);
@@ -411,20 +454,12 @@
         var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         });
-
-        var satelliteImg = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-        });
-
-        var satelliteLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; Esri'
-        });
-
+        var satelliteImg = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' });
+        var satelliteLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' });
         var satelliteLayer = L.layerGroup([satelliteImg, satelliteLabels]);
         streetLayer.addTo(map);
 
         var isSatellite = false;
-
         document.getElementById('toggleMap').addEventListener('click', function() {
             if (isSatellite) {
                 map.removeLayer(satelliteLayer);
@@ -444,42 +479,36 @@
         });
 
         var farms = @json($farmData);
-
         var hasCoords = farms.filter(function(f) {
             return f.lat !== null && f.lng !== null &&
                    !isNaN(f.lat) && !isNaN(f.lng) &&
                    f.lat !== 0 && f.lng !== 0;
         });
 
-        function getColor(yieldValue) {
-            if (!yieldValue) return '#6b7280';
-            if (yieldValue >= 4.5) return '#27ae60';
-            if (yieldValue >= 3.5) return '#f39c12';
+        function getColor(y) {
+            if (!y) return '#6b7280';
+            if (y >= 4.5) return '#27ae60';
+            if (y >= 3.5) return '#f39c12';
             return '#e74c3c';
         }
-
-        function getStatus(yieldValue) {
-            if (!yieldValue) return 'No Data';
-            if (yieldValue >= 4.5) return 'High Yield';
-            if (yieldValue >= 3.5) return 'Medium Yield';
+        function getStatus(y) {
+            if (!y) return 'No Data';
+            if (y >= 4.5) return 'High Yield';
+            if (y >= 3.5) return 'Medium Yield';
             return 'Low Yield';
         }
 
-        @php
-            $isAdmin = auth()->user()->role === 'admin';
-        @endphp
+        @php $isAdmin = auth()->user()->role === 'admin'; @endphp
 
         hasCoords.forEach(function(farm) {
             var color = getColor(farm.yield);
-
-            var popupContent = `
+            var popup = `
                 <div style="min-width: 200px;">
                     <h6 style="margin: 0 0 4px 0; color: #0f4c2b;"><strong>${farm.name}</strong></h6>
                     <hr style="margin: 4px 0;">
                     <p style="margin: 2px 0;"><strong>Barangay:</strong> ${farm.barangay}</p>
                     <p style="margin: 2px 0;"><strong>Farmer:</strong> ${farm.farmer}</p>
                     <p style="margin: 2px 0;"><strong>Land Area:</strong> ${farm.land_area ?? 'N/A'} ha</p>
-                    <p style="margin: 2px 0;"><strong>Soil Type:</strong> ${farm.soil_type ?? 'N/A'}</p>
                     <p style="margin: 2px 0;"><strong>Predicted Yield:</strong> ${farm.yield ? farm.yield + ' t/ha' : 'No data'}</p>
                     <div style="margin-top: 6px;">
                         <span style="background: ${color}; color: white; padding: 2px 12px; border-radius: 20px; font-size: 11px;">
@@ -487,7 +516,7 @@
                         </span>
                     </div>
                     @if($isAdmin)
-                        <button class="btn btn-sm btn-outline-primary mt-2" style="font-size: 11px;" onclick="window.editFarmFromMap(${farm.id})">
+                        <button class="btn btn-sm btn-outline-primary mt-2" style="font-size: 11px;" onclick="editFarmFromMap(${farm.id})">
                             Edit
                         </button>
                     @endif
@@ -495,13 +524,9 @@
             `;
 
             L.circleMarker([farm.lat, farm.lng], {
-                radius: 10,
-                fillColor: color,
-                color: '#fff',
-                weight: 2,
-                opacity: 1,
-                fillOpacity: 0.8
-            }).addTo(map).bindPopup(popupContent);
+                radius: 10, fillColor: color, color: '#fff',
+                weight: 2, opacity: 1, fillOpacity: 0.8
+            }).addTo(map).bindPopup(popup);
         });
 
         if (hasCoords.length > 1) {
@@ -530,20 +555,35 @@
         };
         legend.addTo(map);
 
+        // ============================================================
+        // EMPTY STATE — Show "Add Farm" card in the middle if no farms
+        // ============================================================
         if (hasCoords.length === 0) {
-            var message = @if(auth()->user()->role === 'farmer') 
+            var emptyMessage = @if(auth()->user()->role === 'farmer')
                 'No farms assigned to you yet. Please contact the City Agriculture Office.'
-            @else 
-                'No farm locations available. Add coordinates when creating farms to see them here.'
+            @else
+                'No farms registered yet. Click Add Farm to get started.'
             @endif;
 
-            L.popup()
+            L.popup({
+                closeButton: false,
+                closeOnClick: false,
+                autoClose: false,
+                className: 'empty-farms-popup'
+            })
                 .setLatLng([16.6889, 121.5484])
                 .setContent(`
-                    <div style="text-align: center; padding: 15px;">
-                        <p style="color: #6b7280; font-size: 14px; margin: 0;">${message}</p>
+                    <div style="text-align: center; padding: 20px; min-width: 260px;">
+                        <i class="bi bi-geo-alt" style="font-size: 32px; color: #0f4c2b;"></i>
+                        <p style="color: #4b5563; font-size: 14px; margin: 10px 0 0 0; font-weight: 500;">
+                            ${emptyMessage}
+                        </p>
                         @if(auth()->user()->role !== 'farmer')
-                            <a href="/admin/farms/create" class="btn btn-sm btn-success mt-2">Add Farm</a>
+                            <button type="button"
+                                    onclick="openFarmModal()"
+                                    class="btn btn-sm btn-success mt-3">
+                                <i class="bi bi-plus-circle"></i> Add First Farm
+                            </button>
                         @endif
                     </div>
                 `)

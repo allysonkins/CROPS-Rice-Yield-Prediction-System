@@ -49,10 +49,19 @@
     <div class="col-6 col-lg-3">
         <div class="stat-card">
             <div class="stat-info">
-                <div class="label">Active Staff</div>
-                <div class="value">{{ $users->count() }}</div>
+                <div class="label">Verified</div>
+                <div class="value">{{ $users->whereNotNull('email_verified_at')->count() }}</div>
             </div>
-            <div class="stat-icon"><i class="bi bi-check-circle-fill" style="color: var(--green);"></i></div>
+            <div class="stat-icon"><i class="bi bi-patch-check-fill" style="color: var(--green);"></i></div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-info">
+                <div class="label">Unverified</div>
+                <div class="value">{{ $users->whereNull('email_verified_at')->count() }}</div>
+            </div>
+            <div class="stat-icon"><i class="bi bi-exclamation-circle-fill" style="color: var(--gold);"></i></div>
         </div>
     </div>
 </div>
@@ -68,6 +77,7 @@
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>Verified</th>
                     <th>Joined</th>
                     <th>Actions</th>
                 </tr>
@@ -80,6 +90,18 @@
                         <td>{{ $user->email }}</td>
                         <td>
                             <span class="badge bg-info">{{ ucfirst($user->role) }}</span>
+                        </td>
+                        <td>
+                            @if($user->email_verified_at)
+                                <span class="badge bg-success">
+                                    <i class="bi bi-patch-check-fill"></i> Verified
+                                </span>
+                                <br><small class="text-muted">{{ $user->email_verified_at->format('M d, Y') }}</small>
+                            @else
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-hourglass-split"></i> Pending
+                                </span>
+                            @endif
                         </td>
                         <td>{{ $user->created_at->format('M d, Y') }}</td>
                         <td>
@@ -102,7 +124,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" class="text-center py-4 text-muted">
+                        <td colspan="7" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No staff accounts yet.</p>
                             <button type="button" class="btn btn-sm btn-primary mt-2" onclick="openStaffModal()">
@@ -138,7 +160,7 @@
                 document.getElementById('modalLoading').style.display = 'none';
                 document.getElementById('modalContent').style.display = 'block';
                 document.getElementById('modalContent').innerHTML = html;
-                
+
                 const form = document.getElementById('staffForm');
                 if (form) {
                     form.addEventListener('submit', handleStaffFormSubmit);
@@ -173,7 +195,7 @@
                 document.getElementById('modalLoading').style.display = 'none';
                 document.getElementById('modalContent').style.display = 'block';
                 document.getElementById('modalContent').innerHTML = html;
-                
+
                 const form = document.getElementById('staffForm');
                 if (form) {
                     form.addEventListener('submit', handleStaffFormSubmit);
@@ -200,7 +222,7 @@
         e.preventDefault();
         const form = e.target;
         const formData = new FormData(form);
-        
+
         const submitBtn = form.querySelector('button[type="submit"]');
         const originalText = submitBtn.innerHTML;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';

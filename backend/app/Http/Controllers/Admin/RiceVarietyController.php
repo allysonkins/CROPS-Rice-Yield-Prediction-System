@@ -55,12 +55,17 @@ class RiceVarietyController extends Controller
                 'resilience' => 'nullable|array',
             ]);
 
-            // Set growth_period from method-specific values if not provided
             $validated['growth_period'] = $validated['growth_period_transplanted']
                                        ?? $validated['growth_period_direct']
                                        ?? null;
 
             $variety = RiceVariety::create($validated);
+
+            // 🔥 LOG: Rice variety created
+            log_activity('created', 'Rice variety created', $variety, [
+                'name' => $variety->name,
+                'classification' => $variety->classification,
+            ]);
 
             if ($request->ajax()) {
                 return response()->json([
@@ -74,7 +79,6 @@ class RiceVarietyController extends Controller
                 ->with('success', 'Rice variety added successfully!');
 
         } catch (ValidationException $e) {
-            // Return validation errors for AJAX requests
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -85,7 +89,6 @@ class RiceVarietyController extends Controller
             return back()->withErrors($e->errors())->withInput();
 
         } catch (QueryException $e) {
-            // Database errors (e.g., duplicate entry, constraint violation)
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -95,7 +98,6 @@ class RiceVarietyController extends Controller
             return back()->with('error', 'Database error occurred.')->withInput();
 
         } catch (\Exception $e) {
-            // Any other exception
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -147,13 +149,19 @@ class RiceVarietyController extends Controller
                 'resilience' => 'nullable|array',
             ]);
 
-            // Set growth_period from method-specific values if not provided
             $validated['growth_period'] = $validated['growth_period_transplanted']
                                        ?? $validated['growth_period_direct']
                                        ?? $variety->growth_period
                                        ?? null;
 
+            $oldData = $variety->only(['name', 'classification', 'description']);
             $variety->update($validated);
+
+            // 🔥 LOG: Rice variety updated
+            log_activity('updated', 'Rice variety updated', $variety, [
+                'old' => $oldData,
+                'new' => $variety->only(['name', 'classification', 'description']),
+            ]);
 
             if ($request->ajax()) {
                 return response()->json([
@@ -201,16 +209,21 @@ class RiceVarietyController extends Controller
         if (auth()->user()->role === 'farmer') {
             return back()->with('error', 'Farmers cannot delete rice varieties.');
         }
+
         $variety = RiceVariety::findOrFail($id);
+
+        // 🔥 LOG: Rice variety deleted
+        log_activity('deleted', 'Rice variety deleted', $variety, [
+            'name' => $variety->name,
+            'classification' => $variety->classification,
+        ]);
+
         $variety->delete();
 
         return redirect()->route('admin.rice-varieties.index')
             ->with('success', 'Rice variety deleted successfully!');
     }
 
-    /**
-     * Get yield data for a variety based on seeding method (AJAX).
-     */
     public function getYield($id, Request $request)
     {
         try {
@@ -230,12 +243,9 @@ class RiceVarietyController extends Controller
         }
     }
 
-    /**
- * Show variety details in a modal (AJAX).
- */
-public function details($id)
-{
-    $variety = RiceVariety::findOrFail($id);
-    return view('admin.rice-varieties.partials.detail', compact('variety'));
-}
+    public function details($id)
+    {
+        $variety = RiceVariety::findOrFail($id);
+        return view('admin.rice-varieties.partials.detail', compact('variety'));
+    }
 }

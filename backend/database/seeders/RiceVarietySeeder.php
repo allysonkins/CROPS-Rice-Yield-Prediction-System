@@ -3,85 +3,176 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\RiceVariety;
+use Illuminate\Support\Facades\DB;
 
 class RiceVarietySeeder extends Seeder
 {
     public function run()
     {
-        // NSIC Inbred
-        $inbred = [
-            'NSIC Rc 104', 'NSIC Rc 106', 'NSIC Rc 108', 'NSIC Rc 110',
-            'NSIC Rc 112', 'NSIC Rc 120', 'NSIC Rc 128', 'NSIC Rc 148',
-            'NSIC Rc 150', 'NSIC Rc 152', 'NSIC Rc 154', 'NSIC Rc 156',
-            'NSIC Rc 158', 'NSIC Rc 160', 'NSIC Rc 170', 'NSIC Rc 172',
-            'NSIC Rc 182', 'NSIC Rc 184', 'NSIC Rc 186', 'NSIC Rc 188',
-            'NSIC Rc 190', 'NSIC Rc 192', 'NSIC Rc 194', 'NSIC Rc 212',
-            'NSIC Rc 214', 'NSIC Rc 216', 'NSIC Rc 218', 'NSIC Rc 220',
-            'NSIC Rc 222', 'NSIC Rc 226', 'NSIC Rc 238', 'NSIC Rc 242',
-            'NSIC Rc 272', 'NSIC Rc 274', 'NSIC Rc 276', 'NSIC Rc 278',
-            'NSIC Rc 280', 'NSIC Rc 282', 'NSIC Rc 284', 'NSIC Rc 286',
-            'NSIC Rc 288', 'NSIC Rc 298', 'NSIC Rc 300', 'NSIC Rc 302',
-            'NSIC Rc 308', 'NSIC Rc 342', 'NSIC Rc 352', 'NSIC Rc 354',
-            'NSIC Rc 358', 'NSIC Rc 400', 'NSIC Rc 402', 'NSIC Rc 426',
-            'NSIC Rc 436', 'NSIC Rc 440', 'NSIC Rc 442', 'NSIC Rc 472',
-            'NSIC Rc 478', 'NSIC Rc 480', 'NSIC Rc 482', 'NSIC Rc 484',
-            'NSIC Rc 512', 'NSIC Rc 534', 'NSIC Rc 566', 'NSIC Rc 572',
-            'NSIC Rc 590', 'NSIC Rc 600', 'NSIC Rc 622', 'NSIC Rc 626',
-            'NSIC Rc 628', 'NSIC Rc 670', 'NSIC Rc 672', 'NSIC Rc 680',
-            'NSIC Rc 684', 'NSIC Rc 686', 'NSIC Rc 732', 'NSIC Rc 736',
-            'NSIC Rc 740', 'NSIC Rc 756'
+        $varieties = [
+            [
+                'id' => 1,
+                'name' => 'Angelica (NSIC Rc122)',
+                'description' => 'Irrigated lowland areas under both favorable condition.',
+                'classification' => 'Inbred',
+                'growth_period_transplanted' => 121,
+                'growth_period_direct' => 121,
+                'avg_yield_transplanted' => 4.70,
+                'max_yield_transplanted' => 5.00,
+                'avg_yield_direct' => 4.70,
+                'max_yield_direct' => 5.00,
+                'grain_quality' => 'Acceptable grain quality and high yield potential',
+                'disease_susceptibility' => null,
+                'resilience' => '["Bacterial Blight","Tungro","Blast"]',
+                'optimal_temp_min' => 25.00,
+                'optimal_temp_max' => 33.00,
+                'created_at' => '2026-09-01 07:09:37',
+                'updated_at' => '2026-09-01 07:46:03',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 3,
+                'name' => 'NSIC Rc216 (Tubigan 17)',
+                'description' => null,
+                'classification' => 'Inbred',
+                'growth_period_transplanted' => 112,
+                'growth_period_direct' => 104,
+                'avg_yield_transplanted' => 6.00,
+                'max_yield_transplanted' => 9.70,
+                'avg_yield_direct' => 5.70,
+                'max_yield_direct' => 9.30,
+                'grain_quality' => 'Katamtaman ang lambot nito kapag naluto',
+                'disease_susceptibility' => null,
+                'resilience' => '["Bacterial Blight"]',
+                'optimal_temp_min' => 25.00,
+                'optimal_temp_max' => 35.00,
+                'created_at' => '2026-09-01 07:41:05',
+                'updated_at' => '2026-09-01 07:46:38',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 4,
+                'name' => 'NSIC Rc 512 (Tubigan 44)',
+                'description' => 'Moderately resistant to Blast, Stemborer, BLB, BPH and GLH.\r\nSusceptible to Tungro, Sheath Blight.',
+                'classification' => 'Inbred',
+                'growth_period_transplanted' => 113,
+                'growth_period_direct' => 105,
+                'avg_yield_transplanted' => 5.60,
+                'max_yield_transplanted' => 10.20,
+                'avg_yield_direct' => 5.60,
+                'max_yield_direct' => 10.10,
+                'grain_quality' => 'Long, Slightly creamish when cooked.',
+                'disease_susceptibility' => 'Susceptible to Tungro, Sheath Blight',
+                'resilience' => '["Blast"]',
+                'optimal_temp_min' => 25.00,
+                'optimal_temp_max' => 33.00,
+                'created_at' => '2026-09-01 07:49:42',
+                'updated_at' => '2026-09-01 07:49:42',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 5,
+                'name' => 'NSIC RC 402 (Tubigan 36)',
+                'description' => null,
+                'classification' => 'Inbred',
+                'growth_period_transplanted' => 114,
+                'growth_period_direct' => 107,
+                'avg_yield_transplanted' => 5.50,
+                'max_yield_transplanted' => 14.00,
+                'avg_yield_direct' => 5.50,
+                'max_yield_direct' => 14.00,
+                'grain_quality' => null,
+                'disease_susceptibility' => 'Intermediate reaction to rice blast, BLB, sheath blight. Susceptible to tungro',
+                'resilience' => '["Sheath Blight"]',
+                'optimal_temp_min' => 25.00,
+                'optimal_temp_max' => 33.00,
+                'created_at' => '2026-09-01 07:53:41',
+                'updated_at' => '2026-09-01 07:53:55',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 6,
+                'name' => 'NSIC Rc 534 (Salinas 29)',
+                'description' => 'Recommended in saline prone irrigated lowland areas, dry and wet seasons',
+                'classification' => 'Inbred',
+                'growth_period_transplanted' => 131,
+                'growth_period_direct' => 130,
+                'avg_yield_transplanted' => 3.10,
+                'max_yield_transplanted' => 6.70,
+                'avg_yield_direct' => 3.10,
+                'max_yield_direct' => 6.70,
+                'grain_quality' => 'Aromatic, slightly tasty when cooked. Slightly creamish both in cooked and raw forms',
+                'disease_susceptibility' => 'Susceptible to BLB, Tungro, BPH and Sheath Blight',
+                'resilience' => '["Blast"]',
+                'optimal_temp_min' => 25.00,
+                'optimal_temp_max' => 33.00,
+                'created_at' => '2026-09-01 07:55:59',
+                'updated_at' => '2026-09-01 07:55:59',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 7,
+                'name' => 'NSIC 2016 Rc 456H (Mestiso 78)',
+                'description' => 'LPP 937',
+                'classification' => 'Hybrid',
+                'growth_period_transplanted' => 112,
+                'growth_period_direct' => 112,
+                'avg_yield_transplanted' => 6.70,
+                'max_yield_transplanted' => 11.70,
+                'avg_yield_direct' => 6.70,
+                'max_yield_direct' => 11.70,
+                'grain_quality' => 'Premium milling recovery (70.9%) and headrice (59.5%) recovery,long (6.9mm) and slender (3.1mm) grain shape. High percentage acceptability in the raw form as compared to IR64, the eating quality check. Slightly creamish when cooked.',
+                'disease_susceptibility' => 'Moderately resistant to BLB, Sheat Blight, GLH, and BPH. Susceptible to Tungro',
+                'resilience' => '["Blast"]',
+                'optimal_temp_min' => 20.00,
+                'optimal_temp_max' => 35.00,
+                'created_at' => '2026-09-01 07:59:24',
+                'updated_at' => '2026-09-01 07:59:24',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 8,
+                'name' => 'NSIC Rc234H (MESTISO 27)',
+                'description' => 'NK 5017\r\nLocation specific adaptation during DS, transplanting culture in irrigated areas of Davao del Sur, Cagayan, Bohol, Davao Oriental and Bukidnon.',
+                'classification' => 'Hybrid',
+                'growth_period_transplanted' => 115,
+                'growth_period_direct' => 115,
+                'avg_yield_transplanted' => 6.50,
+                'max_yield_transplanted' => 9.80,
+                'avg_yield_direct' => 6.50,
+                'max_yield_direct' => 9.80,
+                'grain_quality' => null,
+                'disease_susceptibility' => 'Intermediate reaction to blast and bacterial leaf blight. Susceptible to Tungro. Intermediate reaction to Brown Planthopper. Moderate susceptibility to Green Leafhopper.',
+                'resilience' => '["Blast"]',
+                'optimal_temp_min' => 25.00,
+                'optimal_temp_max' => 31.00,
+                'created_at' => '2026-09-01 08:01:37',
+                'updated_at' => '2026-09-01 08:02:06',
+                'deleted_at' => null,
+            ],
+            [
+                'id' => 9,
+                'name' => 'NSIC Rc 486 (Mestiso 80)',
+                'description' => 'LP 534',
+                'classification' => 'Hybrid',
+                'growth_period_transplanted' => 113,
+                'growth_period_direct' => 113,
+                'avg_yield_transplanted' => 6.50,
+                'max_yield_transplanted' => 13.90,
+                'avg_yield_direct' => 6.50,
+                'max_yield_direct' => 13.90,
+                'grain_quality' => null,
+                'disease_susceptibility' => 'Susceptible to Bacterial Blight, Sheath Blight, and tungro',
+                'resilience' => '["Blast"]',
+                'optimal_temp_min' => 20.00,
+                'optimal_temp_max' => 35.00,
+                'created_at' => '2026-09-01 08:04:31',
+                'updated_at' => '2026-09-01 08:04:31',
+                'deleted_at' => null,
+            ],
         ];
 
-        // NSIC Hybrid
-        $hybrid = [
-            'NSIC Rc 114H (Mestiso 2)',
-            'NSIC Rc 116H (Mestiso 3)',
-            'NSIC Rc 176H',
-            'NSIC Rc 230H',
-            'NSIC Rc 234H',
-            'NSIC Rc 250H',
-            'NSIC Rc 362J',
-            'NSIC Rc 404H',
-            'NSIC Rc 456H',
-            'NSIC Rc 492H',
-            'NSIC Rc 634H',
-            'NSIC Rc 636H',
-            'NSIC Rc 649H',
-            'NSIC Rc 650H',
-            'NSIC Rc 666H',
-            'NSIC Rc 696H',
-            'NSIC Rc 714H (Mestiso 132)',
-            'NSIC Rc 742H'
-        ];
-
-        // Insert Inbred
-        foreach ($inbred as $name) {
-            RiceVariety::firstOrCreate(
-                ['name' => $name],
-                [
-                    'classification'  => 'Inbred',
-                    'growth_period'   => 110,
-                    'resilience'      => json_encode(['Bacterial Blight', 'Tungro', 'Blast']),
-                ]
-            );
-        }
-
-        // Insert Hybrid
-        foreach ($hybrid as $name) {
-            RiceVariety::firstOrCreate(
-                ['name' => $name],
-                [
-                    'classification'  => 'Hybrid',
-                    'growth_period'   => 115,
-                    'resilience'      => json_encode(['Bacterial Blight', 'Tungro', 'Blast']),
-                ]
-            );
-        }
-
-        $this->command->info('✅ Rice varieties seeded successfully!');
-        $this->command->info('   Inbred: ' . count($inbred));
-        $this->command->info('   Hybrid: ' . count($hybrid));
-        $this->command->info('   TOTAL: ' . (count($inbred) + count($hybrid)) . ' varieties');
+        // Insert or ignore – will not create duplicates if IDs already exist
+        DB::table('rice_varieties')->insertOrIgnore($varieties);
     }
 }

@@ -44,7 +44,7 @@
             </select>
         </div>
 
-        <!-- ===== MAP SECTION ===== -->
+        <!-- ===== MAP SECTION (unique ID) ===== -->
         <div class="col-12">
             <label class="form-label fw-semibold">Location</label>
             <div class="row g-2">
@@ -60,7 +60,7 @@
                     <i class="bi bi-x-circle"></i> Clear
                 </button>
             </div>
-            <div id="farmMap" style="height:300px; width:100%; border-radius:12px; border:1px solid #ddd; background:#e8ecf1; margin-top:8px;"></div>
+            <div id="farmModalMap" style="height:300px; width:100%; border-radius:12px; border:1px solid #ddd; background:#e8ecf1; margin-top:8px;"></div>
             <small class="text-muted">Click on the map to set coordinates.</small>
         </div>
 

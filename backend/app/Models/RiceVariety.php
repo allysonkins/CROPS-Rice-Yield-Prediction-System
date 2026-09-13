@@ -46,6 +46,17 @@ class RiceVariety extends Model
         ];
     }
 
+    /**
+     * Get the maximum yield for a given seeding method.
+     * Falls back to the general max_yield if method-specific is null.
+     */
+    public function getMaxYieldForMethod($method)
+    {
+        $yield = $this->getYieldForMethod($method);
+        // If method-specific max is null, fallback to the generic max_yield
+        return $yield->max ?? $this->max_yield ?? null;
+    }
+
     // ---- Growth Period Helpers ----
     public function getGrowthPeriodForMethod($method)
     {

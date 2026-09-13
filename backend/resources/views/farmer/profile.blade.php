@@ -8,8 +8,69 @@
         <div class="card-custom">
             <div class="card-title"><i class="bi bi-person"></i> My Profile</div>
 
+            {{-- ============================================================ --}}
+            {{-- EMAIL VERIFICATION STATUS --}}
+            {{-- ============================================================ --}}
+            @if(auth()->user()->email_verified_at)
+                <div class="alert alert-success d-flex align-items-center justify-content-between" style="border-left: 4px solid var(--green); border-radius: 10px;">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-patch-check-fill me-2" style="font-size: 20px; color: var(--green);"></i>
+                        <div>
+                            <strong>Email Verified</strong>
+                            <div class="small text-muted">
+                                Your email <strong>{{ auth()->user()->email }}</strong> was verified on
+                                {{ auth()->user()->email_verified_at->format('F d, Y \a\t h:i A') }}.
+                            </div>
+                        </div>
+                    </div>
+                    <span class="badge bg-success">
+                        <i class="bi bi-check-circle-fill"></i> Verified
+                    </span>
+                </div>
+            @else
+                <div class="alert alert-warning d-flex align-items-center justify-content-between" style="border-left: 4px solid var(--gold); border-radius: 10px;">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 20px; color: var(--gold);"></i>
+                        <div>
+                            <strong>Email Not Verified</strong>
+                            <div class="small text-muted">
+                                Please verify your email <strong>{{ auth()->user()->email }}</strong> to unlock all features.
+                                We sent a verification link to your inbox.
+                            </div>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ route('verification.send') }}" class="d-inline">
+                        @csrf
+                        <button type="submit" class="btn btn-sm btn-outline-warning">
+                            <i class="bi bi-envelope-arrow-up"></i> Resend
+                        </button>
+                    </form>
+                </div>
+            @endif
+
+            {{-- ============================================================ --}}
+            {{-- SESSION MESSAGES --}}
+            {{-- ============================================================ --}}
             @if(session('success'))
-                <div class="alert alert-success">{{ session('success') }}</div>
+                <div class="alert alert-success" style="border-left: 4px solid var(--green); border-radius: 10px;">
+                    <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
+                </div>
+            @endif
+
+            @if(session('status') === 'verification-link-sent')
+                <div class="alert alert-success" style="border-left: 4px solid var(--green); border-radius: 10px;">
+                    <i class="bi bi-check-circle-fill"></i> A new verification link has been sent to your email.
+                </div>
+            @endif
+
+            @if ($errors->any())
+                <div class="alert alert-danger" style="border-left: 4px solid var(--red); border-radius: 10px;">
+                    <ul class="mb-0">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
             @endif
 
             <form id="profileForm" action="{{ route('farmer.profile.update') }}" method="POST">
@@ -24,6 +85,15 @@
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
                         <input type="email" name="email" class="form-control" value="{{ old('email', auth()->user()->email) }}" required>
+                        @if(auth()->user()->email_verified_at)
+                            <small class="text-success">
+                                <i class="bi bi-patch-check-fill"></i> Verified
+                            </small>
+                        @else
+                            <small class="text-warning">
+                                <i class="bi bi-hourglass-split"></i> Pending verification
+                            </small>
+                        @endif
                     </div>
 
                     <div class="col-md-6">

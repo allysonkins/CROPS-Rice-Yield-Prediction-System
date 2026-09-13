@@ -6,6 +6,7 @@ use App\Http\Controllers\Farmer\DashboardController as FarmerDashboardController
 use App\Http\Controllers\Admin\RiceVarietyController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
+use App\Http\Controllers\Web\EmailVerificationController;
 use App\Http\Controllers\Admin\MapController;
 use App\Http\Controllers\Admin\AdvisoryController;
 use App\Http\Controllers\Admin\PredictionController;
@@ -21,12 +22,34 @@ Route::get('/', function () {
     return redirect('/login');
 });
 
-// Auth Routes
+// ============================================================
+// AUTH ROUTES (guest only)
+// ============================================================
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::middleware(['auth'])->group(function () {
+// ============================================================
+// EMAIL VERIFICATION ROUTES
+// (auth required, but the user is NOT yet verified)
+// ============================================================
+Route::middleware('auth')->group(function () {
+    Route::get('/email/verify', [EmailVerificationController::class, 'notice'])
+        ->name('verification.notice');
+
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('verification.verify');
+
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+        ->middleware(['throttle:6,1'])
+        ->name('verification.send');
+});
+
+// ============================================================
+// AUTHENTICATED + VERIFIED ROUTES
+// ============================================================
+Route::middleware(['auth', 'verified'])->group(function () {
 
     // ============================================================
     // 1. DASHBOARDS
@@ -41,6 +64,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/predictions', [PredictionController::class, 'index'])->name('admin.predictions.index');
     Route::get('/admin/predictions/create', [PredictionController::class, 'create'])->name('admin.predictions.create');
     Route::post('/admin/predictions', [PredictionController::class, 'store'])->name('admin.predictions.store');
+    Route::get('/admin/predictions/{id}/history', [PredictionController::class, 'history'])->name('admin.predictions.history');
     Route::put('/admin/predictions/{id}', [PredictionController::class, 'update'])->name('admin.predictions.update');
     Route::get('/admin/predictions/{id}', [PredictionController::class, 'show'])->name('admin.predictions.show');
 
@@ -103,6 +127,8 @@ Route::middleware(['auth'])->group(function () {
     // ============================================================
     Route::middleware(['role:admin'])->group(function () {
         Route::get('/admin/logs', [LogController::class, 'index'])->name('admin.logs.index');
+        Route::get('/admin/logs/{id}', [LogController::class, 'show'])->name('admin.logs.show');
+        Route::delete('/admin/logs/clear', [LogController::class, 'clear'])->name('admin.logs.clear');
     });
 
     // ============================================================
@@ -118,7 +144,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
 
     // ============================================================
-    // 13. FARMER PROFILE (Backward compatibility – points to unified controller)
+    // 13. FARMER PROFILE (backward compatibility)
     // ============================================================
     Route::get('/farmer/profile', [ProfileController::class, 'edit'])->name('farmer.profile.edit');
     Route::put('/farmer/profile', [ProfileController::class, 'update'])->name('farmer.profile.update');
@@ -127,5 +153,7 @@ Route::middleware(['auth'])->group(function () {
     // 14. FARMER PREDICTIONS
     // ============================================================
     Route::get('/farmer/predictions', [FarmerPredictionController::class, 'index'])->name('farmer.predictions.index');
+    Route::get('/farmer/predictions/{id}/history', [FarmerPredictionController::class, 'history'])
+        ->name('farmer.predictions.history');
     Route::get('/farmer/predictions/{id}', [FarmerPredictionController::class, 'show'])->name('farmer.predictions.show');
 });
