@@ -3,24 +3,23 @@
 @section('title', 'Manage Farms')
 
 @section('content')
-    <!-- GUARANTEE LEAFLET CSS LOADS -->
+    <!-- Leaflet CSS (needed for the map inside the modal) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <style>
-        #farmMap {
-            height: 350px;
+        #farmModalMap {
+            height: 300px;
             width: 100%;
             border-radius: 12px;
             border: 1px solid #ddd;
             background: #e8ecf1;
+            margin-top: 8px;
             position: relative;
             overflow: hidden;
             z-index: 1;
         }
         .leaflet-control-zoom {
             z-index: 1050 !important;
-        }
-        .map-toggle-btn {
-            margin-bottom: 8px;
         }
     </style>
 
@@ -154,7 +153,7 @@
                                 <i class="bi bi-inbox" style="font-size: 28px;"></i>
                                 <p class="mt-2 mb-0">No farms yet.</p>
                                 @if(auth()->user()->role === 'admin')
-                                    <button type="button" class="btn btn-sm btn-primary mt-2" onclick="openFarmModal()">
+                                    <button type="button" class="btn btn-sm btn-success mt-2" onclick="openFarmModal()">
                                         <i class="bi bi-plus-circle"></i> Add Farm
                                     </button>
                                 @endif
@@ -166,317 +165,315 @@
         </div>
     </div>
 
-    <!-- Include the Modal -->
+    <!-- Modal shell -->
     @if(auth()->user()->role === 'admin')
         @include('admin.farms.partials.modal')
     @endif
+@endsection
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        @if(auth()->user()->role === 'admin')
-        let mapInstance = null;
-        let markerInstance = null;
+@push('scripts')
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-        // ============================================================
-        // SANTIAGO CITY BOUNDS (approximate)
-        // ============================================================
-        const SANTIAGO_BOUNDS = {
-            minLat: 16.65,
-            maxLat: 16.73,
-            minLng: 121.52,
-            maxLng: 121.58
+<script>
+    @if(auth()->user()->role === 'admin')
+    // ============================================================
+    // MODAL MAP STATE (targets #farmModalMap, NOT #farmMap)
+    // ============================================================
+    let modalMap = null;
+    let modalMarker = null;
+
+    const SANTIAGO_BOUNDS = {
+        minLat: 16.65, maxLat: 16.73,
+        minLng: 121.52, maxLng: 121.58
+    };
+
+    function clampToSantiago(lat, lng) {
+        return {
+            lat: Math.min(Math.max(lat, SANTIAGO_BOUNDS.minLat), SANTIAGO_BOUNDS.maxLat),
+            lng: Math.min(Math.max(lng, SANTIAGO_BOUNDS.minLng), SANTIAGO_BOUNDS.maxLng)
         };
+    }
 
-        function clampToSantiago(lat, lng) {
-            return {
-                lat: Math.min(Math.max(lat, SANTIAGO_BOUNDS.minLat), SANTIAGO_BOUNDS.maxLat),
-                lng: Math.min(Math.max(lng, SANTIAGO_BOUNDS.minLng), SANTIAGO_BOUNDS.maxLng)
+    // ============================================================
+    // OPEN MODAL — ADD FARM
+    // ============================================================
+    function openFarmModal() {
+        document.getElementById('modalTitle').textContent = 'Add Farm';
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalContent').innerHTML = '';
+
+        const modalEl = document.getElementById('farmModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        // IMPORTANT: send AJAX header so controller returns the view, not a redirect
+        fetch('{{ route("admin.farms.create") }}', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('modalLoading').style.display = 'none';
+            document.getElementById('modalContent').style.display = 'block';
+            document.getElementById('modalContent').innerHTML = html;
+
+            const form = document.getElementById('farmForm');
+            if (form) form.addEventListener('submit', handleSubmit);
+
+            setTimeout(initModalMap, 300);
+        })
+        .catch(() => {
+            document.getElementById('modalLoading').innerHTML =
+                '<p class="text-danger">Failed to load form.</p>';
+        });
+    }
+
+    // ============================================================
+    // OPEN MODAL — EDIT FARM
+    // ============================================================
+    function editFarm(id) {
+        document.getElementById('modalTitle').textContent = 'Edit Farm';
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalContent').style.display = 'none';
+        document.getElementById('modalContent').innerHTML = '';
+
+        const modalEl = document.getElementById('farmModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
+        // IMPORTANT: send AJAX header so controller returns the view, not a redirect
+        fetch('/admin/farms/' + id + '/edit', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.text())
+        .then(html => {
+            document.getElementById('modalLoading').style.display = 'none';
+            document.getElementById('modalContent').style.display = 'block';
+            document.getElementById('modalContent').innerHTML = html;
+
+            const form = document.getElementById('farmForm');
+            if (form) form.addEventListener('submit', handleSubmit);
+
+            setTimeout(initModalMap, 300);
+        })
+        .catch(() => {
+            document.getElementById('modalLoading').innerHTML =
+                '<p class="text-danger">Failed to load form.</p>';
+        });
+    }
+
+    // ============================================================
+    // INIT MODAL MAP (targets #farmModalMap)
+    // ============================================================
+    function initModalMap() {
+        const container = document.getElementById('farmModalMap');
+        if (!container) {
+            setTimeout(initModalMap, 200);
+            return;
+        }
+
+        // Destroy previous instance if any
+        if (modalMap) {
+            try { modalMap.off(); modalMap.remove(); } catch (e) {}
+            modalMap = null;
+            modalMarker = null;
+        }
+
+        const latInput = document.getElementById('latitude');
+        const lngInput = document.getElementById('longitude');
+        let lat = latInput && latInput.value ? parseFloat(latInput.value) : 16.6889;
+        let lng = lngInput && lngInput.value ? parseFloat(lngInput.value) : 121.5484;
+        const c = clampToSantiago(lat, lng);
+        lat = c.lat;
+        lng = c.lng;
+
+        modalMap = L.map(container, {
+            center: [lat, lng],
+            zoom: 14,
+            maxBounds: [
+                [SANTIAGO_BOUNDS.minLat - 0.02, SANTIAGO_BOUNDS.minLng - 0.02],
+                [SANTIAGO_BOUNDS.maxLat + 0.02, SANTIAGO_BOUNDS.maxLng + 0.02]
+            ],
+            maxBoundsViscosity: 0.8
+        });
+
+        // Layers
+        const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        });
+        const satImg = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; Esri'
+        });
+        const satLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; Esri'
+        });
+        const satelliteLayer = L.layerGroup([satImg, satLabels]);
+        streetLayer.addTo(modalMap);
+
+        // Toggle control
+        const ToggleControl = L.Control.extend({
+            options: { position: 'topright' },
+            onAdd: function (map) {
+                const btn = L.DomUtil.create('button', 'btn btn-sm btn-secondary shadow-sm');
+                btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Satellite';
+                btn.style.margin = '10px';
+                btn.style.pointerEvents = 'auto';
+                L.DomEvent.disableClickPropagation(btn);
+
+                let isSat = false;
+                L.DomEvent.on(btn, 'click', function (e) {
+                    L.DomEvent.preventDefault(e);
+                    if (isSat) {
+                        map.removeLayer(satelliteLayer);
+                        streetLayer.addTo(map);
+                        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Satellite';
+                        btn.classList.replace('btn-primary', 'btn-secondary');
+                        isSat = false;
+                    } else {
+                        map.removeLayer(streetLayer);
+                        satelliteLayer.addTo(map);
+                        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Street';
+                        btn.classList.replace('btn-secondary', 'btn-primary');
+                        isSat = true;
+                    }
+                });
+                return btn;
+            }
+        });
+        modalMap.addControl(new ToggleControl());
+
+        // Existing marker
+        if (latInput && latInput.value && lngInput && lngInput.value) {
+            modalMarker = L.marker([lat, lng], { draggable: true }).addTo(modalMap);
+            modalMarker.on('dragend', function () {
+                const pos = modalMarker.getLatLng();
+                const cl = clampToSantiago(pos.lat, pos.lng);
+                modalMarker.setLatLng(cl);
+                latInput.value = cl.lat.toFixed(8);
+                lngInput.value = cl.lng.toFixed(8);
+            });
+        }
+
+        // Click to place
+        modalMap.on('click', function (e) {
+            const cl = clampToSantiago(e.latlng.lat, e.latlng.lng);
+            setModalMarker(cl.lat, cl.lng);
+        });
+
+        // Live sync when typing coordinates
+        if (latInput && lngInput) {
+            const sync = () => {
+                const tLat = parseFloat(latInput.value);
+                const tLng = parseFloat(lngInput.value);
+                if (!isNaN(tLat) && !isNaN(tLng)) {
+                    const cl = clampToSantiago(tLat, tLng);
+                    setModalMarker(cl.lat, cl.lng, false);
+                }
             };
+            latInput.addEventListener('input', sync);
+            lngInput.addEventListener('input', sync);
         }
 
-        function initMap() {
-            const container = document.getElementById('farmMap');
-            if (!container) return;
+        setTimeout(() => { if (modalMap) modalMap.invalidateSize(true); }, 300);
+        setTimeout(() => { if (modalMap) modalMap.invalidateSize(true); }, 600);
+    }
 
-            if (mapInstance) {
-                mapInstance.off();
-                mapInstance.remove();
-                mapInstance = null;
-                markerInstance = null;
-            }
+    function setModalMarker(lat, lng, pan = true) {
+        const cl = clampToSantiago(lat, lng);
+        lat = cl.lat;
+        lng = cl.lng;
 
+        const latInput = document.getElementById('latitude');
+        const lngInput = document.getElementById('longitude');
+        if (!latInput || !lngInput) return;
+
+        latInput.value = lat.toFixed(8);
+        lngInput.value = lng.toFixed(8);
+
+        if (modalMarker) {
+            modalMarker.setLatLng([lat, lng]);
+        } else if (modalMap) {
+            modalMarker = L.marker([lat, lng], { draggable: true }).addTo(modalMap);
+            modalMarker.on('dragend', function () {
+                const pos = modalMarker.getLatLng();
+                const cl2 = clampToSantiago(pos.lat, pos.lng);
+                modalMarker.setLatLng(cl2);
+                latInput.value = cl2.lat.toFixed(8);
+                lngInput.value = cl2.lng.toFixed(8);
+            });
+        }
+        if (modalMap && pan) modalMap.setView([lat, lng], modalMap.getZoom());
+    }
+
+    // Clear location
+    document.addEventListener('click', function (e) {
+        if (e.target.id === 'clearLocation' || e.target.closest('#clearLocation')) {
             const latInput = document.getElementById('latitude');
             const lngInput = document.getElementById('longitude');
-            let lat = latInput && latInput.value ? parseFloat(latInput.value) : 16.6889;
-            let lng = lngInput && lngInput.value ? parseFloat(lngInput.value) : 121.5484;
-            // Clamp initial coordinates to Santiago
-            const clamped = clampToSantiago(lat, lng);
-            lat = clamped.lat;
-            lng = clamped.lng;
-
-            mapInstance = L.map(container, {
-                center: [lat, lng],
-                zoom: 14,
-                maxBounds: [
-                    [SANTIAGO_BOUNDS.minLat - 0.02, SANTIAGO_BOUNDS.minLng - 0.02],
-                    [SANTIAGO_BOUNDS.maxLat + 0.02, SANTIAGO_BOUNDS.maxLng + 0.02]
-                ],
-                maxBoundsViscosity: 0.8
-            });
-
-            // ===== LAYER DEFINITIONS WITH LABELS =====
-            const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            });
-
-            const satelliteImg = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '&copy; Esri'
-            });
-
-            const satelliteLabels = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '&copy; Esri'
-            });
-
-            const satelliteLayer = L.layerGroup([satelliteImg, satelliteLabels]);
-
-            // Add default street layer
-            streetLayer.addTo(mapInstance);
-
-            // ===== CUSTOM TOGGLE BUTTON ON THE MAP =====
-            const ToggleControl = L.Control.extend({
-                options: { position: 'topright' },
-                onAdd: function (map) {
-                    const btn = L.DomUtil.create('button', 'btn btn-sm btn-secondary shadow-sm');
-                    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Switch to Satellite';
-                    btn.style.margin = '10px';
-                    btn.style.pointerEvents = 'auto';
-                    
-                    L.DomEvent.disableClickPropagation(btn);
-                    
-                    let isSatellite = false;
-                    
-                    L.DomEvent.on(btn, 'click', function(e) {
-                        L.DomEvent.preventDefault(e);
-                        if (isSatellite) {
-                            map.removeLayer(satelliteLayer);
-                            streetLayer.addTo(map);
-                            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Switch to Satellite';
-                            btn.classList.replace('btn-primary', 'btn-secondary');
-                            isSatellite = false;
-                        } else {
-                            map.removeLayer(streetLayer);
-                            satelliteLayer.addTo(map);
-                            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Switch to Street';
-                            btn.classList.replace('btn-secondary', 'btn-primary');
-                            isSatellite = true;
-                        }
-                    });
-                    
-                    return btn;
-                }
-            });
-            
-            mapInstance.addControl(new ToggleControl());
-
-            // ===== MARKER LOGIC WITH CLAMPING =====
-            if (latInput && latInput.value && lngInput && lngInput.value) {
-                markerInstance = L.marker([lat, lng], { draggable: true }).addTo(mapInstance);
-                markerInstance.on('dragend', function() {
-                    const pos = markerInstance.getLatLng();
-                    const clampedPos = clampToSantiago(pos.lat, pos.lng);
-                    markerInstance.setLatLng(clampedPos);
-                    latInput.value = clampedPos.lat.toFixed(8);
-                    lngInput.value = clampedPos.lng.toFixed(8);
-                });
-            }
-
-            mapInstance.on('click', function(e) {
-                const clampedPos = clampToSantiago(e.latlng.lat, e.latlng.lng);
-                setMarker(clampedPos.lat, clampedPos.lng);
-            });
-
-            setTimeout(() => {
-                if (mapInstance) {
-                    mapInstance.invalidateSize();
-                }
-            }, 300);
-
-            if (latInput && lngInput) {
-                const updateFromInputs = () => {
-                    const typedLat = parseFloat(latInput.value);
-                    const typedLng = parseFloat(lngInput.value);
-                    if (!isNaN(typedLat) && !isNaN(typedLng)) {
-                        const clamped = clampToSantiago(typedLat, typedLng);
-                        setMarker(clamped.lat, clamped.lng, false);
-                    }
-                };
-                latInput.addEventListener('input', updateFromInputs);
-                lngInput.addEventListener('input', updateFromInputs);
+            if (latInput) latInput.value = '';
+            if (lngInput) lngInput.value = '';
+            if (modalMarker && modalMap) {
+                modalMap.removeLayer(modalMarker);
+                modalMarker = null;
             }
         }
+    });
 
-        function setMarker(lat, lng, pan = true) {
-            const clamped = clampToSantiago(lat, lng);
-            lat = clamped.lat;
-            lng = clamped.lng;
-
-            const latInput = document.getElementById('latitude');
-            const lngInput = document.getElementById('longitude');
-            if (!latInput || !lngInput) return;
-            
-            latInput.value = lat.toFixed(8);
-            lngInput.value = lng.toFixed(8);
-
-            if (markerInstance) {
-                markerInstance.setLatLng([lat, lng]);
-            } else if (mapInstance) {
-                markerInstance = L.marker([lat, lng], { draggable: true }).addTo(mapInstance);
-                markerInstance.on('dragend', function() {
-                    const pos = markerInstance.getLatLng();
-                    const clampedPos = clampToSantiago(pos.lat, pos.lng);
-                    markerInstance.setLatLng(clampedPos);
-                    latInput.value = clampedPos.lat.toFixed(8);
-                    lngInput.value = clampedPos.lng.toFixed(8);
-                });
-            }
-
-            if (mapInstance && pan) {
-                mapInstance.setView([lat, lng], mapInstance.getZoom());
+    // Cleanup when modal closes
+    document.addEventListener('hidden.bs.modal', function (e) {
+        if (e.target.id === 'farmModal') {
+            if (modalMap) {
+                try { modalMap.off(); modalMap.remove(); } catch (ex) {}
+                modalMap = null;
+                modalMarker = null;
             }
         }
+    });
 
-        function openFarmModal() {
-            document.getElementById('modalTitle').textContent = 'Add Farm';
-            document.getElementById('modalLoading').style.display = 'block';
-            document.getElementById('modalContent').style.display = 'none';
-            document.getElementById('modalContent').innerHTML = '';
+    // ============================================================
+    // FORM SUBMIT (create + edit)
+    // ============================================================
+    function handleSubmit(e) {
+        e.preventDefault();
+        const form = e.target;
+        const formData = new FormData(form);
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+        submitBtn.disabled = true;
 
-            const modalEl = document.getElementById('farmModal');
-            const modal = new bootstrap.Modal(modalEl);
-            modal.show(); 
+        const existingErrors = form.querySelector('#formErrors');
+        if (existingErrors) existingErrors.innerHTML = '';
 
-            fetch('{{ route("admin.farms.create") }}')
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById('modalLoading').style.display = 'none';
-                    document.getElementById('modalContent').style.display = 'block';
-                    document.getElementById('modalContent').innerHTML = html;
-
-                    const form = document.getElementById('farmForm');
-                    if (form) {
-                        form.addEventListener('submit', handleSubmit);
-                    }
-
-                    setTimeout(() => {
-                        initMap();
-                    }, 300);
-                });
-        }
-
-        function editFarm(id) {
-            document.getElementById('modalTitle').textContent = 'Edit Farm';
-            document.getElementById('modalLoading').style.display = 'block';
-            document.getElementById('modalContent').style.display = 'none';
-            document.getElementById('modalContent').innerHTML = '';
-
-            const modalEl = document.getElementById('farmModal');
-            const modal = new bootstrap.Modal(modalEl);
-            modal.show(); 
-
-            fetch('/admin/farms/' + id + '/edit')
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById('modalLoading').style.display = 'none';
-                    document.getElementById('modalContent').style.display = 'block';
-                    document.getElementById('modalContent').innerHTML = html;
-
-                    const form = document.getElementById('farmForm');
-                    if (form) {
-                        form.addEventListener('submit', handleSubmit);
-                    }
-
-                    setTimeout(() => {
-                        initMap();
-                    }, 300);
-                });
-        }
-
-        function handleSubmit(e) {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-
-            const submitBtn = form.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
-            submitBtn.disabled = true;
-
-            const existingErrors = form.querySelector('#formErrors');
-            if (existingErrors) existingErrors.remove();
-
-            fetch(form.action, {
-                method: form.method || 'POST',
-                body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('farmModal'));
-                    modal.hide();
-                    location.reload();
-                } else {
-                    const errorDiv = document.createElement('div');
-                    errorDiv.id = 'formErrors';
-                    errorDiv.className = 'alert alert-danger mt-3';
-                    let errorMsg = data.error || 'An error occurred.';
-                    if (data.errors) {
-                        errorMsg = Object.values(data.errors).flat().join('<br>');
-                    }
-                    errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + errorMsg;
-                    form.prepend(errorDiv);
-                    submitBtn.innerHTML = originalText;
-                    submitBtn.disabled = false;
-                }
-            })
-            .catch(() => {
+        fetch(form.action, {
+            method: form.method || 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('farmModal')).hide();
+                location.reload();
+            } else {
+                const errorDiv = document.getElementById('formErrors') || document.createElement('div');
+                errorDiv.id = 'formErrors';
+                errorDiv.className = 'alert alert-danger mb-3';
+                let msg = data.error || 'An error occurred.';
+                if (data.errors) msg = Object.values(data.errors).flat().join('<br>');
+                errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + msg;
+                form.prepend(errorDiv);
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
-                alert('An error occurred. Please try again.');
-            });
-        }
-
-        document.addEventListener('click', function(e) {
-            if (e.target.id === 'clearLocation' || e.target.closest('#clearLocation')) {
-                const latInput = document.getElementById('latitude');
-                const lngInput = document.getElementById('longitude');
-                if (latInput) latInput.value = '';
-                if (lngInput) lngInput.value = '';
-                if (markerInstance) {
-                    mapInstance.removeLayer(markerInstance);
-                    markerInstance = null;
-                }
-                if (mapInstance) {
-                    mapInstance.setView([16.6889, 121.5484], 13);
-                }
             }
+        })
+        .catch(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+            alert('An error occurred. Please try again.');
         });
-
-        document.addEventListener('hidden.bs.modal', function(e) {
-            if (e.target.id === 'farmModal') {
-                if (mapInstance) {
-                    try {
-                        mapInstance.off();
-                        mapInstance.remove();
-                    } catch (ex) {}
-                    mapInstance = null;
-                    markerInstance = null;
-                }
-            }
-        });
-        @endif
-    </script>
-@endsection
+    }
+    @endif
+</script>
+@endpush
