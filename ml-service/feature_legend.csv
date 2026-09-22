@@ -1,0 +1,38 @@
+feature,meaning
+variety_maturity_days,"variety == 'maturity_days' (1 = yes, 0 = no)"
+variety_max_yield,"variety == 'max_yield' (1 = yes, 0 = no)"
+variety_avg_yield,"variety == 'avg_yield' (1 = yes, 0 = no)"
+land_area_ha,numeric value (land_area_ha)
+fertilizer_kg_ha,numeric value (fertilizer_kg_ha)
+historical_yield_tons_ha,numeric value (historical_yield_tons_ha)
+temperature_avg,numeric value (temperature_avg)
+rainfall_mm,numeric value (rainfall_mm)
+humidity_avg,numeric value (humidity_avg)
+variety_Angelica (NSIC Rc122),"variety == 'Angelica (NSIC Rc122)' (1 = yes, 0 = no)"
+variety_NSIC 2016 Rc 456H (Mestiso 78),"variety == 'NSIC 2016 Rc 456H (Mestiso 78)' (1 = yes, 0 = no)"
+variety_NSIC RC 402 (Tubigan 36),"variety == 'NSIC RC 402 (Tubigan 36)' (1 = yes, 0 = no)"
+variety_NSIC Rc 480,"variety == 'NSIC Rc 480' (1 = yes, 0 = no)"
+variety_NSIC Rc 486 (Mestiso 80),"variety == 'NSIC Rc 486 (Mestiso 80)' (1 = yes, 0 = no)"
+variety_NSIC Rc 512 (Tubigan 44),"variety == 'NSIC Rc 512 (Tubigan 44)' (1 = yes, 0 = no)"
+variety_NSIC Rc 534 (Salinas 29),"variety == 'NSIC Rc 534 (Salinas 29)' (1 = yes, 0 = no)"
+variety_NSIC Rc 666H,"variety == 'NSIC Rc 666H' (1 = yes, 0 = no)"
+variety_NSIC Rc124H (MESTISO 4),"variety == 'NSIC Rc124H (MESTISO 4)' (1 = yes, 0 = no)"
+variety_NSIC Rc132H (MESTISO 6),"variety == 'NSIC Rc132H (MESTISO 6)' (1 = yes, 0 = no)"
+variety_NSIC Rc160 (Tubigan 14),"variety == 'NSIC Rc160 (Tubigan 14)' (1 = yes, 0 = no)"
+variety_NSIC Rc204H (Mestiso 20),"variety == 'NSIC Rc204H (Mestiso 20)' (1 = yes, 0 = no)"
+variety_NSIC Rc216 (Tubigan 17),"variety == 'NSIC Rc216 (Tubigan 17)' (1 = yes, 0 = no)"
+variety_NSIC Rc222 (Tubigan 18),"variety == 'NSIC Rc222 (Tubigan 18)' (1 = yes, 0 = no)"
+variety_NSIC Rc234H (MESTISO 27),"variety == 'NSIC Rc234H (MESTISO 27)' (1 = yes, 0 = no)"
+variety_NSIC Rc440(Tubigan 39),"variety == 'NSIC Rc440(Tubigan 39)' (1 = yes, 0 = no)"
+variety_PSB Rc18 (Ala),"variety == 'PSB Rc18 (Ala)' (1 = yes, 0 = no)"
+variety_PSB Rc72H (Mestiso),"variety == 'PSB Rc72H (Mestiso)' (1 = yes, 0 = no)"
+classification_Hybrid,"classification == 'Hybrid' (1 = yes, 0 = no)"
+classification_Inbred,"classification == 'Inbred' (1 = yes, 0 = no)"
+soil_type_Clay,"soil_type == 'Clay' (1 = yes, 0 = no)"
+soil_type_Clay Loam,"soil_type == 'Clay Loam' (1 = yes, 0 = no)"
+soil_type_Sandy Loam,"soil_type == 'Sandy Loam' (1 = yes, 0 = no)"
+soil_type_Silty Clay,"soil_type == 'Silty Clay' (1 = yes, 0 = no)"
+season_Dry,"season == 'Dry' (1 = yes, 0 = no)"
+season_Wet,"season == 'Wet' (1 = yes, 0 = no)"
+seeding_method_Direct Seeded,"seeding_method == 'Direct Seeded' (1 = yes, 0 = no)"
+seeding_method_Transplanted,"seeding_method == 'Transplanted' (1 = yes, 0 = no)"
