@@ -13,8 +13,15 @@ class RiceVarietyController extends Controller
 {
     public function index()
     {
-        $varieties = RiceVariety::orderBy('name')->get();
-        return view('admin.rice-varieties.index', compact('varieties'));
+        $varieties        = RiceVariety::orderBy('name')->get();
+        $trainedVarieties = $this->getTrainedVarieties();
+        $lastTrained      = $this->getLastTrainedDate();
+
+        return view('admin.rice-varieties.index', compact(
+            'varieties',
+            'trainedVarieties',
+            'lastTrained'
+        ));
     }
 
     public function create()
@@ -61,17 +68,23 @@ class RiceVarietyController extends Controller
 
             $variety = RiceVariety::create($validated);
 
-            // 🔥 LOG: Rice variety created
             log_activity('created', 'Rice variety created', $variety, [
                 'name' => $variety->name,
                 'classification' => $variety->classification,
             ]);
 
+            // Check if this variety is in the ML model
+            $trainedVarieties = $this->getTrainedVarieties();
+            $isFallback = !in_array($variety->name, $trainedVarieties, true);
+
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
-                    'message' => '✅ Rice variety "' . $variety->name . '" added successfully!',
-                    'data' => $variety
+                    'message' => $isFallback
+                        ? '✅ Rice variety "' . $variety->name . '" added! Note: this variety is not in the ML model — predictions will use numeric features only. Retrain the model to include it.'
+                        : '✅ Rice variety "' . $variety->name . '" added successfully!',
+                    'data' => $variety,
+                    'is_fallback' => $isFallback,
                 ], 201);
             }
 
@@ -157,7 +170,6 @@ class RiceVarietyController extends Controller
             $oldData = $variety->only(['name', 'classification', 'description']);
             $variety->update($validated);
 
-            // 🔥 LOG: Rice variety updated
             log_activity('updated', 'Rice variety updated', $variety, [
                 'old' => $oldData,
                 'new' => $variety->only(['name', 'classification', 'description']),
@@ -212,7 +224,6 @@ class RiceVarietyController extends Controller
 
         $variety = RiceVariety::findOrFail($id);
 
-        // 🔥 LOG: Rice variety deleted
         log_activity('deleted', 'Rice variety deleted', $variety, [
             'name' => $variety->name,
             'classification' => $variety->classification,
@@ -247,5 +258,70 @@ class RiceVarietyController extends Controller
     {
         $variety = RiceVariety::findOrFail($id);
         return view('admin.rice-varieties.partials.detail', compact('variety'));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // ML MODEL HELPERS
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Read the one-hot variety columns the ML model was trained on.
+     * Reads from feature_legend.json, filters out numeric variety_* fields.
+     */
+    private function getTrainedVarieties(): array
+    {
+        $path = $this->findMlFile('feature_legend.json');
+        if (!$path) return [];
+
+        $legend = json_decode(file_get_contents($path), true) ?? [];
+
+        // These start with "variety_" but are numeric, not one-hot columns
+        $numericVarietyFields = [
+            'variety_maturity_days',
+            'variety_max_yield',
+            'variety_avg_yield',
+        ];
+
+        $trained = [];
+        foreach (array_keys($legend) as $feat) {
+            if (str_starts_with($feat, 'variety_')
+                && !in_array($feat, $numericVarietyFields, true)) {
+                $trained[] = substr($feat, strlen('variety_'));
+            }
+        }
+
+        return $trained;
+    }
+
+    /**
+     * Get the timestamp of the last model training.
+     */
+    private function getLastTrainedDate(): string
+    {
+        $path = $this->findMlFile('model_rf.pkl');
+        if (!$path) return 'Not trained yet';
+
+        return date('M d, Y g:i A', filemtime($path));
+    }
+
+    /**
+     * Search common relative paths for a file in the ml-service folder.
+     */
+    private function findMlFile(string $filename): ?string
+    {
+        $candidates = [
+            base_path('ml-service/' . $filename),
+            base_path('../ml-service/' . $filename),
+            base_path('../../ml-service/' . $filename),
+            'C:/xampp/install/htdocs/crops-system/ml-service/' . $filename,
+        ];
+
+        foreach ($candidates as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 }

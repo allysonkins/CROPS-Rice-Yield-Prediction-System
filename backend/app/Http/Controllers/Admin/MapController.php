@@ -12,7 +12,6 @@ class MapController extends Controller
     {
         $user = auth()->user();
 
-        // If farmer, only show their farms
         if ($user->role === 'farmer') {
             $farms = Farm::with('user')
                 ->where('user_id', $user->id)
@@ -21,27 +20,58 @@ class MapController extends Controller
             $farms = Farm::with('user')->get();
         }
 
-        $farmData = $farms->map(function($farm) {
-            $latestPrediction = null;
-            foreach ($farm->farmRecords as $record) {
-                foreach ($record->predictions as $prediction) {
-                    if ($prediction->model_type === 'RandomForest') {
-                        $latestPrediction = $prediction;
-                        break 2;
-                    }
+        $farmData = $farms->map(function ($farm) {
+            // Latest XGBoost prediction for ANY farm record on this farm
+            $latestPrediction = Prediction::where('model_type', 'XGBoost')
+                ->with('farmRecord.riceVariety')
+                ->whereHas('farmRecord', fn($q) => $q->where('farm_id', $farm->id))
+                ->latest('created_at')
+                ->first();
+
+            $yield      = $latestPrediction?->predicted_yield_tons_ha;
+            $confidence = $latestPrediction?->confidence;
+            $lo         = $latestPrediction?->yield_lower;
+            $hi         = $latestPrediction?->yield_upper;
+
+            // ── App-level yield class (variety-relative, NOT a model output) ──
+            $yieldClass  = null;
+            $ratio       = null;
+            $varietyAvg  = null;
+            $seedingMethod = null;
+
+            if ($latestPrediction && $latestPrediction->farmRecord?->riceVariety) {
+                $fr     = $latestPrediction->farmRecord;
+                $method = $fr->seeding_method ?? 'Transplanted';
+                $vy     = $fr->riceVariety->getYieldForMethod($method);
+
+                $varietyAvg    = $vy->avg ?? ($fr->riceVariety->avg_yield ?? null);
+                $seedingMethod = $method;
+
+                if ($varietyAvg && $varietyAvg > 0 && $yield !== null) {
+                    $ratio = $yield / $varietyAvg;
+                    if ($ratio >= 1.125)     $yieldClass = 'High';
+                    elseif ($ratio >= 0.875) $yieldClass = 'Medium';
+                    else                     $yieldClass = 'Low';
                 }
             }
 
             return [
-                'id' => $farm->id,
-                'name' => $farm->name,
-                'barangay' => $farm->barangay,
-                'farmer' => $farm->user->name ?? 'Unassigned',
-                'lat' => $farm->latitude,
-                'lng' => $farm->longitude,
-                'land_area' => $farm->land_area_ha,
-                'soil_type' => $farm->soil_type,
-                'yield' => $latestPrediction ? round($latestPrediction->predicted_yield_tons_ha, 2) : null,
+                'id'             => $farm->id,
+                'name'           => $farm->name,
+                'barangay'       => $farm->barangay,
+                'farmer'         => $farm->user->name ?? 'Unassigned',
+                'lat'            => $farm->latitude,
+                'lng'            => $farm->longitude,
+                'land_area'      => $farm->land_area_ha,
+                'soil_type'      => $farm->soil_type,
+                'yield'          => $yield !== null ? round($yield, 2) : null,
+                'class'          => $yieldClass,
+                'confidence'     => $confidence,
+                'yield_lower'    => $lo,
+                'yield_upper'    => $hi,
+                'variety_avg'    => $varietyAvg,
+                'ratio'          => $ratio,
+                'seeding_method' => $seedingMethod,
             ];
         });
 

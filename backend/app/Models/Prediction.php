@@ -13,7 +13,18 @@ class Prediction extends Model
         'farm_record_id',
         'model_type',
         'predicted_yield_tons_ha',
+        'confidence',
+        'yield_lower',
+        'yield_upper',
         'input_features',
+    ];
+
+    protected $casts = [
+        'predicted_yield_tons_ha' => 'float',
+        'confidence'              => 'float',
+        'yield_lower'             => 'float',
+        'yield_upper'             => 'float',
+        'input_features'          => 'string',
     ];
 
     public function farmRecord()

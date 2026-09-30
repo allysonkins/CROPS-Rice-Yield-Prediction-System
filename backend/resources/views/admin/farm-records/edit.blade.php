@@ -1,6 +1,3 @@
-<!-- ============================================================ -->
-<!-- EDIT FARM RECORD (loaded into modal)                         -->
-<!-- ============================================================ -->
 <div id="formErrors"></div>
 
 <form id="farmRecordForm" action="{{ route('admin.farm-records.update', $farmRecord->id) }}" method="POST">
@@ -33,25 +30,39 @@
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Season <span class="text-danger">*</span></label>
-            <input type="text" name="season" class="form-control" placeholder="e.g., Wet 2026" value="{{ old('season', $farmRecord->season) }}" required>
+            <select name="season" class="form-select" required>
+                <option value="">Select Season...</option>
+                <option value="Dry Season" {{ old('season', $farmRecord->season) == 'Dry Season' ? 'selected' : '' }}>Dry Season</option>
+                <option value="Wet Season" {{ old('season', $farmRecord->season) == 'Wet Season' ? 'selected' : '' }}>Wet Season</option>
+            </select>
+            <small class="text-muted">Predictions only available for Dry and Wet seasons.</small>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Season Year <span class="text-danger">*</span></label>
+            @php
+                $curYear = now()->year;
+                $selectedYear = old('year', $farmRecord->year ?? $curYear);
+            @endphp
+            <select name="year" class="form-select" required>
+                @for($y = $curYear + 1; $y >= $curYear - 10; $y--)
+                    <option value="{{ $y }}" {{ $selectedYear == $y ? 'selected' : '' }}>
+                        {{ $y }}{{ $y === $curYear ? ' (Current)' : '' }}
+                    </option>
+                @endfor
+            </select>
+            <small class="text-muted">Which year does this season belong to?</small>
         </div>
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Fertilizer (kg/ha) <span class="text-danger">*</span></label>
-            <input type="number" step="0.01" name="fertilizer_kg_ha" class="form-control" placeholder="120" value="{{ old('fertilizer_kg_ha', $farmRecord->fertilizer_kg_ha) }}" required>
+            <input type="number" step="0.01" min="0" max="250" name="fertilizer_kg_ha" class="form-control" placeholder="120" value="{{ old('fertilizer_kg_ha', $farmRecord->fertilizer_kg_ha) }}" required>
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Historical Yield (t/ha)</label>
-            <input type="number" step="0.01" name="historical_yield_tons_ha" class="form-control" placeholder="4.2" value="{{ old('historical_yield_tons_ha', $farmRecord->historical_yield_tons_ha) }}">
+            <label class="form-label fw-semibold">Previous Yield (t/ha)</label>
+            <input type="number" step="0.01" min="0" max="10" name="historical_yield_tons_ha" class="form-control" placeholder="4.2" value="{{ old('historical_yield_tons_ha', $farmRecord->historical_yield_tons_ha) }}">
             <small class="text-muted">Previous season's yield (if available)</small>
-        </div>
-
-        <!-- Actual Yield – shown only if status is Harvested -->
-        <div class="col-md-6" id="actualYieldContainer" style="{{ $farmRecord->status === 'Harvested' ? 'display: block;' : 'display: none;' }}">
-            <label class="form-label fw-semibold">Actual Yield (t/ha)</label>
-            <input type="number" step="0.01" name="actual_yield_tons_ha" class="form-control" placeholder="e.g., 4.8" value="{{ old('actual_yield_tons_ha', $farmRecord->actual_yield_tons_ha) }}" {{ $farmRecord->status === 'Harvested' ? 'required' : '' }}>
-            <small class="text-muted">Record the actual harvested yield</small>
         </div>
 
         <div class="col-md-6">
@@ -59,20 +70,39 @@
             <select name="seeding_method" class="form-select">
                 <option value="">Select...</option>
                 <option value="Transplanted" {{ old('seeding_method', $farmRecord->seeding_method) == 'Transplanted' ? 'selected' : '' }}>Transplanted</option>
-                <option value="Direct Seeded" {{ old('seeding_method', $farmRecord->seeding_method) == 'Direct Seeded' ? 'selected' : '' }}>Direct Seeded</option>
+                <option value="Direct-Seeded" {{ old('seeding_method', $farmRecord->seeding_method) == 'Direct-Seeded' ? 'selected' : '' }}>Direct-Seeded</option>
             </select>
         </div>
 
-        <div class="col-md-6">
-            <label class="form-label fw-semibold">Current Status <span class="text-danger">*</span></label>
-            <select name="status" class="form-select" required>
-                <option value="Vegetative" {{ old('status', $farmRecord->status) == 'Vegetative' ? 'selected' : '' }}>🌱 Vegetative (Growing)</option>
-                <option value="Harvested" {{ old('status', $farmRecord->status) == 'Harvested' ? 'selected' : '' }}>🌾 Harvested</option>
-            </select>
-            <small class="text-muted">Is the crop still growing or already harvested?</small>
-        </div>
+        {{-- Status is fixed on this form:
+             - Vegetative: use the 🌾 "Mark as Harvested" button in the records list to transition.
+             - Harvested: already recorded — banner reflects that. --}}
+        @if($farmRecord->status === 'Vegetative')
+            <div class="col-12">
+                <div class="alert alert-info d-flex align-items-center mb-0" style="border-radius: 10px; padding: 10px 16px;">
+                    <i class="bi bi-info-circle-fill me-2" style="font-size: 18px;"></i>
+                    <div style="font-size: 13px;">
+                        This record is <strong>Vegetative</strong>. To record the harvest, use the
+                        <i class="bi bi-basket-fill"></i> <strong>Harvest</strong> button in the records list.
+                    </div>
+                </div>
+            </div>
+        @elseif($farmRecord->status === 'Harvested')
+            <div class="col-12">
+                <div class="alert alert-secondary d-flex align-items-center mb-0" style="border-radius: 10px; padding: 10px 16px;">
+                    <i class="bi bi-basket-fill me-2" style="font-size: 18px;"></i>
+                    <div style="font-size: 13px;">
+                        This record is already <strong>Harvested</strong>
+                        @if($farmRecord->actual_yield_tons_ha)
+                            with an actual yield of <strong>{{ number_format($farmRecord->actual_yield_tons_ha, 2) }} t/ha</strong>.
+                        @else
+                            .
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @endif
 
-        <!-- Yield Preview (auto-updates) -->
         <div class="col-12" id="yieldPreviewContainer">
             <label class="form-label fw-semibold">Expected Yield (Variety)</label>
             <div class="p-2 bg-light rounded" id="yieldPreview" style="min-height: 40px; color: var(--gray-600);">
@@ -99,33 +129,6 @@
 
 <script>
     (function() {
-        // ============================================================
-        // TOGGLE ACTUAL YIELD FIELD BASED ON STATUS
-        // ============================================================
-        const statusSelect = document.querySelector('select[name="status"]');
-        const actualYieldContainer = document.getElementById('actualYieldContainer');
-        const actualYieldInput = document.querySelector('input[name="actual_yield_tons_ha"]');
-
-        if (statusSelect && actualYieldContainer && actualYieldInput) {
-            function toggleActualYield() {
-                if (statusSelect.value === 'Harvested') {
-                    actualYieldContainer.style.display = 'block';
-                    actualYieldInput.setAttribute('required', 'required');
-                } else {
-                    actualYieldContainer.style.display = 'none';
-                    actualYieldInput.removeAttribute('required');
-                    actualYieldInput.value = ''; // Clear the value when switching away
-                }
-            }
-
-            statusSelect.addEventListener('change', toggleActualYield);
-            // Initial state
-            toggleActualYield();
-        }
-
-        // ============================================================
-        // YIELD PREVIEW (unchanged)
-        // ============================================================
         const varietySelect = document.querySelector('select[name="rice_variety_id"]');
         const methodSelect = document.querySelector('select[name="seeding_method"]');
         const preview = document.getElementById('yieldPreview');

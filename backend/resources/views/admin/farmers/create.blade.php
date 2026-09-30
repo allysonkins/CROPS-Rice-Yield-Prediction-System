@@ -9,13 +9,27 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
-            <input type="email" name="email" class="form-control" placeholder="farmer@example.com" value="{{ old('email') }}" required>
+            <label class="form-label fw-semibold">RSBSA Number</label>
+            <input type="text" name="rsbsa_number" class="form-control" placeholder="e.g., RSBSA-0001" value="{{ old('rsbsa_number') }}">
+            <small class="text-muted">Optional.</small>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Phone Number</label>
+            <input type="text" name="phone" class="form-control" placeholder="09171234567" value="{{ old('phone') }}" pattern="09[0-9]{9}" maxlength="11">
+            <small class="text-muted">PH mobile — used for login.</small>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Email <span class="text-muted">(optional)</span></label>
+            <input type="email" name="email" class="form-control" placeholder="Leave blank if none" value="{{ old('email') }}">
+            <small class="text-muted">Most farmers don't have one — leave blank.</small>
         </div>
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
             <input type="password" name="password" class="form-control" placeholder="Min 8 characters" required>
+            <small class="text-muted">Farmer will use this or a PIN to log in.</small>
         </div>
 
         <div class="col-md-6">
@@ -60,6 +74,13 @@
                 <option value="Villa Gonzaga" {{ old('barangay') == 'Villa Gonzaga' ? 'selected' : '' }}>Villa Gonzaga</option>
                 <option value="Villasis" {{ old('barangay') == 'Villasis' ? 'selected' : '' }}>Villasis</option>
             </select>
+        </div>
+
+        <div class="col-12">
+            <div class="alert alert-info py-2 mb-0" style="font-size: 13px;">
+                <i class="bi bi-info-circle"></i>
+                Farmers are verified through RSBSA/CAO — they do not need email verification.
+            </div>
         </div>
 
         <div class="col-12">

@@ -1,204 +1,225 @@
-{{-- ============================================================ --}}
-{{-- HEADER --}}
-{{-- ============================================================ --}}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h6 class="mb-1">
-            <i class="bi bi-clock-history"></i>
-            Prediction History — {{ $farmRecord->farm->name ?? 'N/A' }}
-        </h6>
-        <div class="text-muted small">
-            {{ $farmRecord->riceVariety->name ?? 'N/A' }} •
-            {{ $farmRecord->season }} •
-            {{ $farmRecord->seeding_method ?? 'N/A' }}
-        </div>
-    </div>
-    <span class="badge bg-secondary">{{ $predictions->count() }} prediction{{ $predictions->count() !== 1 ? 's' : '' }}</span>
-</div>
-
 @if($predictions->isEmpty())
-    <div class="text-center py-4 text-muted">
-        <i class="bi bi-inbox" style="font-size: 32px;"></i>
-        <p class="mt-2 mb-0">No predictions yet for this farm record.</p>
+    <div class="card-custom text-center py-5">
+        <i class="bi bi-inbox" style="font-size: 42px; color: var(--slate-300);"></i>
+        <h6 class="mt-3 mb-1" style="color: var(--slate-700); font-weight: 700;">No predictions yet</h6>
+        <p style="font-size: 13px; color: var(--slate-500); margin: 0;">
+            No predictions have been generated for this farm record.
+        </p>
     </div>
 @else
-    {{-- ============================================================ --}}
+
+    @php
+        // Convert every yield in the collection once, so we don't repeat the helper
+        $yieldsCavan = $predictions->map(fn($p) => t_ha_to_cavan_ha((float) $p->predicted_yield_tons_ha))->values();
+
+        $avgCavan     = $yieldsCavan->avg();
+        $bestCavan    = $yieldsCavan->max();
+        $worstCavan   = $yieldsCavan->min();
+        $firstCavan   = $yieldsCavan->last();  // collection is newest-first, so last = oldest
+        $latestCavan  = $yieldsCavan->first();
+        $deltaCavan   = $latestCavan - $firstCavan;
+        $deltaPct     = $firstCavan > 0 ? ($deltaCavan / $firstCavan) * 100 : 0;
+        $deltaColor   = $deltaCavan > 1 ? 'var(--brand-green)' : ($deltaCavan < -1 ? 'var(--brand-danger)' : 'var(--slate-400)');
+        $deltaIcon    = $deltaCavan > 1 ? 'arrow-up' : ($deltaCavan < -1 ? 'arrow-down' : 'dash');
+
+        $maxYieldTons  = $analysis['maxYield'];
+        $maxCavan      = $maxYieldTons !== null ? t_ha_to_cavan_ha((float) $maxYieldTons) : null;
+
+        $farmArea = (float) ($farmRecord->farm->land_area_ha ?? 1.0);
+    @endphp
+
     {{-- SUMMARY CARDS --}}
-    {{-- ============================================================ --}}
-    <div class="row g-2 mb-3">
+    <div class="row g-2 mb-4">
         <div class="col-6 col-md-3">
-            <div class="card p-2" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
-                <div class="text-muted small" style="font-size: 11px;">AVERAGE</div>
-                <div style="font-size: 20px; font-weight: 700; color: var(--green);">{{ number_format($analysis['avg'], 2) }}</div>
-                <div class="text-muted small">t/ha</div>
+            <div class="card-custom" style="padding: 16px 20px;">
+                <div style="font-size: 10px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.5px;">Average</div>
+                <div style="font-size: 24px; font-weight: 800; color: var(--brand-green); line-height: 1.1; margin-top: 4px;">
+                    {{ number_format($avgCavan, 0) }}
+                </div>
+                <div style="font-size: 11px; color: var(--slate-500);">cavan/ha</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card p-2" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
-                <div class="text-muted small" style="font-size: 11px;">BEST</div>
-                <div style="font-size: 20px; font-weight: 700; color: #16a34a;">{{ number_format($analysis['best'], 2) }}</div>
-                <div class="text-muted small">t/ha</div>
+            <div class="card-custom" style="padding: 16px 20px;">
+                <div style="font-size: 10px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.5px;">Best</div>
+                <div style="font-size: 24px; font-weight: 800; color: var(--brand-green); line-height: 1.1; margin-top: 4px;">
+                    {{ number_format($bestCavan, 0) }}
+                </div>
+                <div style="font-size: 11px; color: var(--slate-500);">cavan/ha</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card p-2" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
-                <div class="text-muted small" style="font-size: 11px;">WORST</div>
-                <div style="font-size: 20px; font-weight: 700; color: var(--red);">{{ number_format($analysis['worst'], 2) }}</div>
-                <div class="text-muted small">t/ha</div>
+            <div class="card-custom" style="padding: 16px 20px;">
+                <div style="font-size: 10px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.5px;">Lowest</div>
+                <div style="font-size: 24px; font-weight: 800; color: var(--brand-danger); line-height: 1.1; margin-top: 4px;">
+                    {{ number_format($worstCavan, 0) }}
+                </div>
+                <div style="font-size: 11px; color: var(--slate-500);">cavan/ha</div>
             </div>
         </div>
         <div class="col-6 col-md-3">
-            @php
-                $delta = $analysis['delta'];
-                $deltaClass = $delta > 0.05 ? 'text-success' : ($delta < -0.05 ? 'text-danger' : 'text-muted');
-                $deltaIcon = $delta > 0.05 ? 'arrow-up' : ($delta < -0.05 ? 'arrow-down' : 'dash');
-            @endphp
-            <div class="card p-2" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
-                <div class="text-muted small" style="font-size: 11px;">CHANGE (FIRST → LATEST)</div>
-                <div style="font-size: 20px; font-weight: 700;" class="{{ $deltaClass }}">
+            <div class="card-custom" style="padding: 16px 20px;">
+                <div style="font-size: 10px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.5px;">Change</div>
+                <div style="font-size: 24px; font-weight: 800; color: {{ $deltaColor }}; line-height: 1.1; margin-top: 4px;">
                     <i class="bi bi-{{ $deltaIcon }}"></i>
-                    {{ $delta > 0 ? '+' : '' }}{{ number_format($delta, 2) }}
+                    {{ $deltaCavan > 0 ? '+' : '' }}{{ number_format($deltaCavan, 0) }}
                 </div>
-                <div class="text-muted small">{{ number_format($analysis['delta_pct'], 1) }}%</div>
+                <div style="font-size: 11px; color: var(--slate-500);">{{ number_format($deltaPct, 1) }}% from first</div>
             </div>
         </div>
     </div>
 
-    {{-- ============================================================ --}}
     {{-- STATUS DISTRIBUTION --}}
-    {{-- ============================================================ --}}
-    <div class="d-flex gap-2 mb-3">
-        <span class="badge-status high" style="font-size: 12px; padding: 4px 12px;">
-            <span class="dot"></span> High: {{ $analysis['statusCounts']['high'] }}
-        </span>
-        <span class="badge-status medium" style="font-size: 12px; padding: 4px 12px;">
-            <span class="dot"></span> Medium: {{ $analysis['statusCounts']['medium'] }}
-        </span>
-        <span class="badge-status low" style="font-size: 12px; padding: 4px 12px;">
-            <span class="dot"></span> Low: {{ $analysis['statusCounts']['low'] }}
-        </span>
-        @if($analysis['maxYield'])
-            <span class="badge bg-light text-muted ms-auto" style="font-size: 11px; padding: 4px 12px;">
-                Max potential: {{ number_format($analysis['maxYield'], 2) }} t/ha
+    <div class="card-custom" style="padding: 14px 20px;">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 12px; padding: 5px 14px;">
+                <span class="dot" style="background: var(--brand-green);"></span>
+                High: {{ $analysis['statusCounts']['high'] }}
             </span>
-        @endif
+            <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 12px; padding: 5px 14px;">
+                <span class="dot" style="background: var(--brand-gold);"></span>
+                Medium: {{ $analysis['statusCounts']['medium'] }}
+            </span>
+            <span class="badge-status" style="background: var(--brand-danger-light); color: #991b1b; border-color: #fecaca; font-size: 12px; padding: 5px 14px;">
+                <span class="dot" style="background: var(--brand-danger);"></span>
+                Low: {{ $analysis['statusCounts']['low'] }}
+            </span>
+            @if($maxCavan)
+                <span class="badge-status ms-auto" style="background: var(--slate-100); color: var(--slate-700); border-color: var(--slate-200); font-size: 11px; padding: 5px 14px;">
+                    <i class="bi bi-trophy"></i>
+                    Max potential: {{ number_format($maxCavan, 0) }} cavan/ha
+                </span>
+            @endif
+        </div>
     </div>
 
-    {{-- ============================================================ --}}
     {{-- TREND CHART --}}
-    {{-- ============================================================ --}}
     @if($predictions->count() > 1)
-        <div class="card mb-3" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
-            <div class="card-body">
-                <h6 class="mb-2" style="font-size: 13px;"><i class="bi bi-graph-up"></i> Yield Trend</h6>
-                <div style="height: 180px;">
-                    <canvas id="farmerPredictionTrendChart"></canvas>
-                </div>
+        <div class="card-custom">
+            <div class="card-title" style="font-size: 14px;">
+                <i class="bi bi-graph-up"></i> Yield Trend
+            </div>
+            <div style="height: 280px;">
+                <canvas id="farmerPredictionTrendChart"></canvas>
             </div>
         </div>
     @endif
 
-    {{-- ============================================================ --}}
     {{-- PREDICTIONS TABLE --}}
-    {{-- ============================================================ --}}
-    <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Date</th>
-                    <th>Predicted Yield</th>
-                    <th>Change</th>
-                    <th>Status</th>
-                    <th>Weather</th>
-                    <th>Fertilizer</th>
-                    <th>Historical Yield</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($predictions as $index => $pred)
-                    @php
-                        $yield = $pred->predicted_yield_tons_ha;
-                        $maxYield = $analysis['maxYield'];
-
-                        if ($maxYield !== null && $maxYield > 0) {
-                            $ratio = $yield / $maxYield;
-                            $statusClass = $ratio >= 0.9 ? 'high' : ($ratio >= 0.7 ? 'medium' : 'low');
-                            $statusText = $ratio >= 0.9 ? 'High' : ($ratio >= 0.7 ? 'Medium' : 'Low');
-                        } else {
-                            $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
-                            $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
-                        }
-
-                        $prev = $predictions[$index + 1] ?? null;
-                        if ($prev) {
-                            $delta = $yield - $prev->predicted_yield_tons_ha;
-                            $deltaClass = $delta > 0.05 ? 'text-success' : ($delta < -0.05 ? 'text-danger' : 'text-muted');
-                            $deltaIcon = $delta > 0.05 ? 'arrow-up' : ($delta < -0.05 ? 'arrow-down' : 'dash');
-                            $deltaText = ($delta > 0 ? '+' : '') . number_format($delta, 2);
-                        } else {
-                            $deltaClass = 'text-muted';
-                            $deltaIcon = 'dash';
-                            $deltaText = '—';
-                        }
-
-                        $features = json_decode($pred->input_features, true);
-                        $weather = $features['weather'] ?? [];
-                        $input = $features['input'] ?? [];
-                    @endphp
+    <div class="card-custom">
+        <div class="card-title">
+            <i class="bi bi-table"></i> All Predictions
+            <span class="badge-status ms-auto"
+                  style="background: var(--slate-100); color: var(--slate-700); border-color: var(--slate-200); font-size: 11px;">
+                {{ $predictions->count() }} record{{ $predictions->count() !== 1 ? 's' : '' }}
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead>
                     <tr>
-                        <td>{{ $index + 1 }}</td>
-                        <td>
-                            <div>{{ $pred->created_at->format('M d, Y') }}</div>
-                            <small class="text-muted">{{ $pred->created_at->format('H:i') }} ({{ $pred->created_at->diffForHumans() }})</small>
-                        </td>
-                        <td><strong style="color: #0f4c2b;">{{ number_format($yield, 2) }} t/ha</strong></td>
-                        <td class="{{ $deltaClass }}" style="font-weight: 600;">
-                            <i class="bi bi-{{ $deltaIcon }}"></i> {{ $deltaText }}
-                        </td>
-                        <td>
-                            <span class="badge-status {{ $statusClass }}">
-                                <span class="dot"></span> {{ $statusText }}
-                            </span>
-                        </td>
-                        <td>
-                            <small>
-                                <i class="bi bi-thermometer-half"></i> {{ $weather['temperature'] ?? 'N/A' }}°C<br>
-                                <i class="bi bi-droplet"></i> {{ $weather['humidity'] ?? 'N/A' }}%<br>
-                                <i class="bi bi-cloud-rain"></i> {{ $weather['rainfall'] ?? 0 }} mm
-                            </small>
-                        </td>
-                        <td>{{ $input['fertilizer_kg_ha'] ?? 'N/A' }} kg/ha</td>
-                        <td>{{ $input['historical_yield_tons_ha'] ?? 'N/A' }} t/ha</td>
+                        <th>#</th>
+                        <th>Date</th>
+                        <th>Estimated Yield</th>
+                        <th>Change</th>
+                        <th>Class</th>
+                        <th>Weather</th>
+                        <th>Fertilizer</th>
+                        <th>Historical Yield</th>
                     </tr>
-                @endforeach
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach($predictions as $index => $pred)
+                        @php
+                            $yieldTons  = (float) $pred->predicted_yield_tons_ha;
+                            $yieldCavan = t_ha_to_cavan_ha($yieldTons);
+                            $class      = $pred->predicted_class ?? 'Medium';
+
+                            $statusClass = match($class) {
+                                'High' => 'high',
+                                'Low'  => 'low',
+                                default => 'medium',
+                            };
+
+                            $prev = $predictions[$index + 1] ?? null;
+                            if ($prev) {
+                                $deltaCavanRow = $yieldCavan - t_ha_to_cavan_ha((float) $prev->predicted_yield_tons_ha);
+                                $deltaColorRow = $deltaCavanRow > 1 ? 'var(--brand-green)' : ($deltaCavanRow < -1 ? 'var(--brand-danger)' : 'var(--slate-400)');
+                                $deltaIconRow  = $deltaCavanRow > 1 ? 'arrow-up' : ($deltaCavanRow < -1 ? 'arrow-down' : 'dash');
+                                $deltaTextRow  = ($deltaCavanRow > 0 ? '+' : '') . number_format($deltaCavanRow, 0);
+                            } else {
+                                $deltaColorRow = 'var(--slate-400)';
+                                $deltaIconRow  = 'dash';
+                                $deltaTextRow  = '—';
+                            }
+
+                            $features = json_decode($pred->input_features, true);
+                            $weather = $features['weather'] ?? [];
+                            $input = $features['input'] ?? [];
+                        @endphp
+                        <tr>
+                            <td>{{ $index + 1 }}</td>
+                            <td>
+                                <div style="font-size: 13px;">{{ $pred->created_at->format('M d, Y') }}</div>
+                                <small style="color: var(--slate-500);">{{ $pred->created_at->format('H:i') }} · {{ $pred->created_at->diffForHumans() }}</small>
+                            </td>
+                            <td>
+                                <strong style="color: var(--brand-green-dark);">{{ number_format($yieldCavan, 0) }}</strong>
+                                <small style="color: var(--slate-500);">cavan/ha</small>
+                            </td>
+                            <td style="color: {{ $deltaColorRow }}; font-weight: 600;">
+                                <i class="bi bi-{{ $deltaIconRow }}"></i> {{ $deltaTextRow }}
+                            </td>
+                            <td>
+                                <span class="badge-status {{ $statusClass }}">
+                                    <span class="dot"></span> {{ $class }}
+                                </span>
+                            </td>
+                            <td>
+                                <small style="color: var(--slate-600);">
+                                    <i class="bi bi-thermometer-half"></i> {{ $weather['temperature'] ?? 'N/A' }}°C<br>
+                                    <i class="bi bi-droplet"></i> {{ $weather['humidity'] ?? 'N/A' }}%<br>
+                                    <i class="bi bi-cloud-rain"></i> {{ $weather['rainfall'] ?? 0 }} mm
+                                </small>
+                            </td>
+                            <td>{{ $input['fertilizer_kg_ha'] ?? 'N/A' }} kg/ha</td>
+                            <td>{{ $input['historical_yield_tons_ha'] ?? 'N/A' }} t/ha</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    {{-- ============================================================ --}}
     {{-- TREND CHART SCRIPT --}}
-    {{-- ============================================================ --}}
     @if($predictions->count() > 1)
         @php
-            $chartData = $predictions->sortBy('created_at')->values();
-            $labels = $chartData->map(fn($p) => $p->created_at->format('M d H:i'))->toArray();
-            $yields = $chartData->pluck('predicted_yield_tons_ha')->toArray();
-            $maxLine = $analysis['maxYield'] ? array_fill(0, count($labels), $analysis['maxYield']) : null;
+            $chartData   = $predictions->sortBy('created_at')->values();
+            $labels      = $chartData->map(fn($p) => $p->created_at->format('M d H:i'))->toArray();
+            $yieldsChart = $chartData->map(fn($p) => t_ha_to_cavan_ha((float) $p->predicted_yield_tons_ha))->toArray();
+            $maxLine     = $maxCavan ? array_fill(0, count($labels), $maxCavan) : null;
+
+            // Compute suggested Y-axis bounds so the line doesn't sit on zero
+            $allPoints    = $maxLine ? array_merge($yieldsChart, $maxLine) : $yieldsChart;
+            $chartMin     = min($allPoints);
+            $chartMax     = max($allPoints);
+            $range        = max($chartMax - $chartMin, 1);
+            $suggestedMin = max(0, floor($chartMin - $range * 0.15));
+            $suggestedMax = ceil($chartMax + $range * 0.15);
         @endphp
         <script>
-            (function() {
+            document.addEventListener('DOMContentLoaded', function () {
                 const ctx = document.getElementById('farmerPredictionTrendChart');
                 if (!ctx || typeof Chart === 'undefined') return;
                 if (ctx._chartInstance) ctx._chartInstance.destroy();
 
                 const datasets = [{
-                    label: 'Predicted Yield (t/ha)',
-                    data: @json($yields),
-                    borderColor: '#0f4c2b',
-                    backgroundColor: 'rgba(15, 76, 43, 0.08)',
+                    label: 'Estimated Yield (cavan/ha)',
+                    data: @json($yieldsChart),
+                    borderColor: '#165b33',
+                    backgroundColor: 'rgba(22, 91, 51, 0.08)',
                     borderWidth: 2,
-                    pointBackgroundColor: '#0f4c2b',
+                    pointBackgroundColor: '#165b33',
                     pointRadius: 5,
                     tension: 0.3,
                     fill: true,
@@ -206,9 +227,9 @@
 
                 @if($maxLine)
                     datasets.push({
-                        label: 'Variety Max (t/ha)',
+                        label: 'Variety Max (cavan/ha)',
                         data: @json($maxLine),
-                        borderColor: '#b8860b',
+                        borderColor: '#d97706',
                         borderWidth: 1.5,
                         borderDash: [6, 4],
                         pointRadius: 0,
@@ -232,7 +253,9 @@
                         scales: {
                             y: {
                                 beginAtZero: false,
-                                title: { display: true, text: 't/ha', font: { size: 11 } },
+                                suggestedMin: {{ $suggestedMin }},
+                                suggestedMax: {{ $suggestedMax }},
+                                title: { display: true, text: 'cavan/ha', font: { size: 11 } },
                                 ticks: { font: { size: 11 } }
                             },
                             x: {
@@ -241,7 +264,8 @@
                         }
                     }
                 });
-            })();
+            });
         </script>
     @endif
+
 @endif

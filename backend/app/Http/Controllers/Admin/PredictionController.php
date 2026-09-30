@@ -6,18 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\FarmRecord;
 use App\Models\Prediction;
 use App\Models\Farm;
+use App\Services\PredictionService;
 use App\Services\WeatherService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 
 class PredictionController extends Controller
 {
     protected $weatherService;
+    protected $predictionService;
 
-    public function __construct(WeatherService $weatherService)
+    public function __construct(WeatherService $weatherService, PredictionService $predictionService)
     {
         $this->weatherService = $weatherService;
+        $this->predictionService = $predictionService;
     }
 
     public function index()
@@ -25,7 +26,8 @@ class PredictionController extends Controller
         $user = auth()->user();
 
         $query = Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-            ->where('model_type', 'RandomForest');
+            ->where('model_type', 'XGBoost')
+            ->whereHas('farmRecord', fn($q) => $q->where('status', 'Vegetative'));
 
         if ($user->role === 'farmer') {
             $farmIds = Farm::where('user_id', $user->id)->pluck('id');
@@ -33,31 +35,14 @@ class PredictionController extends Controller
             $query->whereIn('farm_record_id', $farmRecordIds);
         }
 
-        // Get latest prediction per farm record
         $predictions = $query->orderBy('created_at', 'desc')->get();
         $uniquePredictions = $predictions->unique('farm_record_id');
 
-        $barangayData = [];
-        $barangays = $predictions->groupBy(function ($p) {
-            return $p->farmRecord->farm->barangay ?? 'Unknown';
-        });
+        $pendingFarmRecords = FarmRecord::where('status', 'Vegetative')
+            ->whereDoesntHave('predictions', fn($q) => $q->where('model_type', 'XGBoost'))
+            ->count();
 
-        foreach ($barangays as $barangay => $items) {
-            $avgYield = $items->avg('predicted_yield_tons_ha');
-            $barangayData[] = [
-                'barangay' => $barangay,
-                'predicted_yield' => number_format($avgYield, 2),
-                'confidence' => round(85 + rand(-5, 10)),
-                'historical_yield' => number_format($avgYield - 0.2, 2),
-                'moisture' => rand(60, 90),
-                'outlook' => $avgYield >= 4.5 ? 'Optimal' : 'Monitor',
-                'action' => $avgYield >= 4.5 ? 'Continue current practices' : 'Consider intervention',
-            ];
-        }
-
-        $cityAverage = $predictions->avg('predicted_yield_tons_ha');
-
-        return view('admin.predictions.index', compact('uniquePredictions', 'barangayData', 'cityAverage'));
+        return view('admin.predictions.index', compact('uniquePredictions', 'pendingFarmRecords'));
     }
 
     public function create()
@@ -71,162 +56,171 @@ class PredictionController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'farm_record_id' => 'required|exists:farm_records,id',
-        ]);
-
+        $request->validate(['farm_record_id' => 'required|exists:farm_records,id']);
         $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($request->farm_record_id);
 
         if ($farmRecord->status !== 'Vegetative') {
-            if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Cannot generate a prediction for a harvested farm record. Only vegetative (growing) records can be predicted.'
-                ], 400);
-            }
-            return redirect()->route('admin.predictions.index')
-                ->with('error', 'Cannot generate a prediction for a harvested farm record.');
+            return $this->errorResponse($request, 'Cannot generate a prediction for a harvested farm record.');
         }
 
         $existing = Prediction::where('farm_record_id', $farmRecord->id)
-            ->where('model_type', 'RandomForest')
-            ->first();
+            ->where('model_type', 'XGBoost')->first();
 
         if ($existing) {
-            if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'This farm record already has a Random Forest prediction. Use "Regenerate" to add a new one.'
-                ], 400);
-            }
-            return redirect()->route('admin.predictions.index')
-                ->with('warning', 'This farm record already has a prediction. Use "Regenerate" to add a new one.');
+            return $this->errorResponse($request, 'This farm record already has a prediction. Use "Regenerate All" for weather refresh.');
         }
 
-        return $this->runPrediction($farmRecord, $request, 'created');
+        return $this->respondTo($request, $this->predictionService->predict($farmRecord), 'created');
     }
 
-    /**
-     * Regenerate — always creates a NEW prediction (history kept).
-     */
-    public function update(Request $request, $id)
+    public function generateAll(Request $request)
     {
-        $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
-
-        if ($farmRecord->status !== 'Vegetative') {
-            return redirect()->back()
-                ->with('error', 'Cannot regenerate a prediction for a harvested farm record.');
+        if (auth()->user()->role !== 'admin') {
+            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
         }
 
-        return $this->runPrediction($farmRecord, $request, 'regenerated');
+        $farmRecords = FarmRecord::with(['farm', 'riceVariety'])
+            ->where('status', 'Vegetative')
+            ->whereDoesntHave('predictions', fn($q) => $q->where('model_type', 'XGBoost'))
+            ->get();
+
+        if ($farmRecords->isEmpty()) {
+            return response()->json([
+                'success'   => true,
+                'generated' => 0,
+                'failed'    => 0,
+                'message'   => 'No pending farm records to predict.',
+            ]);
+        }
+
+        $generated = 0; $failed = 0; $errors = [];
+
+        foreach ($farmRecords as $record) {
+            $result = $this->predictionService->predict($record);
+            if ($result['success']) {
+                $generated++;
+            } else {
+                $failed++;
+                $errors[] = ($record->farm->name ?? 'Farm #' . $record->farm_id) . ': ' . $result['error'];
+            }
+        }
+
+        log_activity('prediction', 'Bulk prediction generated', null, [
+            'generated' => $generated,
+            'failed'    => $failed,
+        ]);
+
+        return response()->json([
+            'success'   => true,
+            'generated' => $generated,
+            'failed'    => $failed,
+            'errors'    => $errors,
+            'message'   => "Generated {$generated} prediction(s)" . ($failed > 0 ? ", {$failed} failed" : ''),
+        ]);
     }
 
-    /**
-     * Shared prediction logic for store() and update().
-     */
-    protected function runPrediction(FarmRecord $farmRecord, Request $request, $action)
+    public function regenerateAll(Request $request)
     {
-        $weather = $this->weatherService->getWeather();
+        if (auth()->user()->role !== 'admin') {
+            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
+        }
 
-        $input = [
-            'barangay' => $farmRecord->farm->barangay,
-            'variety' => $farmRecord->riceVariety->name,
-            'soil_type' => $farmRecord->farm->soil_type,
-            'season' => $farmRecord->season,
-            'seeding_method' => $farmRecord->seeding_method ?? 'Transplanted',
-            'fertilizer_kg_ha' => (float) $farmRecord->fertilizer_kg_ha,
-            'temperature_avg' => $weather['temperature'],
-            'rainfall_mm' => $weather['rainfall'],
-            'humidity_avg' => $weather['humidity'],
-            'historical_yield_tons_ha' => (float) ($farmRecord->historical_yield_tons_ha ?? 3.5),
-        ];
+        $farmRecordIds = Prediction::where('model_type', 'XGBoost')
+            ->pluck('farm_record_id')
+            ->unique();
 
-        try {
-            $response = Http::post('http://127.0.0.1:5000/predict', $input);
-            $result = $response->json();
+        $farmRecords = FarmRecord::with(['farm', 'riceVariety'])
+            ->whereIn('id', $farmRecordIds)
+            ->where('status', 'Vegetative')
+            ->get();
 
-            $yield = $result['Predicted_Yield'] ?? $result['RandomForest'] ?? null;
+        if ($farmRecords->isEmpty()) {
+            return response()->json([
+                'success'     => true,
+                'regenerated' => 0,
+                'failed'      => 0,
+                'message'     => 'No farm records available to regenerate.',
+            ]);
+        }
 
-            if ($yield === null) {
-                throw new \Exception('ML service did not return a valid yield.');
+        $regenerated = 0; $failed = 0; $errors = [];
+
+        foreach ($farmRecords as $record) {
+            $result = $this->predictionService->predict($record);
+            if ($result['success']) {
+                $regenerated++;
+            } else {
+                $failed++;
+                $errors[] = ($record->farm->name ?? 'Farm #' . $record->farm_id) . ': ' . $result['error'];
             }
+        }
 
-            // Cap using variety's max for the seeding method
-            $maxYield = $farmRecord->riceVariety->getMaxYieldForMethod($farmRecord->seeding_method);
-            if ($maxYield !== null && $yield > $maxYield) {
-                $yield = $maxYield;
-            }
+        log_activity('prediction', 'Bulk prediction regenerated', null, [
+            'regenerated' => $regenerated,
+            'failed'      => $failed,
+        ]);
 
-            // Always create a new Prediction (history is kept)
-            $prediction = Prediction::create([
-                'farm_record_id' => $farmRecord->id,
-                'model_type' => 'RandomForest',
-                'predicted_yield_tons_ha' => $yield,
-                'input_features' => json_encode([
-                    'input' => $input,
-                    'weather' => $weather,
-                ]),
+        return response()->json([
+            'success'     => true,
+            'regenerated' => $regenerated,
+            'failed'      => $failed,
+            'errors'      => $errors,
+            'message'     => "Regenerated {$regenerated} prediction(s)" . ($failed > 0 ? ", {$failed} failed" : ''),
+        ]);
+    }
+
+    protected function respondTo(Request $request, array $result, string $action)
+    {
+        if ($result['success']) {
+            log_activity('prediction', "Prediction {$action}", $result['prediction']->farmRecord, [
+                'yield'      => $result['yield'],
+                'confidence' => $result['confidence'] ?? null,
             ]);
 
-            log_activity('prediction', "Prediction {$action}", $farmRecord, [
-                'farm' => $farmRecord->farm->name,
-                'variety' => $farmRecord->riceVariety->name,
-                'yield' => $yield,
-                'prediction_id' => $prediction->id,
-            ]);
+            $message = "Prediction {$action}! Estimated yield: "
+                     . number_format($result['yield'], 2) . ' t/ha';
 
-            $message = $action === 'created'
-                ? 'Prediction generated successfully!'
-                : 'Prediction regenerated successfully! (Weather: ' . $weather['temperature'] . '°C, ' . $weather['description'] . ')';
+            if (!empty($result['confidence'])) {
+                $message .= ' (' . number_format($result['confidence'] * 100, 1) . '% confidence)';
+            }
 
             if ($request->ajax()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => $message,
-                ]);
+                return response()->json(['success' => true, 'message' => $message]);
             }
-
             return redirect()->route('admin.predictions.index')->with('success', $message);
-
-        } catch (\Exception $e) {
-            if ($request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Failed to generate prediction: ' . $e->getMessage()
-                ], 500);
-            }
-            return redirect()->back()
-                ->with('error', 'Failed to generate prediction: ' . $e->getMessage());
         }
+
+        $error = 'Failed: ' . $result['error'];
+        if ($request->ajax()) {
+            return response()->json(['success' => false, 'error' => $error], 500);
+        }
+        return redirect()->back()->with('error', $error);
+    }
+
+    protected function errorResponse(Request $request, string $error)
+    {
+        if ($request->ajax()) return response()->json(['success' => false, 'error' => $error], 400);
+        return redirect()->route('admin.predictions.index')->with('error', $error);
     }
 
     public function show($id)
     {
         $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
         $prediction = Prediction::where('farm_record_id', $id)
-            ->where('model_type', 'RandomForest')
-            ->latest('created_at')
-            ->first();
-
+            ->where('model_type', 'XGBoost')->latest()->first();
         $weather = $prediction ? json_decode($prediction->input_features, true)['weather'] ?? null : null;
-
         return view('admin.predictions.show', compact('farmRecord', 'prediction', 'weather', 'id'));
     }
 
-    /**
-     * Show the full prediction history with trend analysis for a farm record.
-     */
     public function history($id)
     {
         $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
 
-        // Get in chronological order (oldest first) for trend analysis
         $predictions = Prediction::where('farm_record_id', $id)
-            ->where('model_type', 'RandomForest')
+            ->where('model_type', 'XGBoost')
             ->orderBy('created_at', 'asc')
             ->get();
 
-        // --- Analysis ---
         $maxYield = $farmRecord->riceVariety
             ? $farmRecord->riceVariety->getMaxYieldForMethod($farmRecord->seeding_method)
             : null;
@@ -234,55 +228,57 @@ class PredictionController extends Controller
         $analysis = null;
         if ($predictions->count() > 0) {
             $yields = $predictions->pluck('predicted_yield_tons_ha')->toArray();
-            $count = count($yields);
-
+            $count  = count($yields);
             $latest = end($yields);
             $first  = reset($yields);
-            $best   = max($yields);
-            $worst  = min($yields);
-            $avg    = array_sum($yields) / $count;
 
-            // Trend direction — compare latest vs first
             $direction = 'stable';
             if ($count >= 2) {
-                if ($latest > $first + 0.05) {
-                    $direction = 'up';
-                } elseif ($latest < $first - 0.05) {
-                    $direction = 'down';
-                }
-            }
-
-            // Status distribution (using variety-specific max)
-            $statusCounts = ['high' => 0, 'medium' => 0, 'low' => 0];
-            foreach ($predictions as $p) {
-                $y = $p->predicted_yield_tons_ha;
-                if ($maxYield !== null && $maxYield > 0) {
-                    $ratio = $y / $maxYield;
-                    $key = $ratio >= 0.9 ? 'high' : ($ratio >= 0.7 ? 'medium' : 'low');
-                } else {
-                    $key = $y >= 4.5 ? 'high' : ($y >= 3.5 ? 'medium' : 'low');
-                }
-                $statusCounts[$key]++;
+                if ($latest > $first + 0.05) $direction = 'up';
+                elseif ($latest < $first - 0.05) $direction = 'down';
             }
 
             $analysis = [
-                'count'        => $count,
-                'avg'          => $avg,
-                'best'         => $best,
-                'worst'        => $worst,
-                'first'        => $first,
-                'latest'       => $latest,
-                'delta'        => $latest - $first,
-                'delta_pct'    => $first > 0 ? (($latest - $first) / $first) * 100 : 0,
-                'direction'    => $direction,
-                'statusCounts' => $statusCounts,
-                'maxYield'     => $maxYield,
+                'count'     => $count,
+                'avg'       => array_sum($yields) / $count,
+                'best'      => max($yields),
+                'worst'     => min($yields),
+                'first'     => $first,
+                'latest'    => $latest,
+                'delta'     => $latest - $first,
+                'delta_pct' => $first > 0 ? (($latest - $first) / $first) * 100 : 0,
+                'direction' => $direction,
+                'maxYield'  => $maxYield,
             ];
         }
 
-        // Reverse for display (newest first)
         $predictions = $predictions->reverse()->values();
 
-        return view('admin.predictions.history', compact('farmRecord', 'predictions', 'analysis'));
+        return view('admin.predictions.history-page', compact('farmRecord', 'predictions', 'analysis'));
+    }
+
+    public function destroy($id)
+    {
+        if (auth()->user()->role === 'farmer') {
+            return redirect()->route('admin.predictions.index')->with('error', 'Farmers cannot delete predictions.');
+        }
+
+        try {
+            $prediction = Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])->findOrFail($id);
+
+            log_activity('deleted', 'Prediction deleted', $prediction->farmRecord, [
+                'prediction_id' => $prediction->id,
+                'farm'          => $prediction->farmRecord->farm->name ?? 'N/A',
+                'variety'       => $prediction->farmRecord->riceVariety->name ?? 'N/A',
+            ]);
+
+            $prediction->delete();
+
+            return redirect()->route('admin.predictions.index')->with('success', 'Prediction deleted.');
+
+        } catch (\Exception $e) {
+            return redirect()->route('admin.predictions.index')
+                ->with('error', 'Failed to delete: ' . $e->getMessage());
+        }
     }
 }

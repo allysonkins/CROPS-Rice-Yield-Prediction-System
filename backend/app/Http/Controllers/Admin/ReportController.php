@@ -3,98 +3,63 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Farm;
-use App\Models\Prediction;
-use App\Models\RiceVariety;
-use App\Models\User;
-use App\Models\FarmRecord;
+use App\Exports\FullReportExport;
+use App\Services\ReportService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
-    /**
-     * Display the reports dashboard.
-     */
-    public function index()
+    protected ReportService $service;
+
+    public function __construct(ReportService $service)
     {
-        // --- Get latest Random Forest prediction per farm record ---
-        $allPredictions = Prediction::with(['farmRecord.riceVariety'])
-            ->where('model_type', 'RandomForest')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        $latestPredictions = $allPredictions->unique('farm_record_id');
-
-        $avgYield = $latestPredictions->avg('predicted_yield_tons_ha');
-
-        // Fallback: harvested actual yields
-        if ($avgYield === null) {
-            $avgYield = FarmRecord::where('status', 'Harvested')
-                ->whereNotNull('actual_yield_tons_ha')
-                ->avg('actual_yield_tons_ha');
-        }
-
-        // --- Low yield count: below 70% of variety's max ---
-        $lowYieldCount = $latestPredictions->filter(function ($pred) {
-            $farmRecord = $pred->farmRecord;
-            if (!$farmRecord || !$farmRecord->riceVariety) {
-                return false;
-            }
-            $max = $farmRecord->riceVariety->getMaxYieldForMethod($farmRecord->seeding_method);
-            if ($max === null || $max <= 0) {
-                return $pred->predicted_yield_tons_ha < 4.0;
-            }
-            return ($pred->predicted_yield_tons_ha / $max) < 0.7;
-        })->count();
-
-        $stats = [
-            'total_farmers'      => User::where('role', 'farmer')->count(),
-            'total_farms'        => Farm::count(),
-            'total_varieties'    => RiceVariety::count(),
-            'avg_yield'          => $avgYield !== null ? number_format($avgYield, 2) : 'N/A',
-            'total_predictions'  => Prediction::where('model_type', 'RandomForest')->count(),
-            'low_yield_count'    => $lowYieldCount,
-        ];
-
-        return view('admin.reports.index', compact('stats'));
+        $this->service = $service;
     }
 
-    /**
-     * Generate and download the PDF report.
-     */
-    public function generate()
+    public function index()
     {
-        $allPredictions = Prediction::with(['farmRecord.riceVariety'])
-            ->where('model_type', 'RandomForest')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $data = $this->service->build();
 
-        $latestPredictions = $allPredictions->unique('farm_record_id');
-        $avgYield = $latestPredictions->avg('predicted_yield_tons_ha');
+        return view('admin.reports.index', [
+            'overview' => $data['overview'],
+            'accuracy' => $data['accuracy'],
+            'topFarms' => $data['top_farms'],
+            'lowFarms' => $data['low_farms'],
+        ]);
+    }
 
-        if ($avgYield === null) {
-            $avgYield = FarmRecord::where('status', 'Harvested')
-                ->whereNotNull('actual_yield_tons_ha')
-                ->avg('actual_yield_tons_ha');
-        }
+    public function generatePdf()
+    {
+        $data = $this->service->build();
 
-        $data = [
-            'farms' => Farm::with(['user', 'farmRecords.predictions', 'farmRecords.riceVariety'])->get(),
-            'generated_at' => now(),
-            'stats' => [
-                'total_farmers'   => User::where('role', 'farmer')->count(),
-                'total_farms'     => Farm::count(),
-                'total_varieties' => RiceVariety::count(),
-                'avg_yield'       => $avgYield !== null ? round($avgYield, 2) : null,
-            ],
-        ];
-
-        log_activity('report', 'Report generated', null, [
+        log_activity('report', 'PDF report generated', null, [
             'file' => 'crops_yield_report_' . now()->format('Y-m-d') . '.pdf',
         ]);
 
         $pdf = Pdf::loadView('admin.reports.pdf', $data);
+        $pdf->setPaper('A4', 'portrait');
+
         return $pdf->download('crops_yield_report_' . now()->format('Y-m-d') . '.pdf');
+    }
+
+    public function generateExcel()
+    {
+        log_activity('report', 'Excel report generated', null, [
+            'file' => 'crops_yield_report_' . now()->format('Y-m-d') . '.xlsx',
+        ]);
+
+        return Excel::download(
+            new FullReportExport($this->service),
+            'crops_yield_report_' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }
+
+    /**
+     * Backward-compat — old route name redirects to PDF.
+     */
+    public function generate()
+    {
+        return $this->generatePdf();
     }
 }

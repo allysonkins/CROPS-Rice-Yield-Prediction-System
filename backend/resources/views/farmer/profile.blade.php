@@ -2,158 +2,312 @@
 
 @section('title', 'My Profile')
 
-@section('content')
-<div class="row">
-    <div class="col-12">
-        <div class="card-custom">
-            <div class="card-title"><i class="bi bi-person"></i> My Profile</div>
+@php
+    $user       = auth()->user();
+    $isFarmer   = $user->role === 'farmer';
+    $isVerified = $user->verified_by_cao_at !== null;
+@endphp
 
-            {{-- ============================================================ --}}
-            {{-- EMAIL VERIFICATION STATUS --}}
-            {{-- ============================================================ --}}
-            @if(auth()->user()->email_verified_at)
-                <div class="alert alert-success d-flex align-items-center justify-content-between" style="border-left: 4px solid var(--green); border-radius: 10px;">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-patch-check-fill me-2" style="font-size: 20px; color: var(--green);"></i>
-                        <div>
-                            <strong>Email Verified</strong>
-                            <div class="small text-muted">
-                                Your email <strong>{{ auth()->user()->email }}</strong> was verified on
-                                {{ auth()->user()->email_verified_at->format('F d, Y \a\t h:i A') }}.
-                            </div>
+@section('content')
+
+<div class="row g-3">
+
+    {{-- ═══════════ STATUS BANNER (farmer: CAO verification | staff: email verification) ═══════════ --}}
+    <div class="col-12">
+        @if($isFarmer)
+            @if($isVerified)
+                <div class="alert-custom alert-custom-success mb-0">
+                    <i class="bi bi-patch-check-fill alert-icon"></i>
+                    <div class="alert-content">
+                        <strong>CAO Verified</strong>
+                        <div style="font-size: 12px; color: var(--brand-green-dark); opacity: 0.8; margin-top: 2px;">
+                            Your account was verified by the City Agriculture Office
+                            @if($user->verified_by_cao_at)
+                                on {{ $user->verified_by_cao_at->format('F d, Y') }}
+                            @endif
+                            . You have full access to record farm seasons and receive yield predictions.
                         </div>
                     </div>
-                    <span class="badge bg-success">
-                        <i class="bi bi-check-circle-fill"></i> Verified
-                    </span>
                 </div>
             @else
-                <div class="alert alert-warning d-flex align-items-center justify-content-between" style="border-left: 4px solid var(--gold); border-radius: 10px;">
-                    <div class="d-flex align-items-center">
-                        <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 20px; color: var(--gold);"></i>
-                        <div>
+                <div class="alert-custom alert-custom-warning mb-0">
+                    <i class="bi bi-shield-exclamation alert-icon"></i>
+                    <div class="alert-content">
+                        <strong>Awaiting CAO Verification</strong>
+                        <div style="font-size: 12px; color: #78350f; opacity: 0.9; margin-top: 2px;">
+                            You can view your data, but recording new farms and seasons will unlock once the
+                            City Agriculture Office verifies your account.
+                        </div>
+                    </div>
+                </div>
+            @endif
+        @else
+            @if($user->email_verified_at)
+                <div class="alert-custom alert-custom-success mb-0">
+                    <i class="bi bi-patch-check-fill alert-icon"></i>
+                    <div class="alert-content">
+                        <strong>Email Verified</strong>
+                        <div style="font-size: 12px; color: var(--brand-green-dark); opacity: 0.8; margin-top: 2px;">
+                            Your email <strong>{{ $user->email }}</strong> was verified on
+                            {{ $user->email_verified_at->format('F d, Y \a\t h:i A') }}.
+                        </div>
+                    </div>
+                </div>
+            @else
+                <div class="alert-custom alert-custom-warning mb-0 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-start gap-3">
+                        <i class="bi bi-exclamation-triangle-fill alert-icon"></i>
+                        <div class="alert-content">
                             <strong>Email Not Verified</strong>
-                            <div class="small text-muted">
-                                Please verify your email <strong>{{ auth()->user()->email }}</strong> to unlock all features.
-                                We sent a verification link to your inbox.
+                            <div style="font-size: 12px; color: #78350f; opacity: 0.9; margin-top: 2px;">
+                                Verify <strong>{{ $user->email }}</strong> to unlock all features.
                             </div>
                         </div>
                     </div>
                     <form method="POST" action="{{ route('verification.send') }}" class="d-inline">
                         @csrf
                         <button type="submit" class="btn btn-sm btn-outline-warning">
-                            <i class="bi bi-envelope-arrow-up"></i> Resend
+                            <i class="bi bi-envelope-arrow-up"></i> Resend Link
                         </button>
                     </form>
                 </div>
             @endif
+        @endif
+    </div>
 
-            {{-- ============================================================ --}}
-            {{-- SESSION MESSAGES --}}
-            {{-- ============================================================ --}}
-            @if(session('success'))
-                <div class="alert alert-success" style="border-left: 4px solid var(--green); border-radius: 10px;">
-                    <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
-                </div>
-            @endif
+    {{-- ═══════════ SESSION FLASH ═══════════ --}}
+    @if(session('success'))
+        <div class="col-12">
+            <div class="alert-custom alert-custom-success mb-0">
+                <i class="bi bi-check-circle-fill alert-icon"></i>
+                <div class="alert-content">{{ session('success') }}</div>
+            </div>
+        </div>
+    @endif
 
-            @if(session('status') === 'verification-link-sent')
-                <div class="alert alert-success" style="border-left: 4px solid var(--green); border-radius: 10px;">
-                    <i class="bi bi-check-circle-fill"></i> A new verification link has been sent to your email.
-                </div>
-            @endif
+    @if(session('status') === 'verification-link-sent')
+        <div class="col-12">
+            <div class="alert-custom alert-custom-success mb-0">
+                <i class="bi bi-envelope-check-fill alert-icon"></i>
+                <div class="alert-content">A new verification link has been sent to your email.</div>
+            </div>
+        </div>
+    @endif
 
-            @if ($errors->any())
-                <div class="alert alert-danger" style="border-left: 4px solid var(--red); border-radius: 10px;">
-                    <ul class="mb-0">
-                        @foreach ($errors->all() as $error)
+    @if($errors->any())
+        <div class="col-12">
+            <div class="alert-custom alert-custom-danger mb-0">
+                <i class="bi bi-exclamation-triangle-fill alert-icon"></i>
+                <div class="alert-content">
+                    <ul class="mb-0 ps-3">
+                        @foreach($errors->all() as $error)
                             <li>{{ $error }}</li>
                         @endforeach
                     </ul>
                 </div>
-            @endif
+            </div>
+        </div>
+    @endif
 
-            <form id="profileForm" action="{{ route('farmer.profile.update') }}" method="POST">
+    {{-- ═══════════ PROFILE CARD ═══════════ --}}
+    <div class="col-12 col-lg-8">
+        <div class="card-custom mb-0">
+            <div class="card-title">
+                <i class="bi bi-person-fill"></i>
+                <span>My Profile</span>
+            </div>
+
+            <form id="profileForm" action="{{ $isFarmer ? route('farmer.profile.update') : route('profile.update') }}" method="POST">
                 @csrf
                 @method('PUT')
+
                 <div class="row g-3">
+
+                    {{-- Name --}}
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
-                        <input type="text" name="name" class="form-control" value="{{ old('name', auth()->user()->name) }}" required>
+                        <input type="text" name="name" class="form-control"
+                               value="{{ old('name', $user->name) }}" required>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
-                        <input type="email" name="email" class="form-control" value="{{ old('email', auth()->user()->email) }}" required>
-                        @if(auth()->user()->email_verified_at)
-                            <small class="text-success">
-                                <i class="bi bi-patch-check-fill"></i> Verified
+                    @if($isFarmer)
+
+                        {{-- Phone (farmer login identifier) --}}
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Phone Number <span class="text-danger">*</span></label>
+                            <input type="text" name="phone" class="form-control"
+                                   placeholder="09171234567"
+                                   pattern="09[0-9]{9}" maxlength="11"
+                                   value="{{ old('phone', $user->phone) }}">
+                            <small style="color: var(--slate-500);">
+                                <i class="bi bi-telephone"></i>
+                                This is your login. Remember this number.
                             </small>
-                        @else
-                            <small class="text-warning">
-                                <i class="bi bi-hourglass-split"></i> Pending verification
+                        </div>
+
+                        {{-- RSBSA --}}
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">RSBSA Number</label>
+                            <input type="text" name="rsbsa_number" class="form-control"
+                                   placeholder="e.g., RSBSA-0001"
+                                   value="{{ old('rsbsa_number', $user->rsbsa_number) }}">
+                            <small style="color: var(--slate-500);">
+                                <i class="bi bi-card-checklist"></i>
+                                Can also be used to log in.
                             </small>
-                        @endif
-                    </div>
+                        </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Barangay</label>
-                        <select name="barangay" class="form-select">
-                            <option value="">Select barangay...</option>
-                            <option value="Abra" {{ auth()->user()->barangay == 'Abra' ? 'selected' : '' }}>Abra</option>
-                            <option value="Ambalatungan" {{ auth()->user()->barangay == 'Ambalatungan' ? 'selected' : '' }}>Ambalatungan</option>
-                            <option value="Balintocatoc" {{ auth()->user()->barangay == 'Balintocatoc' ? 'selected' : '' }}>Balintocatoc</option>
-                            <option value="Baluarte" {{ auth()->user()->barangay == 'Baluarte' ? 'selected' : '' }}>Baluarte</option>
-                            <option value="Bannawag Norte" {{ auth()->user()->barangay == 'Bannawag Norte' ? 'selected' : '' }}>Bannawag Norte</option>
-                            <option value="Batal" {{ auth()->user()->barangay == 'Batal' ? 'selected' : '' }}>Batal</option>
-                            <option value="Buenavista" {{ auth()->user()->barangay == 'Buenavista' ? 'selected' : '' }}>Buenavista</option>
-                            <option value="Cabulay" {{ auth()->user()->barangay == 'Cabulay' ? 'selected' : '' }}>Cabulay</option>
-                            <option value="Calao East" {{ auth()->user()->barangay == 'Calao East' ? 'selected' : '' }}>Calao East</option>
-                            <option value="Calao West" {{ auth()->user()->barangay == 'Calao West' ? 'selected' : '' }}>Calao West</option>
-                            <option value="Calaocan" {{ auth()->user()->barangay == 'Calaocan' ? 'selected' : '' }}>Calaocan</option>
-                            <option value="Centro East" {{ auth()->user()->barangay == 'Centro East' ? 'selected' : '' }}>Centro East</option>
-                            <option value="Centro West" {{ auth()->user()->barangay == 'Centro West' ? 'selected' : '' }}>Centro West</option>
-                            <option value="Divisoria" {{ auth()->user()->barangay == 'Divisoria' ? 'selected' : '' }}>Divisoria</option>
-                            <option value="Dubinan East" {{ auth()->user()->barangay == 'Dubinan East' ? 'selected' : '' }}>Dubinan East</option>
-                            <option value="Dubinan West" {{ auth()->user()->barangay == 'Dubinan West' ? 'selected' : '' }}>Dubinan West</option>
-                            <option value="Luna" {{ auth()->user()->barangay == 'Luna' ? 'selected' : '' }}>Luna</option>
-                            <option value="Mabini" {{ auth()->user()->barangay == 'Mabini' ? 'selected' : '' }}>Mabini</option>
-                            <option value="Malvar" {{ auth()->user()->barangay == 'Malvar' ? 'selected' : '' }}>Malvar</option>
-                            <option value="Nabbuan" {{ auth()->user()->barangay == 'Nabbuan' ? 'selected' : '' }}>Nabbuan</option>
-                            <option value="Naggasican" {{ auth()->user()->barangay == 'Naggasican' ? 'selected' : '' }}>Naggasican</option>
-                            <option value="Patul" {{ auth()->user()->barangay == 'Patul' ? 'selected' : '' }}>Patul</option>
-                            <option value="Plaridel" {{ auth()->user()->barangay == 'Plaridel' ? 'selected' : '' }}>Plaridel</option>
-                            <option value="Rizal" {{ auth()->user()->barangay == 'Rizal' ? 'selected' : '' }}>Rizal</option>
-                            <option value="Rosario" {{ auth()->user()->barangay == 'Rosario' ? 'selected' : '' }}>Rosario</option>
-                            <option value="Sagana" {{ auth()->user()->barangay == 'Sagana' ? 'selected' : '' }}>Sagana</option>
-                            <option value="Salvador" {{ auth()->user()->barangay == 'Salvador' ? 'selected' : '' }}>Salvador</option>
-                            <option value="San Andres" {{ auth()->user()->barangay == 'San Andres' ? 'selected' : '' }}>San Andres</option>
-                            <option value="San Isidro" {{ auth()->user()->barangay == 'San Isidro' ? 'selected' : '' }}>San Isidro</option>
-                            <option value="San Jose" {{ auth()->user()->barangay == 'San Jose' ? 'selected' : '' }}>San Jose</option>
-                            <option value="Santa Rosa" {{ auth()->user()->barangay == 'Santa Rosa' ? 'selected' : '' }}>Santa Rosa</option>
-                            <option value="Sinili" {{ auth()->user()->barangay == 'Sinili' ? 'selected' : '' }}>Sinili</option>
-                            <option value="Sinsayon" {{ auth()->user()->barangay == 'Sinsayon' ? 'selected' : '' }}>Sinsayon</option>
-                            <option value="Victory Norte" {{ auth()->user()->barangay == 'Victory Norte' ? 'selected' : '' }}>Victory Norte</option>
-                            <option value="Victory Sur" {{ auth()->user()->barangay == 'Victory Sur' ? 'selected' : '' }}>Victory Sur</option>
-                            <option value="Villa Gonzaga" {{ auth()->user()->barangay == 'Villa Gonzaga' ? 'selected' : '' }}>Villa Gonzaga</option>
-                            <option value="Villasis" {{ auth()->user()->barangay == 'Villasis' ? 'selected' : '' }}>Villasis</option>
-                        </select>
-                    </div>
+                        {{-- Barangay --}}
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Barangay</label>
+                            <select name="barangay" class="form-select">
+                                <option value="">Select barangay...</option>
+                                @foreach(config('santiago.barangays', []) as $brgy)
+                                    <option value="{{ $brgy }}" {{ old('barangay', $user->barangay) == $brgy ? 'selected' : '' }}>
+                                        {{ $brgy }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">New Password</label>
-                        <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current">
-                        <small class="text-muted">Min 8 characters</small>
-                    </div>
+                    @else
 
+                        {{-- Staff / admin email --}}
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+                            <input type="email" name="email" class="form-control"
+                                   value="{{ old('email', $user->email) }}" required>
+                            @if($user->email_verified_at)
+                                <small style="color: var(--brand-green);">
+                                    <i class="bi bi-patch-check-fill"></i> Verified
+                                </small>
+                            @else
+                                <small style="color: var(--brand-gold);">
+                                    <i class="bi bi-hourglass-split"></i> Pending verification
+                                </small>
+                            @endif
+                        </div>
+
+                    @endif
+
+                    {{-- Password / PIN --}}
                     <div class="col-12">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-save"></i> Update Profile
-                        </button>
+                        <hr style="margin: 8px 0 16px; border-color: var(--slate-200);">
                     </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            {{ $isFarmer ? 'New PIN' : 'New Password' }}
+                        </label>
+                        <input type="password" name="password" class="form-control"
+                               placeholder="{{ $isFarmer ? 'Leave blank to keep current PIN' : 'Leave blank to keep current password' }}">
+                        <small style="color: var(--slate-500);">
+                            @if($isFarmer)
+                                Use 6 digits that you can easily remember — this is what you'll enter with your phone number.
+                            @else
+                                Minimum 8 characters.
+                            @endif
+                        </small>
+                    </div>
+
+                    @if($isFarmer)
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Confirm New PIN</label>
+                            <input type="password" name="password_confirmation" class="form-control"
+                                   placeholder="Re-type your new PIN">
+                            <small style="color: var(--slate-500);">Must match the field above.</small>
+                        </div>
+                    @else
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Confirm New Password</label>
+                            <input type="password" name="password_confirmation" class="form-control"
+                                   placeholder="Re-type your new password">
+                            <small style="color: var(--slate-500);">Must match the field above.</small>
+                        </div>
+                    @endif
+
+                    {{-- Submit --}}
+                    <div class="col-12 d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-save"></i> Save Changes
+                        </button>
+                        <a href="{{ $isFarmer ? route('farmer.dashboard') : route('admin.dashboard') }}" class="btn btn-secondary">
+                            Cancel
+                        </a>
+                    </div>
+
                 </div>
             </form>
         </div>
     </div>
+
+    {{-- ═══════════ SIDE CARD — farmer login reminder ═══════════ --}}
+    <div class="col-12 col-lg-4">
+        @if($isFarmer)
+            <div class="card-custom mb-0" style="border-left: 4px solid var(--brand-green);">
+                <div class="card-title">
+                    <i class="bi bi-key-fill"></i>
+                    <span>How You Log In</span>
+                </div>
+                <p style="font-size: 13px; color: var(--slate-600); line-height: 1.6; margin-bottom: 16px;">
+                    You sign in to CROPS using your <strong>phone number</strong> and <strong>PIN</strong>.
+                    No email needed.
+                </p>
+
+                <div class="p-3 mb-3" style="background: var(--brand-green-light); border-radius: var(--radius-md);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--brand-green-dark); font-weight: 700; letter-spacing: 0.4px;">
+                        <i class="bi bi-telephone-fill"></i> Phone
+                    </div>
+                    <div style="font-family: monospace; font-size: 16px; font-weight: 700; color: var(--brand-green-dark); margin-top: 2px;">
+                        {{ $user->phone ?? '— not set —' }}
+                    </div>
+                </div>
+
+                <div class="p-3 mb-3" style="background: var(--slate-50); border-radius: var(--radius-md); border: 1px solid var(--slate-200);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700; letter-spacing: 0.4px;">
+                        <i class="bi bi-shield-lock-fill"></i> PIN
+                    </div>
+                    <div style="font-size: 13px; color: var(--slate-600); margin-top: 4px; line-height: 1.5;">
+                        Your PIN is private. If you've forgotten it, contact the City Agriculture Office
+                        to generate a new one.
+                    </div>
+                </div>
+
+                @if($user->rsbsa_number)
+                    <div class="p-3 mb-0" style="background: var(--slate-50); border-radius: var(--radius-md); border: 1px solid var(--slate-200);">
+                        <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700; letter-spacing: 0.4px;">
+                            <i class="bi bi-card-checklist"></i> RSBSA Number
+                        </div>
+                        <div style="font-family: monospace; font-size: 14px; font-weight: 600; color: var(--slate-700); margin-top: 2px;">
+                            {{ $user->rsbsa_number }}
+                        </div>
+                        <div style="font-size: 11px; color: var(--slate-500); margin-top: 4px;">
+                            You can also log in with this instead of your phone.
+                        </div>
+                    </div>
+                @endif
+            </div>
+        @else
+            <div class="card-custom mb-0" style="border-left: 4px solid var(--brand-green);">
+                <div class="card-title">
+                    <i class="bi bi-shield-check"></i>
+                    <span>Account</span>
+                </div>
+                <div class="p-3 mb-3" style="background: var(--brand-green-light); border-radius: var(--radius-md);">
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--brand-green-dark); font-weight: 700; letter-spacing: 0.4px;">
+                        Role
+                    </div>
+                    <div style="font-size: 15px; font-weight: 700; color: var(--brand-green-dark); margin-top: 2px; text-transform: capitalize;">
+                        {{ $user->role }}
+                    </div>
+                </div>
+                <p style="font-size: 12px; color: var(--slate-500); margin: 0;">
+                    You log in with your email and password.
+                </p>
+            </div>
+        @endif
+    </div>
+
 </div>
+
 @endsection

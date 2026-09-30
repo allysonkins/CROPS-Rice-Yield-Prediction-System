@@ -1,8 +1,6 @@
 ﻿# -*- coding: utf-8 -*-
 import sys, io, os
 
-# Force UTF-8 stdout/stderr so Windows cp1252 (and any other narrow encoding)
-# doesn't crash on non-ASCII output.
 if hasattr(sys.stdout, 'buffer'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
@@ -17,30 +15,19 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)
 
-# ─────────────────────────────────────────────────────────────
-# Paths
-# ─────────────────────────────────────────────────────────────
 SERVICE_DIR   = os.path.dirname(os.path.abspath(__file__))
 CURRENT_MODEL = os.path.join(SERVICE_DIR, 'current_model.json')
 
-LEGACY_MODEL   = os.path.join(SERVICE_DIR, 'model_rf.pkl')
-LEGACY_SCALER  = os.path.join(SERVICE_DIR, 'scaler.pkl')
-LEGACY_ENCODER = os.path.join(SERVICE_DIR, 'target_encoder.pkl')
-LEGACY_FEATS   = os.path.join(SERVICE_DIR, 'feature_names.pkl')
-LEGEND_FILE    = os.path.join(SERVICE_DIR, 'feature_legend.json')
+LEGACY_MODEL      = os.path.join(SERVICE_DIR, 'model_xgb.pkl')
+LEGACY_SCALER     = os.path.join(SERVICE_DIR, 'scaler.pkl')
+LEGACY_FEATS      = os.path.join(SERVICE_DIR, 'feature_names.pkl')
+LEGACY_INTERVAL   = os.path.join(SERVICE_DIR, 'interval_scale.pkl')
+LEGEND_FILE       = os.path.join(SERVICE_DIR, 'feature_legend.json')
 
-# ─────────────────────────────────────────────────────────────
-# Feature schema (must match generate_dataset.py / retrain.py)
-# ─────────────────────────────────────────────────────────────
 NUM_COLS_SCALED = [
-    'variety_maturity_days',
-    'variety_max_yield',
-    'land_area_ha',
-    'fertilizer_kg_ha',
-    'historical_yield_tons_ha',
-    'temperature_avg',
-    'rainfall_mm',
-    'humidity_avg',
+    'variety_maturity_days', 'variety_max_yield', 'land_area_ha',
+    'fertilizer_kg_ha', 'historical_yield_tons_ha',
+    'temperature_avg', 'rainfall_mm', 'humidity_avg',
 ]
 NUM_COLS_RAW = ['variety_avg_yield']
 NUM_COLS     = NUM_COLS_SCALED + NUM_COLS_RAW
@@ -53,30 +40,29 @@ CAT_PREFIXES = {
     'seeding_method': 'seeding_method',
 }
 
-CLASS_RATIO = {'Low': 0.75, 'Medium': 1.00, 'High': 1.25}
-
-SEASON_MAP = {
-    'dry season': 'Dry', 'wet season': 'Wet',
-    'dry': 'Dry', 'wet': 'Wet',
-}
+SEASON_MAP  = {'dry season':'Dry','wet season':'Wet','dry':'Dry','wet':'Wet'}
 SEEDING_MAP = {
-    'transplanted':  'Transplanted',
-    'direct-seeded': 'Direct Seeded',
-    'direct seeded': 'Direct Seeded',
-    'directseeded':  'Direct Seeded',
+    'transplanted':'Transplanted',
+    'direct-seeded':'Direct Seeded',
+    'direct seeded':'Direct Seeded',
+    'directseeded':'Direct Seeded',
 }
 
 
-# ─────────────────────────────────────────────────────────────
-# Hot-reloadable model state
-# ─────────────────────────────────────────────────────────────
+def _derive_sibling(main_path, suffix):
+    base, ext = os.path.splitext(main_path)
+    return f"{base}{suffix}{ext}"
+
+
 class ModelState:
     def __init__(self):
         self.model = None
+        self.model_low = None
+        self.model_high = None
         self.scaler = None
-        self.target_encoder = None
         self.feature_names = []
         self.legend = {}
+        self.interval_scale = 1.0
         self.version = None
         self._mtime = None
 
@@ -94,21 +80,20 @@ class ModelState:
                 return (
                     meta.get('model_path'),
                     meta.get('scaler_path'),
-                    meta.get('encoder_path'),
                     meta.get('feature_names_path'),
+                    meta.get('interval_scale_path'),
                     meta.get('version'),
                 )
             except Exception as e:
                 print('[WARN] Could not read current_model.json: {}'.format(e))
-
-        return (LEGACY_MODEL, LEGACY_SCALER, LEGACY_ENCODER, LEGACY_FEATS, 'baseline')
+        return (LEGACY_MODEL, LEGACY_SCALER, LEGACY_FEATS, LEGACY_INTERVAL, 'baseline')
 
     def ensure_loaded(self):
         mtime = self._pointer_mtime()
         if self.model is not None and mtime == self._mtime:
             return
 
-        model_p, scaler_p, enc_p, feat_p, version = self._resolve_paths()
+        model_p, scaler_p, feat_p, interval_p, version = self._resolve_paths()
 
         if not model_p or not os.path.isfile(model_p):
             print('[ERR] Model file not found at: {}'.format(model_p))
@@ -118,9 +103,29 @@ class ModelState:
             print('[LOAD] Loading model version: {}'.format(version))
             self.model = joblib.load(model_p)
             self.scaler = joblib.load(scaler_p) if scaler_p and os.path.isfile(scaler_p) else None
-            self.target_encoder = joblib.load(enc_p) if enc_p and os.path.isfile(enc_p) else None
             self.feature_names = list(joblib.load(feat_p)) if feat_p and os.path.isfile(feat_p) else []
             self.version = version
+
+            # Quantile models live next to the main one
+            low_p  = _derive_sibling(model_p, '_low')
+            high_p = _derive_sibling(model_p, '_high')
+            self.model_low  = joblib.load(low_p)  if os.path.isfile(low_p)  else None
+            self.model_high = joblib.load(high_p) if os.path.isfile(high_p) else None
+
+            # Calibration factor
+            if interval_p and os.path.isfile(interval_p):
+                try:
+                    self.interval_scale = float(joblib.load(interval_p))
+                except Exception:
+                    self.interval_scale = 1.0
+            else:
+                self.interval_scale = 1.0
+
+            if self.model_low is None or self.model_high is None:
+                print('[WARN] Quantile models missing — confidence will be unavailable')
+            else:
+                print('[OK] Quantile models loaded (10th / 90th percentile)')
+                print('[OK] Interval calibration factor: {:.4f}'.format(self.interval_scale))
 
             if os.path.isfile(LEGEND_FILE):
                 try:
@@ -131,8 +136,6 @@ class ModelState:
 
             self._mtime = mtime
             print('[OK] Model loaded - {} features'.format(len(self.feature_names)))
-            if self.target_encoder is not None:
-                print('     Classes: {}'.format(list(self.target_encoder.classes_)))
         except Exception as e:
             print('[ERR] Failed to load model: {}'.format(e))
 
@@ -141,23 +144,19 @@ STATE = ModelState()
 STATE.ensure_loaded()
 
 
-# ─────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────
 def normalize_categoricals(data):
     out = dict(data)
     if 'season' in out:
-        key = str(out['season']).strip().lower()
-        out['season'] = SEASON_MAP.get(key, out['season'])
+        k = str(out['season']).strip().lower()
+        out['season'] = SEASON_MAP.get(k, out['season'])
     if 'seeding_method' in out:
-        key = str(out['seeding_method']).strip().lower()
-        out['seeding_method'] = SEEDING_MAP.get(key, out['seeding_method'])
+        k = str(out['seeding_method']).strip().lower()
+        out['seeding_method'] = SEEDING_MAP.get(k, out['seeding_method'])
     return out
 
 
 def preprocess_input(data, feature_names):
     row = {}
-
     for raw_field, prefix in CAT_PREFIXES.items():
         raw_val = str(data.get(raw_field, '')).strip()
         for feat in feature_names:
@@ -184,15 +183,30 @@ def preprocess_input(data, feature_names):
     return df
 
 
-# ─────────────────────────────────────────────────────────────
-# Routes
-# ─────────────────────────────────────────────────────────────
+def compute_confidence(point, low, high):
+    """
+    Confidence = 1 - (interval width / point prediction)
+    Narrow interval -> high confidence.
+    """
+    low  = min(float(low),  float(point))
+    high = max(float(high), float(point))
+
+    width = high - low
+    denom = max(abs(float(point)), 1.0)
+    relative_width = width / denom
+
+    return float(np.clip(1.0 - relative_width, 0.0, 1.0))
+
+
 @app.route('/health', methods=['GET'])
 def health():
     STATE.ensure_loaded()
     return jsonify({
-        "status":  "CROPS ML Service is running!",
-        "version": STATE.version,
+        "status":         "CROPS ML Service is running!",
+        "version":        STATE.version,
+        "model":          "XGBoost Regressor",
+        "quantile":       STATE.model_low is not None and STATE.model_high is not None,
+        "interval_scale": STATE.interval_scale,
     })
 
 
@@ -206,10 +220,11 @@ def reload_model():
     STATE._mtime = None
     STATE.ensure_loaded()
     return jsonify({
-        "success": True,
-        "message": "Model reloaded",
-        "version": STATE.version,
-        "features": len(STATE.feature_names),
+        "success":        True,
+        "message":        "Model reloaded",
+        "version":        STATE.version,
+        "features":       len(STATE.feature_names),
+        "interval_scale": STATE.interval_scale,
     })
 
 
@@ -225,30 +240,37 @@ def predict():
         data = normalize_categoricals(data)
         vec = preprocess_input(data, STATE.feature_names)
 
-        if STATE.model is not None and STATE.target_encoder is not None:
-            proba = STATE.model.predict_proba(vec)[0]
-            idx = int(np.argmax(proba))
-            cls = STATE.target_encoder.inverse_transform([idx])[0]
-            conf = float(proba[idx])
-            probabilities = {
-                STATE.target_encoder.inverse_transform([i])[0]: round(float(p), 4)
-                for i, p in enumerate(proba)
-            }
-        else:
-            cls, conf = 'Medium', 0.5
-            probabilities = {'Low': 0.33, 'Medium': 0.34, 'High': 0.33}
+        if STATE.model is None:
+            return jsonify({"error": "Model not loaded"}), 503
 
-        raw_avg = data.get('variety_avg_yield')
-        avg_y = float(raw_avg) if raw_avg not in (None, '') else 5.0
-        ratio = CLASS_RATIO.get(cls, 1.0)
-        yield_estimate = round(avg_y * ratio, 2)
+        point = float(STATE.model.predict(vec)[0])
+
+        confidence = None
+        y_low = None
+        y_high = None
+
+        if STATE.model_low is not None and STATE.model_high is not None:
+            raw_low  = float(STATE.model_low.predict(vec)[0])
+            raw_high = float(STATE.model_high.predict(vec)[0])
+
+            # Centre the interval on the point prediction and widen it
+            # by the calibration factor derived during training.
+            half_width = (raw_high - raw_low) / 2.0
+            half_width *= STATE.interval_scale
+
+            y_low  = point - half_width
+            y_high = point + half_width
+
+            confidence = round(compute_confidence(point, y_low, y_high), 4)
+            y_low  = round(max(0.0, y_low), 2)
+            y_high = round(max(0.0, y_high), 2)
 
         return jsonify({
-            "Predicted_Yield": yield_estimate,
-            "Predicted_Class": cls,
-            "Confidence":      round(conf, 4),
-            "Probabilities":   probabilities,
-            "Model":           "Random Forest Classifier",
+            "Predicted_Yield": round(max(0.0, point), 2),
+            "Confidence":      confidence,
+            "Yield_Lower":     y_low,
+            "Yield_Upper":     y_high,
+            "Model":           "XGBoost Regressor",
             "Model_Version":   STATE.version,
             "success":         True,
         })
@@ -261,7 +283,7 @@ def predict():
 
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 5000))
     print(f'[START] CROPS ML Service on http://0.0.0.0:{port}')
     app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+

@@ -11,8 +11,15 @@ class EmailVerificationController extends Controller
 {
     public function notice(Request $request)
     {
-        if ($request->user()->hasVerifiedEmail()) {
-            return redirect($request->user()->redirectAfterVerification());
+        $user = $request->user();
+
+        // Farmers never verify email — they use CAO verification + PIN login
+        if ($user->role === 'farmer') {
+            return redirect()->route('farmer.dashboard');
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return redirect($user->redirectAfterVerification());
         }
 
         return view('auth.verify-email');
@@ -20,33 +27,53 @@ class EmailVerificationController extends Controller
 
     public function verify(EmailVerificationRequest $request)
     {
-        if ($request->user()->hasVerifiedEmail()) {
-            return redirect($request->user()->redirectAfterVerification())
+        $user = $request->user();
+
+        // Farmers should never reach here
+        if ($user->role === 'farmer') {
+            return redirect()->route('farmer.dashboard');
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return redirect($user->redirectAfterVerification())
                 ->with('status', 'Your email is already verified.');
         }
 
-        if ($request->user()->markEmailAsVerified()) {
-            event(new Verified($request->user()));
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
 
             if (function_exists('log_activity')) {
-                log_activity('email_verified', 'Email verified', $request->user());
+                log_activity('email_verified', 'Email verified', $user, [
+                    'email' => $user->email,
+                    'role'  => $user->role,
+                ]);
             }
         }
 
-        return redirect($request->user()->redirectAfterVerification())
+        return redirect($user->redirectAfterVerification())
             ->with('success', 'Your email has been verified! Welcome to CROPS.');
     }
 
     public function resend(Request $request)
     {
-        if ($request->user()->hasVerifiedEmail()) {
-            return redirect($request->user()->redirectAfterVerification());
+        $user = $request->user();
+
+        // Farmers shouldn't trigger resend
+        if ($user->role === 'farmer') {
+            return redirect()->route('farmer.dashboard');
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        if ($user->hasVerifiedEmail()) {
+            return redirect($user->redirectAfterVerification());
+        }
+
+        $user->sendEmailVerificationNotification();
 
         if (function_exists('log_activity')) {
-            log_activity('verification_sent', 'Verification email resent', $request->user());
+            log_activity('verification_sent', 'Verification email resent', $user, [
+                'email' => $user->email,
+                'role'  => $user->role,
+            ]);
         }
 
         return back()->with('status', 'verification-link-sent');

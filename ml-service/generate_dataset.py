@@ -1,8 +1,5 @@
 """
-CROPS dataset generator — v8 FINAL
-- Classes separated by GAPS (no ambiguous boundary samples)
-- Real rice_varieties values
-- Guaranteed balanced
+CROPS dataset generator — XGBoost regression only (target = yield_tons_ha)
 """
 import numpy as np
 import pandas as pd
@@ -10,20 +7,11 @@ import json
 
 np.random.seed(42)
 
-# ─────────────────────────────────────────────────────────────
-POOL_SIZE    = 15000    # generate this many, keep 6000
-N_PER_CLASS  = 2000
-NOISE_STD    = 0.55     # regression target noise (tune for LR R² ≈ 0.85)
-# ─────────────────────────────────────────────────────────────
+POOL_SIZE = 12000
+NOISE_STD = 0.45
 
 VARIETIES = {
-    # ═══════════════════════════════════════════════════════════
-    # INBRED VARIETIES
-    # ═══════════════════════════════════════════════════════════
-    # Format: 'gp':(transplanted_days, direct_days)
-    #         'avg':(transplanted_yield, direct_yield)
-    #         'max':(transplanted_yield, direct_yield)
-
+    # INBRED
     'Angelica (NSIC Rc122)':           {'cls':'Inbred','gp':(121,121),'avg':(4.70,4.70),'max':(5.00,5.00)},
     'NSIC Rc216 (Tubigan 17)':         {'cls':'Inbred','gp':(112,104),'avg':(6.00,5.70),'max':(9.70,9.30)},
     'NSIC Rc 512 (Tubigan 44)':        {'cls':'Inbred','gp':(113,105),'avg':(5.60,5.60),'max':(10.20,10.10)},
@@ -34,10 +22,7 @@ VARIETIES = {
     'NSIC Rc160 (Tubigan 14)':         {'cls':'Inbred','gp':(122,107),'avg':(5.60,5.60),'max':(8.20,8.20)},
     'NSIC Rc440(Tubigan 39)':          {'cls':'Inbred','gp':(109,109),'avg':(5.50,5.50),'max':(10.80,10.80)},
     'PSB Rc18 (Ala)':                  {'cls':'Inbred','gp':(123,123),'avg':(5.10,5.10),'max':(8.10,8.10)},
-
-    # ═══════════════════════════════════════════════════════════
-    # HYBRID VARIETIES
-    # ═══════════════════════════════════════════════════════════
+    # HYBRID
     'NSIC 2016 Rc 456H (Mestiso 78)':  {'cls':'Hybrid','gp':(112,112),'avg':(6.70,6.70),'max':(11.70,11.70)},
     'NSIC Rc234H (MESTISO 27)':        {'cls':'Hybrid','gp':(115,115),'avg':(6.50,6.50),'max':(9.80,9.80)},
     'NSIC Rc 486 (Mestiso 80)':        {'cls':'Hybrid','gp':(113,113),'avg':(6.50,6.50),'max':(13.90,13.90)},
@@ -56,24 +41,60 @@ SEEDING = ['Transplanted', 'Direct Seeded']
 def compute_clean_yield(avg_y, max_y, soil, season, seeding,
                         fertilizer, temp, rain, humid, land, historical):
     y = avg_y
+
+    # ── Linear terms (LR baseline captures these) ──
     y += 0.60 * (fertilizer - 110) / 70
     y += 0.60 * (historical - avg_y) / 0.70
     y += 0.40 if season == 'Dry' else -0.25
     y += 0.30 if seeding == 'Transplanted' else 0.0
-    y += {'Clay Loam': 0.30, 'Silty Clay': 0.20, 'Sandy Loam': -0.35, 'Clay': 0.10}[soil]
-    y -= min(abs(temp - 27) * 0.08, 0.35)
-    y -= min((abs(rain - 200) / 200) * 0.40, 0.40)
-    y -= min((abs(humid - 78) / 78) * 0.20, 0.20)
-    y += 0.10 if land < 1.5 else 0.0
+    y += {'Clay Loam': 0.30, 'Silty Clay': 0.20,
+          'Sandy Loam': -0.35, 'Clay': 0.10}[soil]
+
+    # ── Nonlinear / interaction terms (only trees capture these) ──
+
+    # 1. Temperature quadratic: optimum ~27.5°C
+    temp_dev = (temp - 27.5) ** 2
+    y -= min(0.030 * temp_dev, 1.20)
+
+    # 2. Rainfall asymmetric optimum around 200mm
+    if rain < 150:
+        y -= (150 - rain) * 0.008
+    elif rain > 280:
+        y -= (rain - 280) * 0.006
+
+    # 3. Fertilizer diminishing returns above 150 kg/ha
+    if fertilizer > 150:
+        y -= (fertilizer - 150) * 0.005
+
+    # 4. Dry season + low humidity is doubly punishing
+    if season == 'Dry' and humid < 70:
+        y -= 0.35
+
+    # 5. High humidity in wet season encourages disease
+    if season == 'Wet' and humid > 90:
+        y -= 0.30
+
+    # 6. Sandy Loam suffers harder in dry season (soil × season)
+    if soil == 'Sandy Loam' and season == 'Dry':
+        y -= 0.30
+
+    # 7. Transplanted responds better to generous fertilizer
+    if seeding == 'Transplanted' and fertilizer > 130:
+        y += 0.20
+
+    # 8. Historical yield amplified by variety's own ceiling
+    y += 0.15 * (historical - avg_y) * (max_y / 10.0)
+
+    # 9. Small plots managed more intensively (decreasing returns)
+    y += 0.15 * float(np.exp(-land / 2.0))
+
     return float(np.clip(y, 2.0, max_y))
 
 
 # ─────────────────────────────────────────────────────────────
-# Generate POOL
-# ─────────────────────────────────────────────────────────────
-print(f"🔄 Generating {POOL_SIZE} raw samples...\n")
+print(f"🔄 Generating {POOL_SIZE} samples...\n")
 
-pool = []
+rows = []
 for _ in range(POOL_SIZE):
     variety_name = np.random.choice(list(VARIETIES.keys()))
     v = VARIETIES[variety_name]
@@ -98,7 +119,7 @@ for _ in range(POOL_SIZE):
         fertilizer, temp, rain, humid, land, historical
     )
 
-    pool.append({
+    rows.append({
         'variety':                  variety_name,
         'classification':           v['cls'],
         'soil_type':                soil,
@@ -114,51 +135,23 @@ for _ in range(POOL_SIZE):
         'rainfall_mm':              round(rain, 1),
         'humidity_avg':             round(humid, 1),
         '_clean_y':                 clean_y,
-        '_ratio':                   clean_y / avg_y,
     })
 
-# Sort by ratio
-pool_df = pd.DataFrame(pool).sort_values('_ratio').reset_index(drop=True)
+df = pd.DataFrame(rows)
 
-# ─────────────────────────────────────────────────────────────
-# SPLIT WITH GAPS
-#   Low    : positions 0      – 1999     (bottom)
-#   Medium : positions 6500   – 8499     (middle)
-#   High   : positions 13000  – 14999    (top)
-#   The gaps (2000–6499, 8500–12999) are the ambiguous cases → discarded
-# ─────────────────────────────────────────────────────────────
-pool_df['yield_class'] = None
-pool_df.loc[0:N_PER_CLASS-1, 'yield_class'] = 'Low'
-pool_df.loc[6500:6500+N_PER_CLASS-1, 'yield_class'] = 'Medium'
-pool_df.loc[13000:13000+N_PER_CLASS-1, 'yield_class'] = 'High'
-
-df = pool_df[pool_df['yield_class'].notna()].copy()
-
-print(f"✅ Class counts: {df['yield_class'].value_counts().to_dict()}")
-print(f"   Low  ratio range : {df[df.yield_class=='Low']['_ratio'].min():.3f} – {df[df.yield_class=='Low']['_ratio'].max():.3f}")
-print(f"   Med  ratio range : {df[df.yield_class=='Medium']['_ratio'].min():.3f} – {df[df.yield_class=='Medium']['_ratio'].max():.3f}")
-print(f"   High ratio range : {df[df.yield_class=='High']['_ratio'].min():.3f} – {df[df.yield_class=='High']['_ratio'].max():.3f}")
-print(f"   → Gaps between classes prevent boundary confusion\n")
-
-# ─────────────────────────────────────────────────────────────
-# Add noise to regression target
-# ─────────────────────────────────────────────────────────────
 noise = np.random.normal(0, NOISE_STD, len(df))
 df['yield_tons_ha'] = np.clip(
     df['_clean_y'].values + noise, 2.0, df['variety_max_yield'].values
 ).round(3)
 
-df = df.drop(columns=['_clean_y', '_ratio'])
+df = df.drop(columns=['_clean_y'])
 
-# ─────────────────────────────────────────────────────────────
-# One-hot encode
-# ─────────────────────────────────────────────────────────────
 CAT_COLS = ['variety', 'classification', 'soil_type', 'season', 'seeding_method']
 df_encoded = pd.get_dummies(df, columns=CAT_COLS, prefix=CAT_COLS, dtype=int)
 
 legend = {}
 for col in df_encoded.columns:
-    if col in ('yield_tons_ha', 'yield_class'):
+    if col == 'yield_tons_ha':
         continue
     matched = False
     for c in CAT_COLS:
@@ -177,5 +170,5 @@ pd.DataFrame([{'feature': k, 'meaning': v} for k, v in legend.items()]
 print(f"✅ Created rice_yield_dataset.csv")
 print(f"   Rows    : {len(df_encoded)}")
 print(f"   Columns : {len(df_encoded.columns)}")
-print(f"Yield range : {df['yield_tons_ha'].min():.2f} – {df['yield_tons_ha'].max():.2f} t/ha")
-print(f"Avg yield   : {df['yield_tons_ha'].mean():.2f} t/ha")
+print(f"   Yield range : {df['yield_tons_ha'].min():.2f} – {df['yield_tons_ha'].max():.2f} t/ha")
+print(f"   Avg yield   : {df['yield_tons_ha'].mean():.2f} t/ha")

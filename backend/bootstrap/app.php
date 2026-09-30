@@ -13,8 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-    $middleware->alias([
-        'role' => \App\Http\Middleware\CheckRole::class,
+        $middleware->alias([
+            'role'         => \App\Http\Middleware\CheckRole::class,
+            'verified.cao' => \App\Http\Middleware\EnsureCaoVerified::class,
+            'not.farmer'   => \App\Http\Middleware\EnsureNotFarmer::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

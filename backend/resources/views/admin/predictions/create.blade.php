@@ -5,7 +5,6 @@
 
 <div id="generatePredictionError"></div>
 
-<!-- Weather Display -->
 <div class="row mb-3">
     <div class="col-12">
         <div class="card" style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200);">
@@ -23,9 +22,6 @@
                             <i class="bi bi-cloud-rain"></i> Rainfall: {{ $weather['rainfall'] ?? 0 }}mm &nbsp;|&nbsp;
                             <i class="bi bi-wind"></i> Wind: {{ $weather['wind_speed'] ?? 'N/A' }} km/h
                         </div>
-                        <div class="text-muted small">
-                            <i class="bi bi-satellite"></i> Source: {{ $weather['source'] ?? 'Weather API' }}
-                        </div>
                     </div>
                 </div>
             </div>
@@ -42,8 +38,8 @@
                 <option value="">Select a farm record...</option>
                 @foreach($farmRecords as $record)
                     <option value="{{ $record->id }}">
-                        {{ $record->farm->name ?? 'N/A' }} - 
-                        {{ $record->riceVariety->name ?? 'N/A' }} - 
+                        {{ $record->farm->name ?? 'N/A' }} -
+                        {{ $record->riceVariety->name ?? 'N/A' }} -
                         {{ $record->season }}
                     </option>
                 @endforeach
@@ -54,8 +50,9 @@
             <div class="p-3 bg-light rounded">
                 <h6><i class="bi bi-info-circle"></i> How It Works</h6>
                 <ul class="text-muted small mb-0">
-                    <li><strong>Random Forest</strong> — Captures complex non-linear interactions in the data</li>
-                    <li class="mt-2"><i class="bi bi-cloud-sun"></i> <strong>Weather Data</strong> — Real-time weather from OpenWeatherMap is used as input</li>
+                    <li><strong>XGBoost Regressor</strong> — gradient-boosted trees trained on 12,000 historical samples</li>
+                    <li class="mt-2"><i class="bi bi-cloud-sun"></i> <strong>Weather Data</strong> — real-time weather from OpenWeatherMap is used as input</li>
+                    <li class="mt-2"><i class="bi bi-activity"></i> <strong>Confidence</strong> — derived from a prediction interval computed by two additional quantile models (10th &amp; 90th percentile)</li>
                 </ul>
             </div>
         </div>

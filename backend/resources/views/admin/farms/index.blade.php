@@ -21,35 +21,60 @@
         .leaflet-control-zoom {
             z-index: 1050 !important;
         }
+
+        .farm-list-scroll {
+            max-height: 560px;
+            overflow-y: auto;
+        }
+        .farm-list-scroll thead th {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 2;
+            box-shadow: inset 0 -1px 0 var(--gray-200);
+        }
+
+        .farms-filter-btn {
+            padding: 5px 12px;
+            border-radius: 7px;
+            border: none;
+            font-weight: 600;
+            font-size: 11px;
+            background: transparent;
+            color: var(--gray-600);
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+        .farms-filter-btn.active {
+            background: white;
+            color: var(--gray-900);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        #farmsPaginationList button:not(:disabled):hover {
+            background: var(--brand-green-light) !important;
+            border-color: var(--brand-green) !important;
+            color: var(--brand-green-dark) !important;
+        }
     </style>
 
-    @if(session('success'))
-        <div class="alert alert-success alert-dismissible fade show" role="alert" style="border-left: 4px solid var(--green);">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-check-circle-fill me-2" style="color: var(--green);"></i>
-                <strong>Success!</strong> {{ session('success') }}
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <div class="page-header">
+        <div>
+            <h4 class="page-header-title">
+                
+            </h4>
+            <p class="page-header-desc">
+               
+            </p>
         </div>
-    @endif
-
-    @if(session('error'))
-        <div class="alert alert-danger alert-dismissible fade show" role="alert" style="border-left: 4px solid var(--red);">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-x-circle-fill me-2" style="color: var(--red);"></i>
-                <strong>Error!</strong> {{ session('error') }}
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            @if(auth()->user()->role === 'admin')
+                <button type="button" class="btn btn-success" onclick="openFarmModal()">
+                    <i class="bi bi-plus-circle"></i> Add Farm
+                </button>
+            @endif
+            <span class="badge-count">{{ $farms->count() }} Farms</span>
         </div>
-    @endif
-
-    <div class="d-flex justify-content-end align-items-center mb-4">
-        @if(auth()->user()->role === 'admin')
-            <button type="button" class="btn btn-success" onclick="openFarmModal()">
-                <i class="bi bi-plus-circle"></i> Add Farm
-            </button>
-        @endif
-        <span class="badge bg-secondary ms-2">{{ $farms->count() }} Farms</span>
     </div>
 
     <!-- Stats Cards -->
@@ -92,10 +117,60 @@
         </div>
     </div>
 
-    <!-- Farm List Table -->
+    <!-- Farm List Card -->
     <div class="card-custom">
-        <div class="card-title"><i class="bi bi-table"></i> Farm List</div>
-        <div class="table-responsive">
+
+        <div class="card-title d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span>
+                <i class="bi bi-table"></i> Farm List
+                <span class="badge bg-light text-muted ms-1" id="farmsVisibleCount"
+                      style="font-weight: 400; font-size: 10px;">
+                    {{ $farms->count() }} total
+                </span>
+            </span>
+        </div>
+
+        {{-- FILTER BAR (single row) --}}
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+
+            {{-- SEARCH --}}
+            <div style="flex: 1; min-width: 200px;">
+                <div class="input-group" style="border-radius: 10px; overflow: hidden; border: 1px solid var(--gray-200);">
+                    <span class="input-group-text" style="background: var(--gray-50); border: none; color: var(--gray-400); padding: 0.35rem 0.7rem;">
+                        <i class="bi bi-search" style="font-size: 12px;"></i>
+                    </span>
+                    <input type="text" id="farmsSearch" class="form-control"
+                           placeholder="Search farm, farmer, or barangay..."
+                           style="border: none; background: var(--gray-50); font-size: 12px; padding: 0.4rem 0.7rem;">
+                </div>
+            </div>
+
+            {{-- BARANGAY --}}
+            <select id="farmsFilterBarangay" class="form-select"
+                    style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; appearance: none; cursor: pointer; width: auto; min-width: 160px;">
+                <option value="all">All Barangays</option>
+                @foreach($farms->pluck('barangay')->unique()->filter()->sort()->values() as $barangay)
+                    <option value="{{ $barangay }}">{{ $barangay }}</option>
+                @endforeach
+            </select>
+
+            {{-- ASSIGNMENT PILLS --}}
+            <div class="d-flex" style="background: var(--gray-100); border-radius: 10px; padding: 3px; gap: 2px;">
+                <button class="farms-filter-btn active" data-assign="all">All</button>
+                <button class="farms-filter-btn" data-assign="assigned">Assigned</button>
+                <button class="farms-filter-btn" data-assign="unassigned">Unassigned</button>
+            </div>
+
+            {{-- GEO PILLS --}}
+            <div class="d-flex" style="background: var(--gray-100); border-radius: 10px; padding: 3px; gap: 2px;">
+                <button class="farms-filter-btn active" data-geo="all">Any</button>
+                <button class="farms-filter-btn" data-geo="with">Located</button>
+                <button class="farms-filter-btn" data-geo="without">No Pin</button>
+            </div>
+        </div>
+
+        {{-- TABLE --}}
+        <div class="table-responsive farm-list-scroll">
             <table class="table table-sm table-hover align-middle mb-0">
                 <thead>
                     <tr>
@@ -107,23 +182,36 @@
                         <th>Soil Type</th>
                         <th>Coordinates</th>
                         @if(auth()->user()->role === 'admin')
-                            <th>Actions</th>
+                            <th style="width: 90px;">Actions</th>
                         @else
                             <th>Access</th>
                         @endif
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="farmsListBody">
                     @forelse($farms as $farm)
-                        <tr>
-                            <td>{{ $loop->iteration }}</td>
+                        @php
+                            $hasCoords = $farm->latitude && $farm->longitude;
+                            $isAssigned = $farm->user_id !== null;
+                            $searchText = strtolower(
+                                ($farm->name ?? '') . ' ' .
+                                ($farm->user->name ?? '') . ' ' .
+                                ($farm->barangay ?? '')
+                            );
+                        @endphp
+                        <tr class="farms-row"
+                            data-search="{{ $searchText }}"
+                            data-barangay="{{ $farm->barangay ?? '' }}"
+                            data-assign="{{ $isAssigned ? 'assigned' : 'unassigned' }}"
+                            data-geo="{{ $hasCoords ? 'with' : 'without' }}">
+                            <td class="farms-row-index">{{ $loop->iteration }}</td>
                             <td><strong>{{ $farm->name }}</strong></td>
                             <td>{{ $farm->barangay }}</td>
                             <td>{{ $farm->user->name ?? 'Unassigned' }}</td>
                             <td>{{ number_format($farm->land_area_ha, 2) }}</td>
                             <td>{{ $farm->soil_type }}</td>
                             <td>
-                                @if($farm->latitude && $farm->longitude)
+                                @if($hasCoords)
                                     <span class="badge bg-light text-muted" style="font-size: 10px;">
                                         {{ number_format($farm->latitude, 6) }}, {{ number_format($farm->longitude, 6) }}
                                     </span>
@@ -133,15 +221,17 @@
                             </td>
                             <td>
                                 @if(auth()->user()->role === 'admin')
-                                    <button type="button" class="btn btn-sm btn-secondary" onclick="editFarm({{ $farm->id }})">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <form action="{{ route('admin.farms.destroy', $farm->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this farm?')">
-                                        @csrf @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-danger">
-                                            <i class="bi bi-trash"></i>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <button type="button" class="btn-action btn-action-edit" onclick="editFarm({{ $farm->id }})" title="Edit Farm">
+                                            <i class="bi bi-pencil"></i>
                                         </button>
-                                    </form>
+                                        <form action="{{ route('admin.farms.destroy', $farm->id) }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Delete this farm?')">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="btn-action btn-action-danger" title="Delete Farm">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
                                 @else
                                     <span class="text-muted small">View Only</span>
                                 @endif
@@ -160,9 +250,40 @@
                             </td>
                         </tr>
                     @endforelse
+
+                    <tr id="farmsNoResults" style="display: none;">
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            <i class="bi bi-search" style="font-size: 28px;"></i>
+                            <p class="mt-2 mb-0">No farms match your filters.</p>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
+
+        {{-- PAGINATION --}}
+        <div id="farmsPaginationBar" class="d-none"
+             style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--gray-200);">
+
+            <div class="d-flex align-items-center gap-2" style="font-size: 11px; color: var(--gray-500);">
+                <span>Show</span>
+                <select id="farmsPerPage" class="form-select form-select-sm"
+                        style="width: auto; border-radius: 7px; border: 1px solid var(--gray-200); font-size: 11px; padding: 2px 22px 2px 8px; appearance: none; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 6px center; background-size: 9px; cursor: pointer;">
+                    <option value="10">10</option>
+                    <option value="25" selected>25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+                <span>entries</span>
+                <span id="farmsPaginationInfo" style="margin-left: 4px;"></span>
+            </div>
+
+            <nav aria-label="Farm pagination">
+                <ul id="farmsPaginationList" class="pagination mb-0"
+                    style="display: flex; align-items: center; gap: 3px; list-style: none; padding: 0; margin: 0;"></ul>
+            </nav>
+        </div>
+
     </div>
 
     <!-- Modal shell -->
@@ -178,7 +299,7 @@
 <script>
     @if(auth()->user()->role === 'admin')
     // ============================================================
-    // MODAL MAP STATE (targets #farmModalMap, NOT #farmMap)
+    // MODAL MAP STATE
     // ============================================================
     let modalMap = null;
     let modalMarker = null;
@@ -195,9 +316,6 @@
         };
     }
 
-    // ============================================================
-    // OPEN MODAL — ADD FARM
-    // ============================================================
     function openFarmModal() {
         document.getElementById('modalTitle').textContent = 'Add Farm';
         document.getElementById('modalLoading').style.display = 'block';
@@ -205,10 +323,8 @@
         document.getElementById('modalContent').innerHTML = '';
 
         const modalEl = document.getElementById('farmModal');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
+        new bootstrap.Modal(modalEl).show();
 
-        // IMPORTANT: send AJAX header so controller returns the view, not a redirect
         fetch('{{ route("admin.farms.create") }}', {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
@@ -229,9 +345,6 @@
         });
     }
 
-    // ============================================================
-    // OPEN MODAL — EDIT FARM
-    // ============================================================
     function editFarm(id) {
         document.getElementById('modalTitle').textContent = 'Edit Farm';
         document.getElementById('modalLoading').style.display = 'block';
@@ -239,10 +352,8 @@
         document.getElementById('modalContent').innerHTML = '';
 
         const modalEl = document.getElementById('farmModal');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
+        new bootstrap.Modal(modalEl).show();
 
-        // IMPORTANT: send AJAX header so controller returns the view, not a redirect
         fetch('/admin/farms/' + id + '/edit', {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
@@ -263,9 +374,6 @@
         });
     }
 
-    // ============================================================
-    // INIT MODAL MAP (targets #farmModalMap)
-    // ============================================================
     function initModalMap() {
         const container = document.getElementById('farmModalMap');
         if (!container) {
@@ -273,7 +381,6 @@
             return;
         }
 
-        // Destroy previous instance if any
         if (modalMap) {
             try { modalMap.off(); modalMap.remove(); } catch (e) {}
             modalMap = null;
@@ -298,7 +405,6 @@
             maxBoundsViscosity: 0.8
         });
 
-        // Layers
         const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         });
@@ -311,7 +417,6 @@
         const satelliteLayer = L.layerGroup([satImg, satLabels]);
         streetLayer.addTo(modalMap);
 
-        // Toggle control
         const ToggleControl = L.Control.extend({
             options: { position: 'topright' },
             onAdd: function (map) {
@@ -343,7 +448,6 @@
         });
         modalMap.addControl(new ToggleControl());
 
-        // Existing marker
         if (latInput && latInput.value && lngInput && lngInput.value) {
             modalMarker = L.marker([lat, lng], { draggable: true }).addTo(modalMap);
             modalMarker.on('dragend', function () {
@@ -355,13 +459,11 @@
             });
         }
 
-        // Click to place
         modalMap.on('click', function (e) {
             const cl = clampToSantiago(e.latlng.lat, e.latlng.lng);
             setModalMarker(cl.lat, cl.lng);
         });
 
-        // Live sync when typing coordinates
         if (latInput && lngInput) {
             const sync = () => {
                 const tLat = parseFloat(latInput.value);
@@ -406,7 +508,6 @@
         if (modalMap && pan) modalMap.setView([lat, lng], modalMap.getZoom());
     }
 
-    // Clear location
     document.addEventListener('click', function (e) {
         if (e.target.id === 'clearLocation' || e.target.closest('#clearLocation')) {
             const latInput = document.getElementById('latitude');
@@ -420,7 +521,6 @@
         }
     });
 
-    // Cleanup when modal closes
     document.addEventListener('hidden.bs.modal', function (e) {
         if (e.target.id === 'farmModal') {
             if (modalMap) {
@@ -431,9 +531,6 @@
         }
     });
 
-    // ============================================================
-    // FORM SUBMIT (create + edit)
-    // ============================================================
     function handleSubmit(e) {
         e.preventDefault();
         const form = e.target;
@@ -475,5 +572,160 @@
         });
     }
     @endif
+
+    // ============================================================
+    // FARM LIST — FILTERING + PAGINATION
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput    = document.getElementById('farmsSearch');
+        const barangaySelect = document.getElementById('farmsFilterBarangay');
+        const assignBtns     = document.querySelectorAll('.farms-filter-btn[data-assign]');
+        const geoBtns        = document.querySelectorAll('.farms-filter-btn[data-geo]');
+        const allRows        = Array.from(document.querySelectorAll('#farmsListBody .farms-row'));
+        const noResults      = document.getElementById('farmsNoResults');
+        const visibleCount   = document.getElementById('farmsVisibleCount');
+        const paginationBar  = document.getElementById('farmsPaginationBar');
+        const paginationList = document.getElementById('farmsPaginationList');
+        const paginationInfo = document.getElementById('farmsPaginationInfo');
+        const perPageSelect  = document.getElementById('farmsPerPage');
+
+        if (!searchInput || allRows.length === 0) return;
+
+        let currentPage = 1;
+        let perPage = parseInt(perPageSelect?.value || '25', 10);
+
+        function getMatchingRows() {
+            const search     = searchInput.value.toLowerCase().trim();
+            const barangay   = barangaySelect.value;
+            const activeA    = document.querySelector('.farms-filter-btn[data-assign].active');
+            const assignFilter = activeA ? activeA.dataset.assign : 'all';
+            const activeG    = document.querySelector('.farms-filter-btn[data-geo].active');
+            const geoFilter  = activeG ? activeG.dataset.geo : 'all';
+
+            return allRows.filter(row => {
+                const sd = row.dataset.search || '';
+                const rb = row.dataset.barangay || '';
+                const ra = row.dataset.assign || '';
+                const rg = row.dataset.geo || '';
+
+                const matchesSearch   = sd.includes(search);
+                const matchesBarangay = (barangay === 'all' || rb === barangay);
+                const matchesAssign   = (assignFilter === 'all' || ra === assignFilter);
+                const matchesGeo      = (geoFilter === 'all' || rg === geoFilter);
+
+                return matchesSearch && matchesBarangay && matchesAssign && matchesGeo;
+            });
+        }
+
+        function renderPagination() {
+            const matching = getMatchingRows();
+            const total = matching.length;
+            const totalPages = Math.max(1, Math.ceil(total / perPage));
+
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            allRows.forEach(r => r.style.display = 'none');
+
+            const start = (currentPage - 1) * perPage;
+            const end = start + perPage;
+            matching.slice(start, end).forEach((row, i) => {
+                row.style.display = '';
+                const c = row.querySelector('.farms-row-index');
+                if (c) c.textContent = start + i + 1;
+            });
+
+            if (noResults) noResults.style.display = (total === 0 && allRows.length > 0) ? '' : 'none';
+            if (visibleCount) visibleCount.textContent = total + ' visible';
+
+            if (paginationInfo) {
+                paginationInfo.textContent = total === 0
+                    ? '— no entries'
+                    : '— ' + (start + 1) + ' to ' + Math.min(end, total) + ' of ' + total;
+            }
+
+            if (paginationBar) paginationBar.classList.toggle('d-none', totalPages <= 1);
+            if (!paginationList) return;
+
+            paginationList.innerHTML = '';
+            const btnStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 8px;border-radius:7px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-700);font-size:12px;font-weight:600;cursor:pointer;';
+            const activeStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 8px;border-radius:7px;border:1px solid var(--brand-green);background:var(--brand-green);color:#fff;font-size:12px;font-weight:700;';
+            const disabledStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 8px;border-radius:7px;border:1px solid var(--gray-200);background:var(--gray-50);color:var(--gray-300);font-size:12px;font-weight:600;cursor:not-allowed;';
+
+            const addBtn = (label, page, opts = {}) => {
+                const li = document.createElement('li');
+                const a = document.createElement('button');
+                a.type = 'button';
+                a.innerHTML = label;
+                a.setAttribute('style', opts.active ? activeStyle : (opts.disabled ? disabledStyle : btnStyle));
+                if (!opts.active && !opts.disabled && page !== null) {
+                    a.addEventListener('click', () => {
+                        currentPage = page;
+                        renderPagination();
+                    });
+                } else a.disabled = true;
+                li.appendChild(a);
+                paginationList.appendChild(li);
+            };
+
+            addBtn('<i class="bi bi-chevron-left"></i>', currentPage - 1, { disabled: currentPage === 1 });
+
+            const pages = [];
+            if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+            } else {
+                pages.push(1);
+                if (currentPage > 3) pages.push('...');
+                const s = Math.max(2, currentPage - 1);
+                const e = Math.min(totalPages - 1, currentPage + 1);
+                for (let i = s; i <= e; i++) pages.push(i);
+                if (currentPage < totalPages - 2) pages.push('...');
+                pages.push(totalPages);
+            }
+
+            pages.forEach(p => {
+                if (p === '...') {
+                    const li = document.createElement('li');
+                    const span = document.createElement('span');
+                    span.textContent = '…';
+                    span.setAttribute('style', 'display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;color:var(--gray-400);font-weight:700;font-size:12px;');
+                    li.appendChild(span);
+                    paginationList.appendChild(li);
+                } else {
+                    addBtn(String(p), p, { active: p === currentPage });
+                }
+            });
+
+            addBtn('<i class="bi bi-chevron-right"></i>', currentPage + 1, { disabled: currentPage === totalPages });
+        }
+
+        function resetAndRender() { currentPage = 1; renderPagination(); }
+
+        searchInput.addEventListener('input', resetAndRender);
+        barangaySelect.addEventListener('change', resetAndRender);
+
+        assignBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                assignBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                resetAndRender();
+            });
+        });
+
+        geoBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                geoBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                resetAndRender();
+            });
+        });
+
+        perPageSelect?.addEventListener('change', function() {
+            perPage = parseInt(this.value, 10) || 25;
+            resetAndRender();
+        });
+
+        renderPagination();
+    });
 </script>
 @endpush

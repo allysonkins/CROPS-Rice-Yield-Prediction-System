@@ -6,18 +6,43 @@
     <div class="row g-3">
         <div class="col-md-6">
             <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
-            <input type="text" name="name" class="form-control" placeholder="e.g., Juan Dela Cruz" value="{{ old('name', $farmer->name) }}" required>
+            <input type="text" name="name" class="form-control" value="{{ old('name', $farmer->name) }}" required>
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
-            <input type="email" name="email" class="form-control" placeholder="farmer@example.com" value="{{ old('email', $farmer->email) }}" required>
+            <label class="form-label fw-semibold">RSBSA Number</label>
+            <input type="text" name="rsbsa_number" class="form-control" placeholder="e.g., RSBSA-0001" value="{{ old('rsbsa_number', $farmer->rsbsa_number) }}">
+            <small class="text-muted">Optional.</small>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Phone Number</label>
+            <input type="text" name="phone" class="form-control" placeholder="09171234567" value="{{ old('phone', $farmer->phone) }}" pattern="09[0-9]{9}" maxlength="11">
+            <small class="text-muted">PH mobile — used for login.</small>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Email <span class="text-muted">(optional)</span></label>
+            @php
+                $isPlaceholder = $farmer->email && \Illuminate\Support\Str::endsWith($farmer->email, '@crops.local');
+            @endphp
+            <input type="email" name="email" class="form-control"
+                   placeholder="{{ $isPlaceholder ? 'Not set — no email on file' : '' }}"
+                   value="{{ old('email', $isPlaceholder ? '' : $farmer->email) }}">
+            @if($isPlaceholder)
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    This farmer has no email. Leave blank to keep it that way.
+                </small>
+            @else
+                <small class="text-muted">Leave blank to keep current.</small>
+            @endif
         </div>
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">New Password</label>
             <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current">
-            <small class="text-muted">Min 8 characters</small>
+            <small class="text-muted">Min 8 characters.</small>
         </div>
 
         <div class="col-md-6">

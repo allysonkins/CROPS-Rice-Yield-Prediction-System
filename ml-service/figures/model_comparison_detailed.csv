@@ -1,0 +1,5 @@
+Model,RMSE,MAE,MAPE (%),R²
+XGBoost,0.4621,0.3674,7.4377,0.8954
+Gradient Boosting,0.4682,0.3714,7.5664,0.8927
+Random Forest,0.5173,0.4079,8.4228,0.869
+Extra Trees,0.5428,0.4275,8.8417,0.8558

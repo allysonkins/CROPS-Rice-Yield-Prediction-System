@@ -63,4 +63,13 @@ class RiceVariety extends Model
         $key = $method === 'Transplanted' ? 'growth_period_transplanted' : 'growth_period_direct';
         return $this->$key ?? $this->growth_period; // fallback to main growth_period
     }
+
+
+    /**
+ * Farm records that planted this variety.
+ */
+public function farmRecords()
+{
+    return $this->hasMany(FarmRecord::class, 'rice_variety_id');
+}
 }

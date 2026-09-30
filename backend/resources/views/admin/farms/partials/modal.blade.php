@@ -2,9 +2,9 @@
 <div class="modal fade" id="farmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header" style="background: var(--green); color: white;">
+            <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-geo-alt-fill"></i> <span id="modalTitle">Add Farm</span></h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="farmModalBody" style="overflow: hidden;">
                 <div class="text-center py-4" id="modalLoading">

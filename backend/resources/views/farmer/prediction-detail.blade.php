@@ -1,123 +1,114 @@
-<!-- Farm Information -->
-<div class="row g-3 mb-3">
-    <div class="col-md-6">
-        <div class="card" style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200);">
-            <div class="card-body">
-                <h6><i class="bi bi-info-circle"></i> Farm Information</h6>
-                <table class="table table-sm table-borderless mb-0">
-                    <tr><td><strong>Farm Name:</strong></td><td>{{ $farmRecord->farm->name ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Barangay:</strong></td><td>{{ $farmRecord->farm->barangay ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Variety:</strong></td><td>{{ $farmRecord->riceVariety->name ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Season:</strong></td><td>{{ $farmRecord->season ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Soil Type:</strong></td><td>{{ $farmRecord->farm->soil_type ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Seeding Method:</strong></td><td>{{ $farmRecord->seeding_method ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Fertilizer (kg/ha):</strong></td><td>{{ $farmRecord->fertilizer_kg_ha ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Historical Yield:</strong></td><td>{{ $farmRecord->historical_yield_tons_ha ? number_format($farmRecord->historical_yield_tons_ha, 2) : 'N/A' }} t/ha</td></tr>
-                </table>
-            </div>
-        </div>
-    </div>
+@php
+    $yieldTons   = $prediction?->predicted_yield_tons_ha;
+    $yieldCavan  = $yieldTons !== null ? t_ha_to_cavan_ha((float) $yieldTons) : null;
+    $farmArea    = (float) ($farmRecord->farm->land_area_ha ?? 1.0);
+    $totalCavan  = $yieldTons !== null ? cavan_total((float) $yieldTons, $farmArea) : null;
+@endphp
 
-    <div class="col-md-6">
-        <div class="card" style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200); border-top: 3px solid #3498db;">
-            <div class="card-body">
-                <h6><i class="bi bi-cloud-sun" style="color: var(--gold);"></i> Weather Conditions</h6>
-                @if($weather)
-                    <div class="row align-items-center">
-                        <div class="col-4 text-center">
-                            <i class="bi bi-{{ $weather['icon'] ?? 'sun' }}" style="font-size: 32px; color: var(--gold);"></i>
-                            <div class="fw-bold" style="font-size: 18px;">{{ $weather['temperature'] ?? 'N/A' }}°C</div>
-                            <small class="text-muted">{{ $weather['description'] ?? 'N/A' }}</small>
-                        </div>
-                        <div class="col-8">
-                            <div class="row small">
-                                <div class="col-6">
-                                    <span class="text-muted"><i class="bi bi-droplet"></i> Humidity</span><br>
-                                    <strong>{{ $weather['humidity'] ?? 'N/A' }}%</strong>
-                                </div>
-                                <div class="col-6">
-                                    <span class="text-muted"><i class="bi bi-cloud-rain"></i> Rainfall</span><br>
-                                    <strong>{{ $weather['rainfall'] ?? 0 }} mm</strong>
-                                </div>
-                                <div class="col-6 mt-1">
-                                    <span class="text-muted"><i class="bi bi-wind"></i> Wind Speed</span><br>
-                                    <strong>{{ $weather['wind_speed'] ?? 'N/A' }} km/h</strong>
-                                </div>
-                                <div class="col-6 mt-1">
-                                    <span class="text-muted"><i class="bi bi-satellite"></i> Source</span><br>
-                                    <strong>{{ $weather['source'] ?? 'Weather API' }}</strong>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                @else
-                    <p class="text-muted mb-0">No weather data available for this prediction.</p>
-                @endif
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Prediction Results (Random Forest) -->
+<!-- ═══════════ PREDICTION RESULT ═══════════ -->
 <div class="row g-3 mb-3">
     <div class="col-12">
-        <div class="card" style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200); border-top: 3px solid #4f46e5;">
+        <div class="card" style="background: var(--slate-50); border-radius: var(--radius-md); border: 1px solid var(--slate-200); border-top: 3px solid #4f46e5;">
             <div class="card-body">
-                <h6><i class="bi bi-cpu" style="color: #4f46e5;"></i> Random Forest Prediction</h6>
-                <div class="row g-3">
-                    <div class="col-md-6 offset-md-3">
-                        <div class="card p-3 text-center" style="border: 2px solid #0f4c2b; background: white; border-radius: 10px; box-shadow: var(--shadow-sm);">
-                            <strong>Predicted Yield</strong>
-                            <h3 class="mt-2" style="color: #0f4c2b;">
-                                {{ $prediction ? number_format($prediction->predicted_yield_tons_ha, 2) : 'N/A' }} t/ha
-                            </h3>
-                        </div>
-                    </div>
-                </div>
+                <h6 style="color: var(--slate-800); font-weight: 700;">
+                    <i class="bi bi-cpu" style="color: #4f46e5;"></i> Random Forest Prediction
+                </h6>
 
                 @if($prediction)
                     @php
-                        $yield = $prediction->predicted_yield_tons_ha;
+                        $class      = $prediction->predicted_class;
+                        $confidence = $prediction->confidence;
 
-                        // --- Status based on variety's max yield ---
-                        $maxYield = $farmRecord->riceVariety
-                            ? $farmRecord->riceVariety->getMaxYieldForMethod($farmRecord->seeding_method)
-                            : null;
-
-                        if ($maxYield !== null && $maxYield > 0) {
-                            $ratio = $yield / $maxYield;
-                            if ($ratio >= 0.9) {
-                                $statusClass = 'success';
-                                $statusText = 'High';
-                                $statusIcon = 'check-circle';
-                            } elseif ($ratio >= 0.7) {
-                                $statusClass = 'warning';
-                                $statusText = 'Medium';
-                                $statusIcon = 'exclamation-triangle';
-                            } else {
-                                $statusClass = 'danger';
-                                $statusText = 'Low';
-                                $statusIcon = 'x-circle';
-                            }
-                        } else {
-                            $statusClass = $yield >= 4.5 ? 'success' : ($yield >= 3.5 ? 'warning' : 'danger');
-                            $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
-                            $statusIcon = $yield >= 4.5 ? 'check-circle' : ($yield >= 3.5 ? 'exclamation-triangle' : 'x-circle');
-                        }
+                        $classMap = [
+                            'High'   => ['css' => 'high',   'icon' => 'check-circle-fill',        'text' => 'Good harvest expected'],
+                            'Medium' => ['css' => 'medium', 'icon' => 'exclamation-triangle-fill','text' => 'Average harvest expected'],
+                            'Low'    => ['css' => 'low',    'icon' => 'x-circle-fill',            'text' => 'Below average expected'],
+                        ];
+                        $meta = $classMap[$class] ?? ['css' => 'medium', 'icon' => 'question-circle', 'text' => 'Unknown'];
                     @endphp
-                    <div class="mt-3 text-center">
-                        <span class="badge bg-{{ $statusClass }}" style="font-size: 14px; padding: 6px 16px;">
-                            <i class="bi bi-{{ $statusIcon }}"></i>
-                            {{ $statusText }} Yield ({{ number_format($yield, 2) }} t/ha)
-                        </span>
-                        @if($maxYield)
-                            <div class="text-muted small mt-1">
-                                Max potential for this variety: {{ number_format($maxYield, 2) }} t/ha
+
+                    {{-- Big yield card --}}
+                    <div class="row g-3">
+                        <div class="col-md-6 offset-md-3">
+                            <div class="card p-3 text-center" style="border: 2px solid var(--brand-green-dark); background: white; border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
+                                <strong style="color: var(--slate-700);">Estimated Yield</strong>
+                                <h3 class="mt-2" style="color: var(--brand-green-dark); font-weight: 800; letter-spacing: -0.6px;">
+                                    {{ number_format($yieldCavan, 0) }}
+                                    <small style="font-size: 15px; font-weight: 600;">cavan/ha</small>
+                                </h3>
+                                <div style="font-size: 11px; color: var(--slate-400); margin-top: 2px;">
+                                    ({{ number_format($yieldTons, 2) }} t/ha)
+                                </div>
                             </div>
-                        @endif
+                        </div>
                     </div>
+
+                    {{-- Total for this farm --}}
+                    @if($totalCavan !== null)
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6 offset-md-3">
+                                <div class="text-center p-3"
+                                     style="background: var(--brand-green-light); border-radius: var(--radius-md);">
+                                    <div style="font-size: 11px; text-transform: uppercase; color: var(--brand-green-dark); font-weight: 700; letter-spacing: 0.4px;">
+                                        <i class="bi bi-box-seam"></i> Total from your {{ number_format($farmArea, 2) }} ha
+                                    </div>
+                                    <div style="font-size: 24px; font-weight: 800; color: var(--brand-green-dark); line-height: 1.1; margin-top: 4px;">
+                                        {{ number_format($totalCavan, 0) }}
+                                        <small style="font-size: 14px; font-weight: 600;">cavan</small>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--brand-green-dark); opacity: 0.8; margin-top: 2px;">
+                                        ≈ {{ number_format($totalCavan * 50, 0) }} kg
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- Classification badge --}}
+                    <div class="mt-3 text-center">
+                        <span class="badge-status {{ $meta['css'] }}" style="font-size: 13px; padding: 8px 18px;">
+                            <i class="bi bi-{{ $meta['icon'] }}"></i>
+                            {{ $class ?? 'Unknown' }} Yield
+                            @if($confidence)
+                                · {{ number_format($confidence * 100, 1) }}% confidence
+                            @endif
+                        </span>
+                        <div style="font-size: 12px; color: var(--slate-600); margin-top: 6px;">
+                            {{ $meta['text'] }}
+                        </div>
+                    </div>
+
+                    {{-- Confidence explanation --}}
+                    @if($confidence)
+                        <div class="mt-3 text-center">
+                            <div class="d-inline-flex align-items-center gap-2 px-3 py-2"
+                                 style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); font-size: 12px; color: var(--slate-600); max-width: 640px;">
+                                <i class="bi bi-info-circle" style="color: var(--brand-gold);"></i>
+                                <span style="text-align: left;">
+                                    Confidence reflects how many of the model's 800 decision trees voted for
+                                    <strong>{{ $class }}</strong>. Higher = more agreement among trees.
+                                    It is <em>not</em> a probability that the yield will occur.
+                                </span>
+                            </div>
+                        </div>
+                    @endif
+
+                    {{-- Tree vote distribution --}}
+                    @php
+                        $probas = json_decode($prediction->input_features, true)['probabilities'] ?? null;
+                    @endphp
+                    @if($probas)
+                        <div class="mt-3 text-center small" style="color: var(--slate-500);">
+                            @foreach($probas as $lbl => $p)
+                                <span class="me-3">
+                                    <strong style="color: var(--slate-700);">{{ $lbl }}:</strong>
+                                    <span style="color: var(--brand-green-dark); font-weight: 600;">{{ number_format($p * 100, 1) }}%</span>
+                                </span>
+                            @endforeach
+                        </div>
+                    @endif
                 @else
-                    <div class="mt-3 text-center text-muted">
+                    <div class="mt-3 text-center" style="color: var(--slate-500); font-size: 13px;">
                         No prediction available for this farm record.
                     </div>
                 @endif
@@ -126,12 +117,14 @@
     </div>
 </div>
 
-<!-- Input Data -->
+<!-- ═══════════ INPUT DATA ═══════════ -->
 <div class="row g-3">
     <div class="col-12">
-        <div class="card" style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200);">
+        <div class="card" style="background: var(--slate-50); border-radius: var(--radius-md); border: 1px solid var(--slate-200);">
             <div class="card-body">
-                <h6><i class="bi bi-sliders2"></i> Input Data Used for Prediction</h6>
+                <h6 style="color: var(--slate-800); font-weight: 700;">
+                    <i class="bi bi-sliders2"></i> Input Data Used for Prediction
+                </h6>
                 @if($prediction)
                     @php
                         $inputFeatures = json_decode($prediction->input_features, true);
@@ -139,35 +132,37 @@
                     @endphp
                     <div class="row">
                         <div class="col-md-6">
-                            <ul class="list-unstyled small mb-0">
-                                <li><strong>Barangay:</strong> {{ $input['barangay'] ?? 'N/A' }}</li>
-                                <li><strong>Variety:</strong> {{ $input['variety'] ?? 'N/A' }}</li>
-                                <li><strong>Soil Type:</strong> {{ $input['soil_type'] ?? 'N/A' }}</li>
-                                <li><strong>Season:</strong> {{ $input['season'] ?? 'N/A' }}</li>
-                                <li><strong>Seeding Method:</strong> {{ $input['seeding_method'] ?? 'N/A' }}</li>
+                            <ul class="list-unstyled small mb-0" style="line-height: 1.8;">
+                                <li><strong style="color: var(--slate-700);">Variety:</strong> {{ $input['variety'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Soil Type:</strong> {{ $input['soil_type'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Season:</strong> {{ $input['season'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Seeding Method:</strong> {{ $input['seeding_method'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Land Area (ha):</strong> {{ $input['land_area_ha'] ?? 'N/A' }}</li>
                             </ul>
                         </div>
                         <div class="col-md-6">
-                            <ul class="list-unstyled small mb-0">
-                                <li><strong>Fertilizer (kg/ha):</strong> {{ $input['fertilizer_kg_ha'] ?? 'N/A' }}</li>
-                                <li><strong>Temperature (°C):</strong> {{ $input['temperature_avg'] ?? 'N/A' }}</li>
-                                <li><strong>Rainfall (mm):</strong> {{ $input['rainfall_mm'] ?? 'N/A' }}</li>
-                                <li><strong>Humidity (%):</strong> {{ $input['humidity_avg'] ?? 'N/A' }}</li>
-                                <li><strong>Historical Yield (t/ha):</strong> {{ $input['historical_yield_tons_ha'] ?? 'N/A' }}</li>
+                            <ul class="list-unstyled small mb-0" style="line-height: 1.8;">
+                                <li><strong style="color: var(--slate-700);">Fertilizer (kg/ha):</strong> {{ $input['fertilizer_kg_ha'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Temperature (°C):</strong> {{ $input['temperature_avg'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Rainfall (mm):</strong> {{ $input['rainfall_mm'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Humidity (%):</strong> {{ $input['humidity_avg'] ?? 'N/A' }}</li>
+                                <li><strong style="color: var(--slate-700);">Historical Yield (t/ha):</strong> {{ $input['historical_yield_tons_ha'] ?? 'N/A' }}</li>
                             </ul>
                         </div>
                     </div>
                 @else
-                    <p class="text-muted mb-0">No input data available.</p>
+                    <p style="color: var(--slate-500); margin: 0;">No input data available.</p>
                 @endif
             </div>
         </div>
     </div>
 </div>
 
-<!-- Close Button -->
+<!-- ═══════════ FOOTER ═══════════ -->
 <div class="row mt-3">
     <div class="col-12 text-end">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-circle"></i> Close
+        </button>
     </div>
 </div>

@@ -1,18 +1,22 @@
 <?php
 
-use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PredictionController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+// ============================================================
+// API ROUTES
+// ============================================================
+// Note: The AuthController import was removed — the API auth
+// endpoints aren't used by this web-only capstone. Web auth is
+// handled by App\Http\Controllers\Web\AuthController instead.
+//
+// If you build a mobile app later, restore the AuthController
+// with the correct namespace (App\Http\Controllers\Api).
+// ============================================================
 
-// TEMPORARILY REMOVED FOR TESTING - Add back later
-// Route::middleware('auth:sanctum')->group(function () {
-//     Route::post('/predict', [PredictionController::class, 'predict']);
-//     Route::get('/predictions', [PredictionController::class, 'index']);
-// });
+// ── Prediction endpoints ──
+// Currently unauthenticated for testing.
+// TODO: Wrap with 'auth:sanctum' middleware before production.
 
-// TEMPORARY ROUTES FOR TESTING (No authentication)
-Route::post('/predict', [PredictionApiController::class, 'predict'])->name('api.predict');
-Route::get('/predictions', [PredictionController::class, 'index']);
+Route::post('/predict',     [PredictionController::class, 'predict'])->name('api.predict');
+Route::get ('/predictions', [PredictionController::class, 'index'])->name('api.predictions.index');

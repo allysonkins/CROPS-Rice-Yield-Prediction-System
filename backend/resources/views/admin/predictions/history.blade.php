@@ -1,6 +1,4 @@
-{{-- ============================================================ --}}
 {{-- HEADER --}}
-{{-- ============================================================ --}}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h6 class="mb-1">
@@ -8,8 +6,8 @@
             Prediction History — {{ $farmRecord->farm->name ?? 'N/A' }}
         </h6>
         <div class="text-muted small">
-            {{ $farmRecord->riceVariety->name ?? 'N/A' }} •
-            {{ $farmRecord->season }} •
+            {{ $farmRecord->riceVariety->name ?? 'N/A' }} ·
+            {{ $farmRecord->season }} ·
             {{ $farmRecord->seeding_method ?? 'N/A' }}
         </div>
     </div>
@@ -22,9 +20,7 @@
         <p class="mt-2 mb-0">No predictions yet for this farm record.</p>
     </div>
 @else
-    {{-- ============================================================ --}}
     {{-- SUMMARY CARDS --}}
-    {{-- ============================================================ --}}
     <div class="row g-2 mb-3">
         <div class="col-6 col-md-3">
             <div class="card p-2" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
@@ -64,29 +60,15 @@
         </div>
     </div>
 
-    {{-- ============================================================ --}}
-    {{-- STATUS DISTRIBUTION --}}
-    {{-- ============================================================ --}}
-    <div class="d-flex gap-2 mb-3">
-        <span class="badge-status high" style="font-size: 12px; padding: 4px 12px;">
-            <span class="dot"></span> High: {{ $analysis['statusCounts']['high'] }}
-        </span>
-        <span class="badge-status medium" style="font-size: 12px; padding: 4px 12px;">
-            <span class="dot"></span> Medium: {{ $analysis['statusCounts']['medium'] }}
-        </span>
-        <span class="badge-status low" style="font-size: 12px; padding: 4px 12px;">
-            <span class="dot"></span> Low: {{ $analysis['statusCounts']['low'] }}
-        </span>
-        @if($analysis['maxYield'])
-            <span class="badge bg-light text-muted ms-auto" style="font-size: 11px; padding: 4px 12px;">
+    @if($analysis['maxYield'])
+        <div class="mb-3">
+            <span class="badge bg-light text-muted" style="font-size: 11px; padding: 4px 12px;">
                 Max potential: {{ number_format($analysis['maxYield'], 2) }} t/ha
             </span>
-        @endif
-    </div>
+        </div>
+    @endif
 
-    {{-- ============================================================ --}}
     {{-- TREND CHART --}}
-    {{-- ============================================================ --}}
     @if($predictions->count() > 1)
         <div class="card mb-3" style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px;">
             <div class="card-body">
@@ -98,9 +80,16 @@
         </div>
     @endif
 
-    {{-- ============================================================ --}}
+    @php
+        // Compute variety average for this farm record (used by every row)
+        $methodYield = $farmRecord->riceVariety
+            ? $farmRecord->riceVariety->getYieldForMethod($farmRecord->seeding_method ?? 'Transplanted')
+            : null;
+        $avgYield = $methodYield->avg ?? ($farmRecord->riceVariety->avg_yield ?? null);
+        $method   = $farmRecord->seeding_method ?? 'Transplanted';
+    @endphp
+
     {{-- PREDICTIONS TABLE --}}
-    {{-- ============================================================ --}}
     <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0">
             <thead>
@@ -108,8 +97,25 @@
                     <th>#</th>
                     <th>Date</th>
                     <th>Predicted Yield</th>
+                    <th>
+                        Yield Class
+                        <i class="bi bi-question-circle-fill"
+                           style="font-size: 12px; color: var(--gray-400); cursor: help;"
+                           data-bs-toggle="tooltip"
+                           data-bs-placement="top"
+                           data-bs-html="true"
+                           title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
+                               <strong>Variety-relative class</strong><br>
+                               Compared against the variety's <em>own</em> average yield for the chosen seeding method.<br><br>
+                               <strong>Bands:</strong><br>
+                               • <strong>High</strong> — ≥ 112.5% of variety average<br>
+                               • <strong>Medium</strong> — 87.5% – 112.5%<br>
+                               • <strong>Low</strong> — below 87.5%<br><br>
+                               <em>Derived in the application — not a model output.</em>
+                           </div>"></i>
+                    </th>
+                    <th>Confidence</th>
                     <th>Change</th>
-                    <th>Status</th>
                     <th>Weather</th>
                     <th>Fertilizer</th>
                     <th>Historical Yield</th>
@@ -119,19 +125,26 @@
                 @foreach($predictions as $index => $pred)
                     @php
                         $yield = $pred->predicted_yield_tons_ha;
+                        $conf  = $pred->confidence;
+                        $lo    = $pred->yield_lower;
+                        $hi    = $pred->yield_upper;
 
-                        // Status relative to variety max
-                        $maxYield = $analysis['maxYield'];
-                        if ($maxYield !== null && $maxYield > 0) {
-                            $ratio = $yield / $maxYield;
-                            $statusClass = $ratio >= 0.9 ? 'high' : ($ratio >= 0.7 ? 'medium' : 'low');
-                            $statusText = $ratio >= 0.9 ? 'High' : ($ratio >= 0.7 ? 'Medium' : 'Low');
-                        } else {
-                            $statusClass = $yield >= 4.5 ? 'high' : ($yield >= 3.5 ? 'medium' : 'low');
-                            $statusText = $yield >= 4.5 ? 'High' : ($yield >= 3.5 ? 'Medium' : 'Low');
+                        // ── App-level yield class ──
+                        $yieldClass = null;
+                        $ratio      = null;
+                        if ($avgYield && $avgYield > 0) {
+                            $ratio = $yield / $avgYield;
+                            if ($ratio >= 1.125)     $yieldClass = 'High';
+                            elseif ($ratio >= 0.875) $yieldClass = 'Medium';
+                            else                     $yieldClass = 'Low';
                         }
+                        $clsBadge = match($yieldClass) {
+                            'High'   => 'high',
+                            'Medium' => 'medium',
+                            'Low'    => 'low',
+                            default  => 'medium',
+                        };
 
-                        // Change vs previous (next in the display order, which is older)
                         $prev = $predictions[$index + 1] ?? null;
                         if ($prev) {
                             $delta = $yield - $prev->predicted_yield_tons_ha;
@@ -155,13 +168,41 @@
                             <small class="text-muted">{{ $pred->created_at->format('H:i') }} ({{ $pred->created_at->diffForHumans() }})</small>
                         </td>
                         <td><strong style="color: #0f4c2b;">{{ number_format($yield, 2) }} t/ha</strong></td>
-                        <td class="{{ $deltaClass }}" style="font-weight: 600;">
-                            <i class="bi bi-{{ $deltaIcon }}"></i> {{ $deltaText }}
+                        <td>
+                            @if($yieldClass)
+                                <span class="badge-status {{ $clsBadge }}"
+                                      style="cursor: help;"
+                                      data-bs-toggle="tooltip"
+                                      data-bs-placement="top"
+                                      data-bs-html="true"
+                                      title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
+                                          <strong>Variety-relative class</strong><br>
+                                          Predicted yield: <strong>{{ number_format($yield, 2) }} t/ha</strong><br>
+                                          Variety average ({{ $method }}): <strong>{{ number_format($avgYield, 2) }} t/ha</strong><br>
+                                          Ratio: <strong>{{ number_format($ratio * 100, 1) }}%</strong> of average<br><br>
+                                          <strong>Bands:</strong><br>
+                                          • High — ≥ 112.5%<br>
+                                          • Medium — 87.5% – 112.5%<br>
+                                          • Low — below 87.5%
+                                      </div>">
+                                    <span class="dot"></span> {{ $yieldClass }}
+                                </span>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
                         </td>
                         <td>
-                            <span class="badge-status {{ $statusClass }}">
-                                <span class="dot"></span> {{ $statusText }}
-                            </span>
+                            @if($conf !== null)
+                                <strong style="color: var(--slate-700);">{{ number_format($conf * 100, 1) }}%</strong>
+                                @if($lo !== null && $hi !== null)
+                                    <br><small class="text-muted">{{ number_format($lo, 2) }}–{{ number_format($hi, 2) }}</small>
+                                @endif
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
+                        <td class="{{ $deltaClass }}" style="font-weight: 600;">
+                            <i class="bi bi-{{ $deltaIcon }}"></i> {{ $deltaText }}
                         </td>
                         <td>
                             <small>
@@ -178,12 +219,9 @@
         </table>
     </div>
 
-    {{-- ============================================================ --}}
     {{-- TREND CHART SCRIPT --}}
-    {{-- ============================================================ --}}
     @if($predictions->count() > 1)
         @php
-            // chronological order for chart
             $chartData = $predictions->sortBy('created_at')->values();
             $labels = $chartData->map(fn($p) => $p->created_at->format('M d H:i'))->toArray();
             $yields = $chartData->pluck('predicted_yield_tons_ha')->toArray();
@@ -191,6 +229,11 @@
         @endphp
         <script>
             (function() {
+                // Tooltips inside modal
+                document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+                    new bootstrap.Tooltip(el, { container: 'body' });
+                });
+
                 const ctx = document.getElementById('predictionTrendChart');
                 if (!ctx || typeof Chart === 'undefined') return;
                 if (ctx._chartInstance) ctx._chartInstance.destroy();
@@ -221,10 +264,7 @@
 
                 ctx._chartInstance = new Chart(ctx, {
                     type: 'line',
-                    data: {
-                        labels: @json($labels),
-                        datasets: datasets
-                    },
+                    data: { labels: @json($labels), datasets: datasets },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
@@ -233,14 +273,8 @@
                             tooltip: { mode: 'index', intersect: false }
                         },
                         scales: {
-                            y: {
-                                beginAtZero: false,
-                                title: { display: true, text: 't/ha', font: { size: 11 } },
-                                ticks: { font: { size: 11 } }
-                            },
-                            x: {
-                                ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0 }
-                            }
+                            y: { beginAtZero: true, title: { display: true, text: 't/ha', font: { size: 11 } } },
+                            x: { ticks: { font: { size: 10 }, maxRotation: 45 } }
                         }
                     }
                 });
