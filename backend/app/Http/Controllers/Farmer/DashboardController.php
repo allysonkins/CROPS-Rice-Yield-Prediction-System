@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Farm;
 use App\Models\FarmRecord;
 use App\Services\PredictionService;
+use App\Services\WeatherService;
 use App\Support\RecommendationCache;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -21,27 +22,45 @@ class DashboardController extends Controller
             ->orderBy('name')
             ->get();
 
+        $palayPricePerKg = (int) config('santiago.palay_price_per_kg', 20);
+
+        // ── Weather (OpenWeatherMap — Santiago City) ────────────
+        // Fetched once, used in both the empty-state and the main view.
+        $weather = null;
+        try {
+            $weather = app(WeatherService::class)->getWeather();
+        } catch (\Exception $e) {
+            \Log::warning('Weather fetch failed on farmer dashboard', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         // ── Empty state ─────────────────────────────────────────
         if ($farms->isEmpty()) {
             return view('farmer.dashboard', [
-                'user'                          => $user,
-                'farms'                         => $farms,
-                'focusFarm'                     => null,
-                'lastHarvest'                   => null,
-                'lastPred'                      => null,
-                'thisSeason'                    => null,
-                'thisPred'                      => null,
-                'recommendations'               => [],
-                'recommendationsGeneratedAt'    => null,
-                'totalTons'                     => null,
-                'expectedTons'                  => null,
-                'nextSeason'                    => $this->nextSeasonFor(null),
+                'user'                       => $user,
+                'farms'                      => $farms,
+                'focusFarm'                  => null,
+                'lastHarvest'                => null,
+                'lastPred'                   => null,
+                'thisSeason'                 => null,
+                'thisPred'                   => null,
+                'recommendations'            => [],
+                'recommendationsGeneratedAt' => null,
+                'totalTons'                  => null,
+                'expectedTons'               => null,
+                'nextSeason'                 => $this->nextSeasonFor(null),
+                'palayPricePerKg'            => $palayPricePerKg,
+                'incomeSeasonLabel'          => null,
+                'incomeSeasonYear'           => null,
+                'incomeFarmCount'            => 0,
+                'incomeExpectedCavan'        => 0,
+                'incomeActualCavan'          => 0,
+                'weather'                    => $weather,
             ]);
         }
 
         // ── Focus farm selection ────────────────────────────────
-        // Farmers can switch farms via ?farm=N; otherwise we auto-pick
-        // the farm with the most recent seasonal activity.
         $requestedFarmId = (int) request()->query('farm');
 
         if ($requestedFarmId && $farms->contains('id', $requestedFarmId)) {
@@ -89,6 +108,37 @@ class DashboardController extends Controller
         // ── Next season target ──────────────────────────────────
         $nextSeason = $this->nextSeasonFor($thisSeason);
 
+        // ── Season-wide tantyang kita (across ALL farms) ────────
+        $incomeSeasonLabel = $thisSeason?->season ?? $lastHarvest?->season;
+        $incomeSeasonYear  = $thisSeason?->year   ?? $lastHarvest?->year;
+
+        $incomeExpectedCavan = 0;
+        $incomeActualCavan   = 0;
+        $incomeFarmCount     = 0;
+
+        if ($incomeSeasonLabel && $incomeSeasonYear) {
+            $seasonRecords = FarmRecord::whereIn('farm_id', $farms->pluck('id'))
+                ->where('season', $incomeSeasonLabel)
+                ->where('year', $incomeSeasonYear)
+                ->with(['farm', 'predictions'])
+                ->get();
+
+            $incomeFarmCount = $seasonRecords->pluck('farm_id')->unique()->count();
+
+            foreach ($seasonRecords as $rec) {
+                $area = (float) ($rec->farm->land_area_ha ?? 0);
+
+                if ($rec->actual_yield_tons_ha !== null) {
+                    $incomeActualCavan += t_ha_to_cavan_ha((float) $rec->actual_yield_tons_ha) * $area;
+                }
+
+                $latestPred = $rec->predictions->sortByDesc('created_at')->first();
+                if ($latestPred && $latestPred->predicted_yield_tons_ha !== null) {
+                    $incomeExpectedCavan += t_ha_to_cavan_ha((float) $latestPred->predicted_yield_tons_ha) * $area;
+                }
+            }
+        }
+
         // ── Recommendations (cached per farm + season + global version) ──
         $cacheKey = RecommendationCache::key($focusFarm->id, $nextSeason)
             . '.g' . RecommendationCache::globalVersion();
@@ -111,7 +161,7 @@ class DashboardController extends Controller
 
                     return [
                         'generated_at' => now()->toIso8601String(),
-                        'items'        => [],   // fail soft — dashboard still renders
+                        'items'        => [],
                     ];
                 }
             }
@@ -134,32 +184,24 @@ class DashboardController extends Controller
             'recommendationsGeneratedAt',
             'totalTons',
             'expectedTons',
-            'nextSeason'
+            'nextSeason',
+            'palayPricePerKg',
+            'incomeSeasonLabel',
+            'incomeSeasonYear',
+            'incomeFarmCount',
+            'incomeExpectedCavan',
+            'incomeActualCavan',
+            'weather'
         ));
     }
 
-    /**
-     * Determine which season to plan for next.
-     *
-     * Priority:
-     *   1. If there's an active season, pick the opposite one.
-     *   2. Otherwise, infer from the current calendar month.
-     *
-     * Philippines (Santiago City):
-     *   - Wet Season: roughly May/June → October/November
-     *   - Dry Season: roughly November/December → April/May
-     */
     private function nextSeasonFor(?FarmRecord $currentSeason): string
     {
         if ($currentSeason && in_array($currentSeason->season, ['Dry Season', 'Wet Season'], true)) {
             return $currentSeason->season === 'Dry Season' ? 'Wet Season' : 'Dry Season';
         }
 
-        // No active season → base it on today's date.
-        // Months 5–10 (May–Oct) = Wet Season is ongoing → next is Dry.
-        // Months 11–4 (Nov–Apr) = Dry Season is ongoing → next is Wet.
         $month = (int) now()->month;
-
         return ($month >= 5 && $month <= 10) ? 'Dry Season' : 'Wet Season';
     }
 }

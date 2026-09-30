@@ -19,7 +19,7 @@ class PredictionController extends Controller
             ->whereHas('farmRecord', function ($query) use ($farmIds) {
                 $query->whereIn('farm_id', $farmIds);
             })
-            ->where('model_type', 'RandomForest')
+            ->where('model_type', 'XGBoost')
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -44,7 +44,7 @@ class PredictionController extends Controller
         $user = auth()->user();
 
         $prediction = Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-            ->where('model_type', 'RandomForest')
+            ->where('model_type', 'XGBoost')
             ->findOrFail($id);
 
         $farmIds = Farm::where('user_id', $user->id)->pluck('id');
@@ -70,7 +70,7 @@ class PredictionController extends Controller
     }
 
     $predictions = Prediction::where('farm_record_id', $id)
-        ->where('model_type', 'RandomForest')
+        ->where('model_type', 'XGBoost')
         ->orderBy('created_at', 'asc')
         ->get();
 
@@ -99,9 +99,17 @@ class PredictionController extends Controller
         }
 
         $statusCounts = ['high' => 0, 'medium' => 0, 'low' => 0];
+        $methodYield = $farmRecord->riceVariety
+            ? $farmRecord->riceVariety->getYieldForMethod($farmRecord->seeding_method)
+            : null;
+        $avgVarietyYield = $methodYield->avg ?? ($farmRecord->riceVariety->avg_yield ?? null);
+
         foreach ($predictions as $p) {
             $y = $p->predicted_yield_tons_ha;
-            if ($maxYield !== null && $maxYield > 0) {
+            if ($avgVarietyYield && $avgVarietyYield > 0 && $y !== null) {
+                $ratio = $y / $avgVarietyYield;
+                $key = $ratio >= 1.125 ? 'high' : ($ratio >= 0.875 ? 'medium' : 'low');
+            } elseif ($maxYield !== null && $maxYield > 0 && $y !== null) {
                 $ratio = $y / $maxYield;
                 $key = $ratio >= 0.9 ? 'high' : ($ratio >= 0.7 ? 'medium' : 'low');
             } else {

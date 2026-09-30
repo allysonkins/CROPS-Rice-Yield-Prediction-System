@@ -133,14 +133,49 @@
                 </thead>
                 <tbody>
                     @foreach($farm->farmRecords as $record)
-                        @php $latest = $record->predictions->sortByDesc('created_at')->first(); @endphp
+                        @php
+                            $latest = $record->predictions->sortByDesc('created_at')->first();
+                            $predTons  = $latest?->predicted_yield_tons_ha;
+                            $predCavan = $predTons !== null ? t_ha_to_cavan_ha((float) $predTons) : null;
+
+                            $actualTons  = $record->actual_yield_tons_ha;
+                            $actualCavan = $actualTons !== null ? t_ha_to_cavan_ha((float) $actualTons) : null;
+
+                            // ── Variety-relative class (same logic as admin) ──
+                            $class = null;
+                            $conf  = $latest?->confidence;
+                            if ($latest && $record->riceVariety && $predTons !== null) {
+                                $methodYield = $record->riceVariety->getYieldForMethod($record->seeding_method ?? 'Transplanted');
+                                $avgTons = $methodYield->avg ?? $record->riceVariety->avg_yield;
+                                if ($avgTons && $avgTons > 0) {
+                                    $ratio = $predTons / $avgTons;
+                                    if     ($ratio >= 1.125) $class = 'High';
+                                    elseif ($ratio >= 0.875) $class = 'Medium';
+                                    else                     $class = 'Low';
+                                }
+                            }
+                            $statusClass = match($class) {
+                                'High' => 'high',
+                                'Low'  => 'low',
+                                'Medium' => 'medium',
+                                default => null,
+                            };
+                        @endphp
                         <tr>
                             <td>
                                 <strong style="color: var(--slate-800);">{{ $record->season }}</strong><br>
                                 <span class="muted-text-sm">{{ $record->year }}</span>
                             </td>
                             <td>
-                                <span style="color: var(--slate-700);">{{ $record->riceVariety->name ?? 'N/A' }}</span>
+                                @if($record->rice_variety_id)
+                                    <span style="cursor:pointer; color: var(--brand-green); text-decoration: underline;"
+                                          onclick="viewVarietyDetails({{ $record->rice_variety_id }})"
+                                          title="Tap to view variety details">
+                                        {{ $record->riceVariety->name ?? 'N/A' }}
+                                    </span>
+                                @else
+                                    <span style="color: var(--slate-700);">{{ $record->riceVariety->name ?? 'N/A' }}</span>
+                                @endif
                             </td>
                             <td>
                                 <span style="color: var(--slate-600); font-size: 12px;">{{ $record->seeding_method ?? '—' }}</span>
@@ -149,21 +184,34 @@
                                 <span style="color: var(--slate-600);">{{ number_format($record->fertilizer_kg_ha, 0) }} kg/ha</span>
                             </td>
                             <td>
-                                @if($latest)
+                                @if($predCavan !== null)
                                     <span class="fw-bold" style="color: var(--brand-green);">
-                                        {{ number_format($latest->predicted_yield_tons_ha, 2) }}
+                                        {{ number_format($predCavan, 0) }}
                                     </span>
-                                    <small class="muted-text">t/ha</small>
+                                    <small class="muted-text">cavan/ha</small>
+                                    <br>
+                                    <span class="muted-text-sm">({{ number_format($predTons, 2) }} t/ha)</span>
+                                    @if($statusClass)
+                                        <br>
+                                        <span class="badge-status {{ $statusClass }}" style="font-size: 10px; margin-top: 4px;">
+                                            <span class="dot"></span> {{ $class }}
+                                            @if($conf)
+                                                · {{ number_format($conf * 100, 0) }}%
+                                            @endif
+                                        </span>
+                                    @endif
                                 @else
                                     <span style="color: var(--slate-400);">—</span>
                                 @endif
                             </td>
                             <td>
-                                @if($record->actual_yield_tons_ha)
+                                @if($actualCavan !== null)
                                     <span class="fw-bold" style="color: var(--slate-800);">
-                                        {{ number_format($record->actual_yield_tons_ha, 2) }}
+                                        {{ number_format($actualCavan, 0) }}
                                     </span>
-                                    <small class="muted-text">t/ha</small>
+                                    <small class="muted-text">cavan/ha</small>
+                                    <br>
+                                    <span class="muted-text-sm">({{ number_format($actualTons, 2) }} t/ha)</span>
                                 @else
                                     <span style="color: var(--slate-400);">—</span>
                                 @endif
@@ -200,7 +248,8 @@
                                                 data-farm="{{ $farm->name }}"
                                                 data-variety="{{ $record->riceVariety->name ?? 'N/A' }}"
                                                 data-season="{{ $record->season }} {{ $record->year }}"
-                                                data-predicted="{{ $latest ? number_format($latest->predicted_yield_tons_ha, 2, '.', '') : '' }}"
+                                                data-predicted-tons="{{ $predTons !== null ? number_format($predTons, 2, '.', '') : '' }}"
+                                                data-predicted-cavan="{{ $predCavan !== null ? number_format($predCavan, 0, '.', '') : '' }}"
                                                 onclick="openFarmerHarvestModal(this)"
                                                 title="Mark Harvested">
                                             <i class="bi bi-basket-fill"></i>
@@ -225,6 +274,28 @@
 </div>
 
 {{-- ═══════════ MODALS ═══════════ --}}
+
+{{-- Variety Detail Modal — available to ALL farmers --}}
+<div class="modal fade" id="varietyDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background: var(--brand-green); color: white; padding: 12px 18px;">
+                <h5 class="modal-title" style="font-size: 15px;">
+                    <i class="bi bi-flower1"></i> Rice Variety
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" style="overflow: hidden; padding: 16px 18px;">
+                <div class="text-center py-3" id="varietyDetailLoading">
+                    <div class="spinner-border text-success" role="status" style="width: 28px; height: 28px;"></div>
+                    <p class="mt-2 mb-0" style="color: var(--slate-500); font-size: 12px;">Loading...</p>
+                </div>
+                <div id="varietyDetailContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @if($isVerified)
 
 {{-- Farm Record modal --}}
@@ -277,6 +348,9 @@
             </div>
             <form id="farmerHarvestForm">
                 @csrf
+                {{-- Hidden field: what the backend actually stores --}}
+                <input type="hidden" name="actual_yield_tons_ha" id="farmerActualYieldTonsInput">
+
                 <div class="modal-body">
                     <div id="farmerHarvestError"></div>
 
@@ -291,11 +365,13 @@
                     <div id="farmerHarvestSuggestion"></div>
 
                     <div>
-                        <label class="form-label fw-semibold">Actual Yield (t/ha) <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" min="0" max="20"
-                               name="actual_yield_tons_ha" id="farmerActualYieldInput"
-                               class="form-control form-control-lg" placeholder="e.g., 4.80" required>
-                        <small style="color: var(--slate-500);">How much did you actually harvest?</small>
+                        <label class="form-label fw-semibold">Actual Yield (cavan/ha) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.1" min="0" max="400"
+                               id="farmerActualYieldInput"
+                               class="form-control form-control-lg" placeholder="e.g., 96" required>
+                        <small style="color: var(--slate-500);">
+                            Ilang cavan ang inani mo per hectare? (1 cavan = 50 kg · 1 ton = 20 cavan)
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -333,6 +409,47 @@
 @endsection
 
 @push('scripts')
+{{-- ═══════════════════════════════════════════════════════════
+     VARIETY DETAIL MODAL — available to ALL farmers
+     ═══════════════════════════════════════════════════════════ --}}
+<script>
+    function viewVarietyDetails(id) {
+        const loading = document.getElementById('varietyDetailLoading');
+        const content = document.getElementById('varietyDetailContent');
+
+        if (!loading || !content) return;
+
+        loading.style.display = 'block';
+        loading.innerHTML =
+            '<div class="spinner-border text-success" role="status" style="width: 28px; height: 28px;"></div>' +
+            '<p class="mt-2 mb-0" style="color: var(--slate-500); font-size: 12px;">Loading...</p>';
+        content.style.display = 'none';
+        content.innerHTML = '';
+
+        new bootstrap.Modal(document.getElementById('varietyDetailModal')).show();
+
+        fetch('/farmer/rice-varieties/' + id, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        })
+        .then(html => {
+            loading.style.display = 'none';
+            content.style.display = 'block';
+            content.innerHTML = html;
+        })
+        .catch(() => {
+            loading.innerHTML =
+                '<div class="text-center py-3">' +
+                '<i class="bi bi-exclamation-triangle-fill" style="font-size: 28px; color: var(--brand-danger);"></i>' +
+                '<p class="mt-2 mb-0" style="color: var(--brand-danger); font-size: 12px;">Failed to load variety.</p>' +
+                '</div>';
+        });
+    }
+</script>
+
 @if($isVerified)
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -536,7 +653,6 @@
                 if (form) {
                     form.addEventListener('submit', submitFarmerFarmRecord);
                 } else {
-                    // Fail loudly if the form ID changed
                     contentEl.insertAdjacentHTML('afterbegin',
                         '<div class="alert-custom alert-custom-danger mb-3">' +
                         '<i class="bi bi-exclamation-triangle-fill alert-icon"></i>' +
@@ -651,14 +767,15 @@
     }
 
     // ═══════════════════════════════════════════════════════════
-    // HARVEST
+    // HARVEST  (cavan/ha input → tons/ha on submit)
     // ═══════════════════════════════════════════════════════════
     function openFarmerHarvestModal(btn) {
-        const id        = btn.dataset.recordId;
-        const farm      = btn.dataset.farm;
-        const variety   = btn.dataset.variety;
-        const season    = btn.dataset.season;
-        const predicted = btn.dataset.predicted;
+        const id             = btn.dataset.recordId;
+        const farm           = btn.dataset.farm;
+        const variety        = btn.dataset.variety;
+        const season         = btn.dataset.season;
+        const predictedTons  = btn.dataset.predictedTons;
+        const predictedCavan = btn.dataset.predictedCavan;
 
         const form = document.getElementById('farmerHarvestForm');
         form.action = '/farmer/farm-records/' + id + '/mark-harvested';
@@ -668,19 +785,22 @@
         document.getElementById('farmerHarvestMeta').textContent = variety + ' · ' + season;
 
         const suggestion = document.getElementById('farmerHarvestSuggestion');
-        if (predicted) {
+        if (predictedCavan) {
             suggestion.innerHTML = `
                 <div class="p-3 mb-3" style="background: var(--brand-green-light); border: 1px solid #a7f3d0; border-radius: var(--radius-md);">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
                             <div style="font-size: 11px; text-transform: uppercase; color: var(--brand-green-dark); font-weight: 700;">
                                 <i class="bi bi-cpu"></i> System Predicted
                             </div>
                             <div style="font-size: 22px; font-weight: 800; color: var(--brand-green-dark);">
-                                ${predicted} <span style="font-size: 14px;">t/ha</span>
+                                ${predictedCavan} <span style="font-size: 14px;">cavan/ha</span>
+                            </div>
+                            <div style="font-size: 11px; color: var(--brand-green-dark); opacity: 0.75;">
+                                (${predictedTons} t/ha)
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-success" onclick="useFarmerSuggestedYield('${predicted}')">
+                        <button type="button" class="btn btn-sm btn-success" onclick="useFarmerSuggestedYield('${predictedCavan}')">
                             <i class="bi bi-arrow-down-circle"></i> Use this
                         </button>
                     </div>
@@ -689,7 +809,8 @@
             suggestion.innerHTML = '';
         }
 
-        document.getElementById('farmerActualYieldInput').value = '';
+        const input = document.getElementById('farmerActualYieldInput');
+        if (input) input.value = '';
         new bootstrap.Modal(document.getElementById('farmerHarvestModal')).show();
     }
 
@@ -700,6 +821,20 @@
 
     document.getElementById('farmerHarvestForm')?.addEventListener('submit', function(e) {
         e.preventDefault();
+
+        // ── Convert cavan/ha → tons/ha before submitting ──
+        const cavanInput = document.getElementById('farmerActualYieldInput');
+        const tonsInput  = document.getElementById('farmerActualYieldTonsInput');
+        const cavan      = parseFloat(cavanInput?.value);
+
+        if (cavanInput && tonsInput) {
+            if (!isNaN(cavan) && cavan >= 0) {
+                tonsInput.value = (cavan / 20).toFixed(4); // 1 ton = 20 cavan
+            } else {
+                tonsInput.value = '';
+            }
+        }
+
         const form = this;
         const btn = document.getElementById('farmerHarvestBtn');
         const original = btn.innerHTML;
@@ -806,7 +941,6 @@
                     });
                 }
 
-                // ⬇️ THIS is the missing piece — initialize the map AFTER the form is in the DOM
                 setTimeout(initFarmerFarmModalMap, 300);
             })
             .catch(err => {

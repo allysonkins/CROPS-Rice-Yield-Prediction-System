@@ -56,10 +56,15 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Last season's yield (t/ha)</label>
-            <input type="number" step="0.01" min="0" max="10" name="historical_yield_tons_ha" class="form-control"
-                   placeholder="Optional" value="{{ old('historical_yield_tons_ha') }}">
-            <small class="text-muted">Leave blank if you don't remember.</small>
+            <label class="form-label fw-semibold">Last season's yield (cavan/ha)</label>
+            <input type="number" step="0.1" min="0" max="200"
+                   id="farmerHistoricalCavan" class="form-control"
+                   placeholder="e.g., 90"
+                   value="{{ old('historical_yield_tons_ha') ? old('historical_yield_tons_ha') * 20 : '' }}">
+            <input type="hidden" name="historical_yield_tons_ha" id="farmerHistoricalTons"
+                   value="{{ old('historical_yield_tons_ha') }}">
+            <small class="text-muted">1 cavan = 50 kg · 1 ton = 20 cavan. Leave blank if unsure.</small>
+            <div id="farmerHistoricalPreview" style="font-size: 11px; color: var(--slate-500); margin-top: 4px;"></div>
         </div>
 
         <div class="col-md-6">
@@ -80,9 +85,15 @@
         </div>
 
         <div class="col-md-6" id="farmerActualYieldContainer" style="display: none;">
-            <label class="form-label fw-semibold">Actual Yield (t/ha)</label>
-            <input type="number" step="0.01" min="0" max="10" name="actual_yield_tons_ha" class="form-control"
-                   placeholder="e.g., 4.80" value="{{ old('actual_yield_tons_ha') }}">
+            <label class="form-label fw-semibold">Actual Yield (cavan/ha)</label>
+            <input type="number" step="0.1" min="0" max="200"
+                   id="farmerActualCavan" class="form-control"
+                   placeholder="e.g., 90"
+                   value="{{ old('actual_yield_tons_ha') ? old('actual_yield_tons_ha') * 20 : '' }}">
+            <input type="hidden" name="actual_yield_tons_ha" id="farmerActualTons"
+                   value="{{ old('actual_yield_tons_ha') }}">
+            <small class="text-muted">Ilang cavan ang inani mo per hectare?</small>
+            <div id="farmerActualPreview" style="font-size: 11px; color: var(--slate-500); margin-top: 4px;"></div>
         </div>
 
         <div class="col-12" id="farmerYieldPreviewContainer">
@@ -106,27 +117,59 @@
     const form = document.getElementById('farmerFarmRecordForm');
     if (!form) return;
 
-    // Status toggle
+    const CAVAN_TO_TONS = 0.05; // 1 cavan = 50 kg = 0.05 tons
+
+    // ── Status toggle (actual yield visible only when harvested) ──
     const statusSelect = form.querySelector('select[name="status"]');
     const actualContainer = document.getElementById('farmerActualYieldContainer');
-    const actualInput = form.querySelector('input[name="actual_yield_tons_ha"]');
     function toggleActual() {
         if (statusSelect.value === 'Harvested') {
             actualContainer.style.display = 'block';
-            actualInput.setAttribute('required', 'required');
         } else {
             actualContainer.style.display = 'none';
-            actualInput.removeAttribute('required');
-            actualInput.value = '';
+            const cavanInput = document.getElementById('farmerActualCavan');
+            const tonsInput  = document.getElementById('farmerActualTons');
+            if (cavanInput) cavanInput.value = '';
+            if (tonsInput)  tonsInput.value  = '';
+            const prev = document.getElementById('farmerActualPreview');
+            if (prev) prev.innerHTML = '';
         }
     }
     statusSelect.addEventListener('change', toggleActual);
     toggleActual();
 
-    // Yield preview
+    // ── Cavan → Tons live conversion ──
+    function bindConversion(cavanId, tonsId, previewId) {
+        const cavanInput = document.getElementById(cavanId);
+        const tonsInput  = document.getElementById(tonsId);
+        const preview    = document.getElementById(previewId);
+        if (!cavanInput || !tonsInput) return;
+
+        const update = () => {
+            const cavan = parseFloat(cavanInput.value);
+            if (!isNaN(cavan) && cavan >= 0) {
+                const tons = cavan * CAVAN_TO_TONS;
+                tonsInput.value = tons.toFixed(4);
+                if (preview) {
+                    preview.innerHTML = `<i class="bi bi-arrow-right-circle"></i> Equivalent to <strong>${tons.toFixed(2)} t/ha</strong>`;
+                }
+            } else {
+                tonsInput.value = '';
+                if (preview) preview.innerHTML = '';
+            }
+        };
+        cavanInput.addEventListener('input', update);
+        update(); // initial
+    }
+
+    bindConversion('farmerHistoricalCavan', 'farmerHistoricalTons', 'farmerHistoricalPreview');
+    bindConversion('farmerActualCavan',     'farmerActualTons',     'farmerActualPreview');
+
+    // ── Yield preview (fetches t/ha from API, displays cavan/ha) ──
     const varietySelect = form.querySelector('select[name="rice_variety_id"]');
     const methodSelect  = form.querySelector('select[name="seeding_method"]');
     const preview       = document.getElementById('farmerYieldPreview');
+
     function updatePreview() {
         const vid = varietySelect.value, method = methodSelect.value;
         if (!vid || !method) {
@@ -136,9 +179,18 @@
         fetch(`/admin/rice-varieties/${vid}/yield?method=${encodeURIComponent(method)}`)
             .then(r => r.json())
             .then(d => {
-                preview.innerHTML = (d.avg !== null && d.max !== null)
-                    ? `<span class="fw-bold text-success">${d.avg} t/ha</span> <small class="text-muted">(max: ${d.max} t/ha)</small>`
-                    : '<span class="text-warning">Yield data not available.</span>';
+                if (d.avg !== null && d.max !== null) {
+                    const avgCavan = (d.avg * 20).toFixed(0);
+                    const maxCavan = (d.max * 20).toFixed(0);
+                    preview.innerHTML = `
+                        <span class="fw-bold text-success">${avgCavan} cavan/ha</span>
+                        <small class="text-muted">(max: ${maxCavan} cavan/ha)</small>
+                        <br>
+                        <small class="text-muted">(${d.avg} t/ha avg · ${d.max} t/ha max)</small>
+                    `;
+                } else {
+                    preview.innerHTML = '<span class="text-warning">Yield data not available.</span>';
+                }
             })
             .catch(() => preview.innerHTML = '<span class="text-danger">Error loading yield data.</span>');
     }

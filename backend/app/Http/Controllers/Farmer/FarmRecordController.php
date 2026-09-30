@@ -15,20 +15,36 @@ use Illuminate\Validation\ValidationException;
 
 class FarmRecordController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $farmIds = Farm::where('user_id', auth()->id())->pluck('id');
 
-        $farmRecords = FarmRecord::whereIn('farm_id', $farmIds)
+        // Server-side year filter (matches admin behaviour)
+        $yearFilter = $request->input('year', (string) now()->year);
+
+        $query = FarmRecord::whereIn('farm_id', $farmIds)
             ->with(['farm', 'riceVariety', 'predictions'])
             ->orderBy('year', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
+
+        if ($yearFilter !== 'all') {
+            $query->where('year', $yearFilter);
+        }
+
+        $farmRecords = $query->get();
+
+        $availableYears = FarmRecord::whereIn('farm_id', $farmIds)
+            ->select('year')
+            ->distinct()
+            ->orderBy('year', 'desc')
+            ->pluck('year');
 
         $farms     = Farm::where('user_id', auth()->id())->orderBy('name')->get();
         $varieties = RiceVariety::orderBy('name')->get();
 
-        return view('farmer.farm-records.index', compact('farmRecords', 'farms', 'varieties'));
+        return view('farmer.farm-records.index', compact(
+            'farmRecords', 'farms', 'varieties', 'yearFilter', 'availableYears'
+        ));
     }
 
     public function create(Request $request)
@@ -86,7 +102,6 @@ class FarmRecordController extends Controller
                 }
             }
 
-            // ── New season changes the recommendation inputs ──
             RecommendationCache::forget($record->farm_id);
 
             log_activity('created', 'Farm record created by farmer', $record, [
@@ -173,7 +188,6 @@ class FarmRecordController extends Controller
                 } catch (\Exception $e) {}
             }
 
-            // ── Record changed → recommendation inputs changed ──
             RecommendationCache::forget($farmRecord->farm_id);
 
             log_activity('updated', 'Farm record updated by farmer', $farmRecord, [
@@ -220,7 +234,6 @@ class FarmRecordController extends Controller
                 'actual_yield_tons_ha' => $validated['actual_yield_tons_ha'],
             ]);
 
-            // ── Actual yield feeds future historical_yield features → recommendation changes ──
             RecommendationCache::forget($farmRecord->farm_id);
 
             log_activity('updated', 'Farmer marked record as harvested', $farmRecord, [
@@ -261,7 +274,6 @@ class FarmRecordController extends Controller
             return back()->with('error', 'Failed to delete season: ' . $e->getMessage());
         }
 
-        // ── Removing a season changes what the model sees for this farm ──
         RecommendationCache::forget($farmId);
 
         log_activity('deleted', 'Farmer deleted farm record', null, [

@@ -8,71 +8,117 @@ use App\Models\Prediction;
 use App\Models\RiceVariety;
 use App\Models\User;
 use App\Models\FarmRecord;
-use Illuminate\Http\Request;
+use App\Services\WeatherService;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Only allow staff or admin to view this page
         if (!in_array(auth()->user()->role, ['staff', 'admin'])) {
             abort(403, 'Unauthorized access.');
         }
 
-        // Statistics
-        $totalFarms = Farm::count();
-        $totalFarmers = User::where('role', 'farmer')->count();
-        $totalVarieties = RiceVariety::count();
+        // ── Statistics ──
+        $farmerCount = User::where('role', 'farmer')->count();
+        $farmCount   = Farm::count();
+        $recordCount = FarmRecord::count();
 
-        // --- Get latest Random Forest prediction per farm record ---
-        $allPredictions = Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-            ->where('model_type', 'RandomForest')
+        // ── Weather (OpenWeatherMap — Santiago City) ────────────
+        $weather = null;
+        try {
+            $weather = app(WeatherService::class)->getWeather();
+        } catch (\Exception $e) {
+            \Log::warning('Weather fetch failed on staff dashboard', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // ── Latest XGBoost prediction per farm record ──
+        $allPredictions = Prediction::with([
+                'farmRecord.farm',
+                'farmRecord.riceVariety',
+            ])
+            ->where('model_type', 'XGBoost')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $latestPredictions = $allPredictions->unique('farm_record_id');
+        $uniquePredictions = $allPredictions->unique('farm_record_id');
 
-        // Average yield from Random Forest (latest per farm record)
-        $rawAvg = $latestPredictions->avg('predicted_yield_tons_ha');
+        $totalPred     = $uniquePredictions->count();
+        $avgYield      = $uniquePredictions->whereNotNull('predicted_yield_tons_ha')->avg('predicted_yield_tons_ha');
+        $avgConfidence = $uniquePredictions->whereNotNull('confidence')->count() > 0
+            ? $uniquePredictions->whereNotNull('confidence')->avg('confidence')
+            : null;
 
-        // Fallback: harvested actual yields if no predictions exist
-        if ($rawAvg === null) {
-            $rawAvg = FarmRecord::where('status', 'Harvested')
-                ->whereNotNull('actual_yield_tons_ha')
-                ->avg('actual_yield_tons_ha');
+        // ── Low Yield Identification ──
+        $lowYieldPredictions = collect();
+        foreach ($uniquePredictions as $p) {
+            $yield = $p->predicted_yield_tons_ha;
+            if ($yield === null) continue;
+
+            $fr = $p->farmRecord;
+            if (!$fr || !$fr->riceVariety) continue;
+
+            $method = $fr->seeding_method ?? 'Transplanted';
+            $vy     = $fr->riceVariety->getYieldForMethod($method);
+            $avgY   = $vy->avg ?? ($fr->riceVariety->avg_yield ?? null);
+            if (!$avgY || $avgY <= 0) continue;
+
+            $ratio = $yield / $avgY;
+            if ($ratio < 0.875) {
+                $lowYieldPredictions->push([
+                    'prediction' => $p,
+                    'yield'      => $yield,
+                    'avg'        => $avgY,
+                    'ratio'      => $ratio,
+                    'confidence' => $p->confidence,
+                ]);
+            }
+        }
+        $lowYieldPredictions = $lowYieldPredictions->sortBy('ratio')->values();
+        $lowYieldCount = $lowYieldPredictions->count();
+        $lowYieldPct   = $totalPred > 0 ? round(($lowYieldCount / $totalPred) * 100, 1) : 0;
+
+        // ── Temporal trend (weekly, last 12 weeks) ──
+        $trendLabels = []; $trendData = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $start = now()->subWeeks($i)->startOfWeek();
+            $end   = now()->subWeeks($i)->endOfWeek();
+            $weekPreds = $uniquePredictions->filter(fn($p) => $p->created_at >= $start && $p->created_at <= $end);
+            $trendLabels[] = $start->format('M d');
+            $trendData[]   = $weekPreds->count() > 0
+                ? round($weekPreds->avg('predicted_yield_tons_ha'), 2)
+                : null;
         }
 
-        $avgYield = $rawAvg !== null ? number_format($rawAvg, 2) : 'No data';
+        // ── Spatial aggregation by barangay ──
+        $barangayData = $uniquePredictions
+            ->groupBy(fn($p) => $p->farmRecord->farm->barangay ?? 'Unknown')
+            ->map(fn($g) => [
+                'avg'   => round($g->avg('predicted_yield_tons_ha'), 2),
+                'count' => $g->count(),
+            ])
+            ->filter(fn($d) => $d['avg'] !== null)
+            ->sortByDesc('avg');
 
-        // --- Low yield predictions: below 70% of the variety's max for the seeding method ---
-        $lowYieldFarms = $latestPredictions->filter(function ($pred) {
-            $farmRecord = $pred->farmRecord;
-            if (!$farmRecord || !$farmRecord->riceVariety) {
-                return false;
-            }
-            $max = $farmRecord->riceVariety->getMaxYieldForMethod($farmRecord->seeding_method);
-            if ($max === null || $max <= 0) {
-                // fallback to global threshold
-                return $pred->predicted_yield_tons_ha < 4.0;
-            }
-            $ratio = $pred->predicted_yield_tons_ha / $max;
-            return $ratio < 0.7;
-        })->sortBy('predicted_yield_tons_ha')->values();
-
-        // --- Recent predictions (Random Forest, latest 5) ---
-        $recentPredictions = Prediction::with(['farmRecord.farm', 'farmRecord.riceVariety'])
-            ->where('model_type', 'RandomForest')
-            ->latest('created_at')
-            ->limit(5)
-            ->get();
+        // ── Recent predictions ──
+        $recent = $uniquePredictions->sortByDesc('created_at')->take(5);
 
         return view('staff.dashboard', compact(
-            'totalFarms',
-            'totalFarmers',
-            'totalVarieties',
+            'farmerCount',
+            'farmCount',
+            'recordCount',
+            'totalPred',
             'avgYield',
-            'lowYieldFarms',
-            'recentPredictions'
+            'avgConfidence',
+            'lowYieldPredictions',
+            'lowYieldCount',
+            'lowYieldPct',
+            'trendLabels',
+            'trendData',
+            'barangayData',
+            'recent',
+            'weather'
         ));
     }
 }

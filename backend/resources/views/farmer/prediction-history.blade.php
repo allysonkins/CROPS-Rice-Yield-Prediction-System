@@ -26,6 +26,12 @@
         $maxCavan      = $maxYieldTons !== null ? t_ha_to_cavan_ha((float) $maxYieldTons) : null;
 
         $farmArea = (float) ($farmRecord->farm->land_area_ha ?? 1.0);
+
+        // Variety-relative class reference (tons/ha) — same logic as admin
+        $methodYieldForClass = $farmRecord->riceVariety
+            ? $farmRecord->riceVariety->getYieldForMethod($farmRecord->seeding_method ?? 'Transplanted')
+            : null;
+        $avgYieldTonsForClass = $methodYieldForClass->avg ?? ($farmRecord->riceVariety->avg_yield ?? null);
     @endphp
 
     {{-- SUMMARY CARDS --}}
@@ -133,7 +139,15 @@
                         @php
                             $yieldTons  = (float) $pred->predicted_yield_tons_ha;
                             $yieldCavan = t_ha_to_cavan_ha($yieldTons);
-                            $class      = $pred->predicted_class ?? 'Medium';
+
+                            // ── Variety-relative class (same logic as admin) ──
+                            $class = 'Medium';
+                            if ($avgYieldTonsForClass && $avgYieldTonsForClass > 0) {
+                                $ratio = $yieldTons / $avgYieldTonsForClass;
+                                if     ($ratio >= 1.125) $class = 'High';
+                                elseif ($ratio >= 0.875) $class = 'Medium';
+                                else                     $class = 'Low';
+                            }
 
                             $statusClass = match($class) {
                                 'High' => 'high',

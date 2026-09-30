@@ -36,7 +36,7 @@
             <div class="stat-info">
                 <div class="label" style="text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">Total Predictions</div>
                 <div class="value" style="font-size: 26px;">{{ $totalRecords }}</div>
-                <div class="text-muted small">Random Forest model</div>
+                <div class="text-muted small">XGBoost Regressor</div>
             </div>
             <div class="stat-icon"><i class="bi bi-cpu" style="color: var(--brand-gold);"></i></div>
         </div>
@@ -70,23 +70,41 @@
     </div>
 @endif
 
-
-<!-- FILTER CONTROLS -->
+<!-- ═══════════ FILTER CONTROLS ═══════════ -->
 <div class="row g-2 mb-4">
     <div class="col-12">
-        <div class="card-custom" style="padding: 12px 20px;">
-            <div class="d-flex flex-wrap align-items-center gap-3">
-                <div style="flex: 1; min-width: 180px;">
+        <div class="card-custom" style="padding: 16px 20px;">
+
+            {{-- ROW 1: Search + Farm + Barangay + Reset --}}
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <div style="flex: 1; min-width: 240px;">
                     <div class="input-group" style="border-radius: 12px; overflow: hidden; border: 1px solid var(--slate-200);">
                         <span class="input-group-text" style="background: var(--slate-50); border: none; color: var(--slate-400);">
                             <i class="bi bi-search"></i>
                         </span>
-                        <input type="text" id="searchPrediction" class="form-control" placeholder="Search by farm, variety, season..." style="border: none; background: var(--slate-50); font-size: 13px;">
+                        <input type="text" id="searchPrediction" class="form-control"
+                               placeholder="Search by farm, variety, season..."
+                               style="border: none; background: var(--slate-50); font-size: 13px;">
                     </div>
                 </div>
 
+                {{-- FARM --}}
+                <div style="min-width: 180px;">
+                    <select id="filterFarm" class="form-select"
+                            title="Filter by farm"
+                            style="border-radius: 12px; border: 1px solid var(--slate-200); background: var(--slate-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none; width: auto; min-width: 170px;">
+                        <option value="all">All Farms</option>
+                        @foreach($predictions->pluck('farmRecord.farm.name')->unique()->filter()->values() as $farmName)
+                            <option value="{{ $farmName }}">{{ $farmName }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- BARANGAY --}}
                 <div style="min-width: 160px;">
-                    <select id="filterBarangay" class="form-select" style="border-radius: 12px; border: 1px solid var(--slate-200); background: var(--slate-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none; width: auto; min-width: 140px;">
+                    <select id="filterBarangay" class="form-select"
+                            title="Filter by barangay"
+                            style="border-radius: 12px; border: 1px solid var(--slate-200); background: var(--slate-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none; width: auto; min-width: 150px;">
                         <option value="all">All Barangays</option>
                         @foreach($predictions->pluck('farmRecord.farm.barangay')->unique()->filter()->values() as $barangay)
                             <option value="{{ $barangay }}">{{ $barangay }}</option>
@@ -94,20 +112,64 @@
                     </select>
                 </div>
 
-                <div style="min-width: 200px;">
-                    <div class="bg-gray-100 p-1 rounded-xl d-flex" style="background: var(--slate-100); border-radius: 12px; padding: 4px; gap: 2px;">
-                        <button class="filter-btn class-btn active" data-class="all" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--slate-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
-                        <button class="filter-btn class-btn" data-class="High" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">High</button>
-                        <button class="filter-btn class-btn" data-class="Medium" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">Medium</button>
-                        <button class="filter-btn class-btn" data-class="Low" style="padding: 6px 16px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">Low</button>
+                <button type="button" id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary"
+                        style="border-radius: 10px; font-size: 12px; display: none;"
+                        title="Clear all filters">
+                    <i class="bi bi-x-circle"></i> Reset
+                </button>
+            </div>
+
+            {{-- ROW 2: Pills --}}
+            <div class="d-flex flex-wrap align-items-center gap-3 pt-3" style="border-top: 1px dashed var(--slate-200);">
+
+                {{-- SEASON GROUP --}}
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Season</span>
+                    <div class="d-flex" style="background: var(--slate-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                        <button class="filter-btn season-btn active" data-season="all"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--slate-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">
+                            All
+                        </button>
+                        @foreach($predictions->pluck('farmRecord.season')->filter()->map(fn($s) => str_replace(' Season', '', $s))->unique()->values() as $seasonOpt)
+                            <button class="filter-btn season-btn" data-season="{{ $seasonOpt }}"
+                                    style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                                {{ $seasonOpt }}
+                            </button>
+                        @endforeach
                     </div>
                 </div>
+
+                <div style="width: 1px; height: 28px; background: var(--slate-200);"></div>
+
+                {{-- YIELD CLASS GROUP --}}
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Yield Class</span>
+                    <div class="d-flex" style="background: var(--slate-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                        <button class="filter-btn class-btn active" data-class="all"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--slate-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">
+                            All
+                        </button>
+                        <button class="filter-btn class-btn" data-class="High"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                            High
+                        </button>
+                        <button class="filter-btn class-btn" data-class="Medium"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                            Medium
+                        </button>
+                        <button class="filter-btn class-btn" data-class="Low"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                            Low
+                        </button>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
 </div>
 
-<!-- TABLE -->
+<!-- ═══════════ TABLE ═══════════ -->
 <div class="row g-3">
     <div class="col-12">
         <div class="card-custom">
@@ -137,13 +199,15 @@
                                    data-bs-html="true"
                                    title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
                                        <strong>Gaano kasigurado ang hula?</strong><br>
-                                       Ang system ay may <strong>800 mini-voters</strong>. Bawat isa ay bumoboto para sa Low, Medium, o High. Kung marami ang sumang-ayon, mataas ang confidence.<br><br>
+                                       Ang bawat hula ay may <strong>80% prediction interval</strong> gamit ang XGBoost quantile models.<br><br>
+                                       <strong>Confidence = 1 − (interval width ÷ predicted yield)</strong><br>
+                                       Mas makitid ang range ng inaasahang ani, mas mataas ang kumpiyansa ng modelo.<br><br>
                                        <strong>Levels:</strong><br>
-                                       • <strong>Very sure</strong> — halos lahat ay pareho ang boto<br>
-                                       • <strong>Fairly sure</strong> — karamihan ay pareho<br>
-                                       • <strong>Somewhat sure</strong> — kalahati lang<br>
-                                       • <strong>Not sure</strong> — hati ang boto<br><br>
-                                       <strong>Hindi ito garantiya</strong> — indikasyon lang ito kung gaano kakumpiyansa ang system.
+                                       • <strong>Very sure</strong> — ≥ 90% certainty<br>
+                                       • <strong>Fairly sure</strong> — 70% – 89% certainty<br>
+                                       • <strong>Somewhat sure</strong> — 50% – 69% certainty<br>
+                                       • <strong>Not sure</strong> — < 50% certainty<br><br>
+                                       <strong>Hindi ito garantiya</strong> — sukat ito kung gaano katiyak ang modelo sa inaasahang range.
                                    </div>"></i>
                             </th>
                             <th>Last Updated</th>
@@ -157,11 +221,36 @@
                                 $barangay   = $prediction->farmRecord->farm->barangay ?? 'N/A';
                                 $variety    = $prediction->farmRecord->riceVariety->name ?? 'N/A';
                                 $season     = $prediction->farmRecord->season ?? 'N/A';
+                                $seasonNorm = str_replace(' Season', '', $season);
                                 $yieldTons  = $prediction->predicted_yield_tons_ha;
-                                $yieldCavan = t_ha_to_cavan_ha((float) $yieldTons);
-                                $class      = $prediction->predicted_class ?? 'Medium';
+                                $yieldCavan = $yieldTons !== null ? t_ha_to_cavan_ha((float) $yieldTons) : null;
                                 $conf       = $prediction->confidence;
+                                $lo         = $prediction->yield_lower;
+                                $hi         = $prediction->yield_upper;
+                                $loCavan    = $lo !== null ? t_ha_to_cavan_ha((float) $lo) : null;
+                                $hiCavan    = $hi !== null ? t_ha_to_cavan_ha((float) $hi) : null;
                                 $varietyId  = $prediction->farmRecord->rice_variety_id ?? null;
+
+                                // Variety bands for class explanation (in cavan/ha)
+                                $method       = $prediction->farmRecord->seeding_method ?? 'Transplanted';
+                                $varietyModel = $prediction->farmRecord->riceVariety;
+                                $methodYield  = $varietyModel ? $varietyModel->getYieldForMethod($method) : null;
+                                $avgYieldTons = $methodYield->avg ?? ($varietyModel->avg_yield ?? null);
+
+                                $class = 'Medium';
+                                $ratio = null;
+                                if ($avgYieldTons && $avgYieldTons > 0 && $yieldTons !== null) {
+                                    $ratio = $yieldTons / $avgYieldTons;
+                                    if ($ratio >= 1.125)     $class = 'High';
+                                    elseif ($ratio >= 0.875) $class = 'Medium';
+                                    else                     $class = 'Low';
+                                }
+
+                                $lowTons   = $avgYieldTons ? round($avgYieldTons * 0.875, 2) : null;
+                                $highTons  = $avgYieldTons ? round($avgYieldTons * 1.125, 2) : null;
+                                $lowCavan  = $lowTons ? t_ha_to_cavan_ha((float) $lowTons) : null;
+                                $highCavan = $highTons ? t_ha_to_cavan_ha((float) $highTons) : null;
+                                $avgCavan  = $avgYieldTons ? t_ha_to_cavan_ha((float) $avgYieldTons) : null;
 
                                 // Confidence label + colour
                                 if ($conf !== null) {
@@ -185,26 +274,6 @@
                                     }
                                 }
 
-                                // Variety bands for class explanation (in cavan/ha)
-                                $method       = $prediction->farmRecord->seeding_method ?? 'Transplanted';
-                                $varietyModel = $prediction->farmRecord->riceVariety;
-                                $methodYield  = $varietyModel ? $varietyModel->getYieldForMethod($method) : null;
-                                $avgYieldTons = $methodYield->avg ?? ($varietyModel->avg_yield ?? null);
-                                $maxYieldTons = $methodYield->max ?? ($varietyModel->max_yield ?? null);
-
-                                $lowTons  = $avgYieldTons ? round($avgYieldTons * 0.75, 2) : null;
-                                $medTons  = $avgYieldTons ? round($avgYieldTons * 1.00, 2) : null;
-                                $highTons = $avgYieldTons ? round($avgYieldTons * 1.25, 2) : null;
-
-                                $lowCavan  = $lowTons  ? t_ha_to_cavan_ha((float) $lowTons)  : null;
-                                $medCavan  = $medTons  ? t_ha_to_cavan_ha((float) $medTons)  : null;
-                                $highCavan = $highTons ? t_ha_to_cavan_ha((float) $highTons) : null;
-                                $avgCavan  = $avgYieldTons ? t_ha_to_cavan_ha((float) $avgYieldTons) : null;
-
-                                // Model probabilities
-                                $features = json_decode($prediction->input_features, true);
-                                $probas   = $features['probabilities'] ?? null;
-
                                 $statusClass = match($class) {
                                     'High' => 'high',
                                     'Low'  => 'low',
@@ -215,15 +284,17 @@
                             @endphp
                             <tr class="prediction-row"
                                 data-search="{{ $searchData }}"
+                                data-farm="{{ $farmName }}"
                                 data-barangay="{{ $barangay }}"
-                                data-class="{{ $class }}">
+                                data-class="{{ $class }}"
+                                data-season="{{ $seasonNorm }}">
                                 <td class="row-index">{{ $loop->iteration }}</td>
                                 <td><strong>{{ $farmName }}</strong></td>
                                 <td>{{ $barangay }}</td>
                                 <td>
                                     @if($varietyId)
                                         <span style="cursor:pointer; color: var(--brand-green); text-decoration: underline;" onclick="viewVarietyDetails({{ $varietyId }})">
-                                            {{ $variety }}
+                                             {{ $variety }}
                                         </span>
                                     @else
                                         {{ $variety }}
@@ -233,6 +304,7 @@
                                 <td>
                                     <strong style="color: var(--brand-green-dark);">{{ number_format($yieldCavan, 0) }}</strong>
                                     <small style="color: var(--slate-500);">cavan/ha</small>
+                                    <div style="font-size: 11px; color: var(--slate-400);">({{ number_format($yieldTons, 2) }} t/ha)</div>
                                 </td>
                                 <td>
                                     <span class="badge-status {{ $statusClass }}"
@@ -243,12 +315,15 @@
                                           data-method="{{ $method }}"
                                           data-class="{{ $class }}"
                                           data-yield-cavan="{{ number_format($yieldCavan, 0, '.', '') }}"
+                                          data-yield-tons="{{ number_format($yieldTons, 2, '.', '') }}"
                                           data-avg-cavan="{{ $avgCavan }}"
                                           data-low-cavan="{{ $lowCavan }}"
-                                          data-med-cavan="{{ $medCavan }}"
                                           data-high-cavan="{{ $highCavan }}"
                                           data-confidence="{{ $conf }}"
-                                          data-probas='@json($probas)'
+                                          data-lo-cavan="{{ $loCavan !== null ? round($loCavan) : '' }}"
+                                          data-hi-cavan="{{ $hiCavan !== null ? round($hiCavan) : '' }}"
+                                          data-lo-tons="{{ $lo !== null ? number_format($lo, 2) : '' }}"
+                                          data-hi-tons="{{ $hi !== null ? number_format($hi, 2) : '' }}"
                                           title="I-tap para makita ang paliwanag">
                                         <span class="dot"></span> {{ $class }}
                                         <i class="bi bi-info-circle" style="font-size: 10px; opacity: 0.7; margin-left: 2px;"></i>
@@ -257,10 +332,14 @@
                                 <td>
                                     @if($conf !== null)
                                         <span style="display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: {{ $confBg }}; color: {{ $confColor }}; font-size: 11px; font-weight: 700; white-space: nowrap;">
-                                            {{ $confLabel }}
+                                            {{ $confLabel }} ({{ number_format($confPct, 1) }}%)
                                         </span>
-                                        <br>
-                                        <small style="color: var(--slate-500); font-size: 10px;">{{ number_format($confPct, 0) }}% ang bumoto dito</small>
+                                        @if($loCavan !== null && $hiCavan !== null)
+                                            <br>
+                                            <small style="color: var(--slate-500); font-size: 10px;" title="80% interval: {{ number_format($lo, 2) }}–{{ number_format($hi, 2) }} t/ha">
+                                                Range: {{ number_format($loCavan, 0) }}–{{ number_format($hiCavan, 0) }} cav/ha
+                                            </small>
+                                        @endif
                                     @else
                                         <span class="text-muted">—</span>
                                     @endif
@@ -360,7 +439,8 @@
 
                 <div class="mt-3" style="font-size: 11px; color: var(--slate-500); line-height: 1.5;">
                     <i class="bi bi-info-circle"></i>
-                    Ang class ay galing sa model na Random Forest. Ito ay <strong>hula lamang</strong> —
+                    Ang class ay <strong>kinukuwenta ng system</strong> base sa karaniwang ani ng variety mo —
+                    hindi ito direktang output ng XGBoost model. Ito ay <strong>hula lamang</strong> —
                     mas maganda pa ring i-check ang aktwal na kondisyon ng iyong bukid.
                 </div>
 
@@ -439,22 +519,22 @@
             const btn = event.relatedTarget;
             if (!btn) return;
 
-            const variety     = btn.dataset.variety || 'N/A';
-            const method      = btn.dataset.method || 'N/A';
-            const cls         = btn.dataset.class || 'Medium';
-            const yieldCavan  = parseFloat(btn.dataset.yieldCavan) || 0;
-            const avgCavan    = parseFloat(btn.dataset.avgCavan) || 0;
-            const lowCavan    = parseFloat(btn.dataset.lowCavan) || 0;
-            const medCavan    = parseFloat(btn.dataset.medCavan) || 0;
-            const highCavan   = parseFloat(btn.dataset.highCavan) || 0;
-            const conf        = parseFloat(btn.dataset.confidence) || 0;
-
-            let probas = null;
-            try { probas = JSON.parse(btn.dataset.probas || 'null'); } catch (e) { probas = null; }
+            const variety    = btn.dataset.variety || 'N/A';
+            const method     = btn.dataset.method || 'N/A';
+            const cls        = btn.dataset.class || 'Medium';
+            const yieldCavan = parseFloat(btn.dataset.yieldCavan) || 0;
+            const yieldTons  = parseFloat(btn.dataset.yieldTons) || 0;
+            const avgCavan   = parseFloat(btn.dataset.avgCavan) || 0;
+            const lowCavan   = parseFloat(btn.dataset.lowCavan) || 0;
+            const highCavan  = parseFloat(btn.dataset.highCavan) || 0;
+            const conf       = parseFloat(btn.dataset.confidence) || 0;
+            const loCavan    = btn.dataset.loCavan ? parseFloat(btn.dataset.loCavan) : null;
+            const hiCavan    = btn.dataset.hiCavan ? parseFloat(btn.dataset.hiCavan) : null;
 
             document.getElementById('farmerExpVariety').textContent = variety;
             document.getElementById('farmerExpMethod').textContent =
-                'Seeding method: ' + method + ' · Karaniwang ani: ~' + (avgCavan ? Math.round(avgCavan) : '—') + ' cavan/ha';
+                'Seeding method: ' + method + ' · Karaniwang ani: ~' +
+                (avgCavan ? Math.round(avgCavan) : '—') + ' cavan/ha';
 
             const clsLower = cls.toLowerCase();
             const clsMap = {
@@ -464,38 +544,44 @@
             };
             const m = clsMap[clsLower] || clsMap['medium'];
 
-            // Bands in cavan
+            // ── Bands ──
             const bandsHtml = `
                 <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px;">
-                    Cavan/ha ranges para sa ${variety}
+                    Cavan/ha ranges para sa ${variety} (${method})
                 </div>
                 <div class="row g-2">
                     <div class="col-4">
                         <div style="padding: 12px; border-radius: 10px; background: #fef2f2; border: 1px solid #fecaca; text-align: center;">
                             <div style="font-size: 10px; text-transform: uppercase; color: #991b1b; font-weight: 700;">Low</div>
-                            <div style="font-size: 22px; font-weight: 800; color: #991b1b; margin-top: 4px;">${lowCavan ? Math.round(lowCavan) : '—'}</div>
-                            <div style="font-size: 11px; color: #991b1b; opacity: 0.8;">cavan/ha</div>
+                            <div style="font-size: 15px; font-weight: 800; color: #991b1b; margin-top: 4px;">
+                                ${lowCavan ? '< ' + Math.round(lowCavan) : '—'}
+                            </div>
+                            <div style="font-size: 10px; color: #991b1b; opacity: 0.8;">cavan/ha</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div style="padding: 12px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; text-align: center;">
                             <div style="font-size: 10px; text-transform: uppercase; color: #92400e; font-weight: 700;">Medium</div>
-                            <div style="font-size: 22px; font-weight: 800; color: #92400e; margin-top: 4px;">${medCavan ? Math.round(medCavan) : '—'}</div>
-                            <div style="font-size: 11px; color: #92400e; opacity: 0.8;">cavan/ha</div>
+                            <div style="font-size: 15px; font-weight: 800; color: #92400e; margin-top: 4px;">
+                                ${lowCavan && highCavan ? Math.round(lowCavan) + '–' + Math.round(highCavan) : '—'}
+                            </div>
+                            <div style="font-size: 10px; color: #92400e; opacity: 0.8;">cavan/ha</div>
                         </div>
                     </div>
                     <div class="col-4">
                         <div style="padding: 12px; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; text-align: center;">
                             <div style="font-size: 10px; text-transform: uppercase; color: #065f46; font-weight: 700;">High</div>
-                            <div style="font-size: 22px; font-weight: 800; color: #065f46; margin-top: 4px;">${highCavan ? Math.round(highCavan) : '—'}</div>
-                            <div style="font-size: 11px; color: #065f46; opacity: 0.8;">cavan/ha</div>
+                            <div style="font-size: 15px; font-weight: 800; color: #065f46; margin-top: 4px;">
+                                ${highCavan ? '> ' + Math.round(highCavan) : '—'}
+                            </div>
+                            <div style="font-size: 10px; color: #065f46; opacity: 0.8;">cavan/ha</div>
                         </div>
                     </div>
                 </div>
             `;
             document.getElementById('farmerExpBands').innerHTML = bandsHtml;
 
-            // Verdict
+            // ── Verdict ──
             const verdictHtml = `
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                     <div>
@@ -505,12 +591,15 @@
                         <div style="font-size: 24px; font-weight: 800; color: ${m.color};">
                             ${cls} · ${Math.round(yieldCavan)} cavan/ha
                         </div>
+                        <div style="font-size: 11px; color: var(--slate-500); margin-top: 2px;">
+                            (${yieldTons.toFixed(2)} t/ha)
+                        </div>
                     </div>
                     ${conf ? `
                         <div style="text-align: right;">
-                            <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700;">Gaano kasigurado</div>
+                            <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700;">Kumpiyansa</div>
                             <div style="font-size: 18px; font-weight: 800; color: var(--slate-800);">${Math.round(conf * 100)}%</div>
-                            <div style="font-size: 10px; color: var(--slate-500);">ng botante ang sumang-ayon</div>
+                            <div style="font-size: 10px; color: var(--slate-500);">mula sa 80% interval</div>
                         </div>
                     ` : ''}
                 </div>
@@ -520,31 +609,32 @@
             verdictBox.style.borderColor = m.border;
             verdictBox.innerHTML = verdictHtml;
 
-            // Vote breakdown
+            // ── 80% interval ──
             const votesEl = document.getElementById('farmerExpVotes');
-            if (probas) {
-                const order = ['Low', 'Medium', 'High'];
-                let rows = '';
-                order.forEach(k => {
-                    if (k in probas) {
-                        const pct = (probas[k] * 100).toFixed(1);
-                        const isWinner = k === cls;
-                        rows += `
-                            <div class="d-flex align-items-center gap-2 mb-2" style="font-size: 12px;">
-                                <div style="width: 60px; font-weight: ${isWinner ? 700 : 500}; color: ${isWinner ? 'var(--slate-900)' : 'var(--slate-600)'};">${k}</div>
-                                <div style="flex: 1; height: 8px; background: var(--slate-100); border-radius: 99px; overflow: hidden;">
-                                    <div style="height: 100%; width: ${pct}%; background: ${isWinner ? m.color : 'var(--slate-400)'}; border-radius: 99px;"></div>
-                                </div>
-                                <div style="width: 50px; text-align: right; font-weight: ${isWinner ? 700 : 500}; color: ${isWinner ? m.color : 'var(--slate-500)'};">${pct}%</div>
-                            </div>
-                        `;
-                    }
-                });
+            if (loCavan !== null && hiCavan !== null) {
+                const rangeWidth = Math.max(hiCavan - loCavan, 1);
+                const posPct = Math.min(100, Math.max(0, ((yieldCavan - loCavan) / rangeWidth) * 100));
+
                 votesEl.innerHTML = `
-                    <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px;">
-                        Ilang boto ang nakuha ng bawat class
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 700; letter-spacing: 0.5px; margin-bottom: 10px;">
+                        <i class="bi bi-arrows-collapse"></i> 80% prediction interval
                     </div>
-                    ${rows}
+                    <div style="padding: 12px 14px; background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: 10px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--slate-600); margin-bottom: 8px;">
+                            <span><strong>${Math.round(loCavan)}</strong> cavan/ha</span>
+                            <span style="color: ${m.color}; font-weight: 800;">${Math.round(yieldCavan)} cavan/ha</span>
+                            <span><strong>${Math.round(hiCavan)}</strong> cavan/ha</span>
+                        </div>
+                        <div style="position: relative; height: 10px; background: linear-gradient(90deg, #fecaca 0%, #fde68a 50%, #a7f3d0 100%); border-radius: 99px;">
+                            <div style="position: absolute; left: ${posPct}%; top: -4px; transform: translateX(-50%); width: 18px; height: 18px; background: white; border: 3px solid ${m.color}; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.15);"></div>
+                        </div>
+                        <div style="font-size: 11px; color: var(--slate-500); margin-top: 10px; line-height: 1.5;">
+                            <i class="bi bi-info-circle"></i>
+                            Ibig sabihin, sa <strong>80% ng mga kaso</strong> ay inaasahang mahuhulog ang ani sa pagitan ng
+                            <strong>${Math.round(loCavan)}–${Math.round(hiCavan)} cavan/ha</strong>.
+                            Ang marker ay ang <em>pinaka-malamang</em> na hula.
+                        </div>
+                    </div>
                 `;
             } else {
                 votesEl.innerHTML = '';
@@ -556,44 +646,64 @@
     // FILTERING + PAGINATION
     // ═══════════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('searchPrediction');
+        const searchInput    = document.getElementById('searchPrediction');
+        const farmSelect     = document.getElementById('filterFarm');
         const barangaySelect = document.getElementById('filterBarangay');
-        const classBtns = document.querySelectorAll('.class-btn');
-        const allRows = Array.from(document.querySelectorAll('#predictionsBody .prediction-row'));
-        const noResults = document.getElementById('noFilterResults');
-        const visibleCount = document.getElementById('visibleCount');
-        const paginationBar = document.getElementById('paginationBar');
+        const classBtns      = document.querySelectorAll('.class-btn');
+        const seasonBtns     = document.querySelectorAll('.season-btn');
+        const allRows        = Array.from(document.querySelectorAll('#predictionsBody .prediction-row'));
+        const noResults      = document.getElementById('noFilterResults');
+        const visibleCount   = document.getElementById('visibleCount');
+        const paginationBar  = document.getElementById('paginationBar');
         const paginationList = document.getElementById('paginationList');
         const paginationInfo = document.getElementById('paginationInfo');
-        const perPageSelect = document.getElementById('perPageSelect');
+        const perPageSelect  = document.getElementById('perPageSelect');
+        const resetBtn       = document.getElementById('resetFiltersBtn');
 
         if (!searchInput) return;
 
         let currentPage = 1;
         let perPage = parseInt(perPageSelect?.value || '25', 10);
 
+        function hasActiveFilters() {
+            const activeClass  = document.querySelector('.class-btn.active');
+            const activeSeason = document.querySelector('.season-btn.active');
+            return (
+                searchInput.value.trim() !== '' ||
+                (farmSelect && farmSelect.value !== 'all') ||
+                barangaySelect.value !== 'all' ||
+                (activeClass  && activeClass.dataset.class   !== 'all') ||
+                (activeSeason && activeSeason.dataset.season !== 'all')
+            );
+        }
+
         function getMatchingRows() {
-            const search = searchInput.value.toLowerCase().trim();
+            const search   = searchInput.value.toLowerCase().trim();
+            const farm     = farmSelect ? farmSelect.value : 'all';
             const barangay = barangaySelect.value;
-            const activeClass = document.querySelector('.class-btn.active');
-            const classFilter = activeClass ? activeClass.dataset.class : 'all';
+            const activeClass  = document.querySelector('.class-btn.active');
+            const classFilter  = activeClass  ? activeClass.dataset.class   : 'all';
+            const activeSeason = document.querySelector('.season-btn.active');
+            const seasonFilter = activeSeason ? activeSeason.dataset.season : 'all';
 
             return allRows.filter(row => {
-                const searchData = row.dataset.search || '';
-                const rowBarangay = row.dataset.barangay || '';
-                const rowClass = row.dataset.class || '';
-
-                const matchesSearch = searchData.includes(search);
-                const matchesBarangay = barangay === 'all' || rowBarangay === barangay;
-                const matchesClass = classFilter === 'all' || rowClass === classFilter;
-
-                return matchesSearch && matchesBarangay && matchesClass;
+                const sd = row.dataset.search   || '';
+                const rf = row.dataset.farm     || '';
+                const rb = row.dataset.barangay || '';
+                const rc = row.dataset.class    || '';
+                const rs = row.dataset.season   || '';
+                const matchesSearch   = sd.includes(search);
+                const matchesFarm     = (farm === 'all' || rf === farm);
+                const matchesBarangay = (barangay === 'all' || rb === barangay);
+                const matchesClass    = (classFilter === 'all' || rc === classFilter);
+                const matchesSeason   = (seasonFilter === 'all' || rs === seasonFilter);
+                return matchesSearch && matchesFarm && matchesBarangay && matchesClass && matchesSeason;
             });
         }
 
         function renderPagination() {
-            const matchingRows = getMatchingRows();
-            const total = matchingRows.length;
+            const matching = getMatchingRows();
+            const total = matching.length;
             const totalPages = Math.max(1, Math.ceil(total / perPage));
 
             if (currentPage > totalPages) currentPage = totalPages;
@@ -603,75 +713,61 @@
 
             const start = (currentPage - 1) * perPage;
             const end = start + perPage;
-            const pageRows = matchingRows.slice(start, end);
-
-            pageRows.forEach((row, i) => {
+            matching.slice(start, end).forEach((row, i) => {
                 row.style.display = '';
-                const idxCell = row.querySelector('.row-index');
-                if (idxCell) idxCell.textContent = start + i + 1;
+                const c = row.querySelector('.row-index');
+                if (c) c.textContent = start + i + 1;
             });
 
             if (noResults) noResults.style.display = (total === 0 && allRows.length > 0) ? '' : 'none';
             if (visibleCount) visibleCount.textContent = total + ' visible';
 
             if (paginationInfo) {
-                if (total === 0) {
-                    paginationInfo.textContent = '— no entries';
-                } else {
-                    paginationInfo.textContent = `— showing ${start + 1} to ${Math.min(end, total)} of ${total} entries`;
-                }
+                paginationInfo.textContent = total === 0
+                    ? '— no entries'
+                    : `— showing ${start + 1} to ${Math.min(end, total)} of ${total} entries`;
             }
 
-            if (paginationBar) {
-                paginationBar.classList.toggle('d-none', totalPages <= 1);
-            }
+            if (paginationBar) paginationBar.classList.toggle('d-none', totalPages <= 1);
+            if (resetBtn) resetBtn.style.display = hasActiveFilters() ? '' : 'none';
 
             if (!paginationList) return;
-            paginationList.innerHTML = '';
 
-            const btnStyle = 'display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--slate-200); background: #fff; color: var(--slate-700); font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer; transition: all 0.15s;';
-            const activeStyle = 'display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--brand-green); background: var(--brand-green); color: #fff; font-size: 13px; font-weight: 700; cursor: default;';
-            const disabledStyle = 'display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--slate-200); background: var(--slate-50); color: var(--slate-300); font-size: 13px; font-weight: 600; cursor: not-allowed;';
+            paginationList.innerHTML = '';
+            const btnStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--slate-200);background:#fff;color:var(--slate-700);font-size:13px;font-weight:600;cursor:pointer;';
+            const activeStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--brand-green);background:var(--brand-green);color:#fff;font-size:13px;font-weight:700;';
+            const disabledStyle = 'display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--slate-200);background:var(--slate-50);color:var(--slate-300);font-size:13px;font-weight:600;cursor:not-allowed;';
 
             const addBtn = (label, page, opts = {}) => {
                 const li = document.createElement('li');
                 const a = document.createElement('button');
                 a.type = 'button';
                 a.innerHTML = label;
-                if (opts.active) a.setAttribute('style', activeStyle);
-                else if (opts.disabled) a.setAttribute('style', disabledStyle);
-                else a.setAttribute('style', btnStyle);
-
+                a.setAttribute('style', opts.active ? activeStyle : (opts.disabled ? disabledStyle : btnStyle));
                 if (!opts.active && !opts.disabled && page !== null) {
                     a.addEventListener('click', () => {
                         currentPage = page;
                         renderPagination();
                         document.querySelector('.card-custom')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     });
-                } else {
-                    a.disabled = true;
-                }
+                } else a.disabled = true;
                 li.appendChild(a);
                 paginationList.appendChild(li);
             };
 
-            addBtn('<i class="bi bi-chevron-left"></i>', currentPage - 1, {
-                disabled: currentPage === 1,
-            });
+            addBtn('<i class="bi bi-chevron-left"></i>', currentPage - 1, { disabled: currentPage === 1 });
 
             const pages = [];
-            const addPage = (p) => pages.push(p);
-
             if (totalPages <= 7) {
-                for (let i = 1; i <= totalPages; i++) addPage(i);
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
             } else {
-                addPage(1);
+                pages.push(1);
                 if (currentPage > 3) pages.push('...');
-                const startPage = Math.max(2, currentPage - 1);
-                const endPage = Math.min(totalPages - 1, currentPage + 1);
-                for (let i = startPage; i <= endPage; i++) addPage(i);
+                const s = Math.max(2, currentPage - 1);
+                const e = Math.min(totalPages - 1, currentPage + 1);
+                for (let i = s; i <= e; i++) pages.push(i);
                 if (currentPage < totalPages - 2) pages.push('...');
-                addPage(totalPages);
+                pages.push(totalPages);
             }
 
             pages.forEach(p => {
@@ -679,7 +775,7 @@
                     const li = document.createElement('li');
                     const span = document.createElement('span');
                     span.textContent = '…';
-                    span.setAttribute('style', 'display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 34px; color: var(--slate-400); font-weight: 700;');
+                    span.setAttribute('style', 'display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;color:var(--slate-400);font-weight:700;');
                     li.appendChild(span);
                     paginationList.appendChild(li);
                 } else {
@@ -687,17 +783,13 @@
                 }
             });
 
-            addBtn('<i class="bi bi-chevron-right"></i>', currentPage + 1, {
-                disabled: currentPage === totalPages,
-            });
+            addBtn('<i class="bi bi-chevron-right"></i>', currentPage + 1, { disabled: currentPage === totalPages });
         }
 
-        function resetAndRender() {
-            currentPage = 1;
-            renderPagination();
-        }
+        function resetAndRender() { currentPage = 1; renderPagination(); }
 
         searchInput.addEventListener('input', resetAndRender);
+        farmSelect?.addEventListener('change', resetAndRender);
         barangaySelect.addEventListener('change', resetAndRender);
 
         classBtns.forEach(btn => {
@@ -716,8 +808,60 @@
             });
         });
 
+        seasonBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                seasonBtns.forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--slate-600)';
+                    b.style.boxShadow = 'none';
+                    b.classList.remove('active');
+                });
+                this.style.background = 'white';
+                this.style.color = 'var(--slate-900)';
+                this.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                this.classList.add('active');
+                resetAndRender();
+            });
+        });
+
         perPageSelect?.addEventListener('change', function() {
             perPage = parseInt(this.value, 10) || 25;
+            resetAndRender();
+        });
+
+        resetBtn?.addEventListener('click', function() {
+            searchInput.value = '';
+            if (farmSelect) farmSelect.value = 'all';
+            barangaySelect.value = 'all';
+
+            classBtns.forEach(b => {
+                b.style.background = 'transparent';
+                b.style.color = 'var(--slate-600)';
+                b.style.boxShadow = 'none';
+                b.classList.remove('active');
+            });
+            const classAll = document.querySelector('.class-btn[data-class="all"]');
+            if (classAll) {
+                classAll.style.background = 'white';
+                classAll.style.color = 'var(--slate-900)';
+                classAll.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                classAll.classList.add('active');
+            }
+
+            seasonBtns.forEach(b => {
+                b.style.background = 'transparent';
+                b.style.color = 'var(--slate-600)';
+                b.style.boxShadow = 'none';
+                b.classList.remove('active');
+            });
+            const seasonAll = document.querySelector('.season-btn[data-season="all"]');
+            if (seasonAll) {
+                seasonAll.style.background = 'white';
+                seasonAll.style.color = 'var(--slate-900)';
+                seasonAll.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                seasonAll.classList.add('active');
+            }
+
             resetAndRender();
         });
 

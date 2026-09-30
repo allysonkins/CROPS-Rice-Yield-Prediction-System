@@ -6,6 +6,12 @@
     $avgD = $variety->avg_yield_direct;
     $maxD = $variety->max_yield_direct;
 
+    // Convert to cavan/ha
+    $avgTCavan = $avgT !== null ? t_ha_to_cavan_ha((float) $avgT) : null;
+    $maxTCavan = $maxT !== null ? t_ha_to_cavan_ha((float) $maxT) : null;
+    $avgDCavan = $avgD !== null ? t_ha_to_cavan_ha((float) $avgD) : null;
+    $maxDCavan = $maxD !== null ? t_ha_to_cavan_ha((float) $maxD) : null;
+
     $resilience = $variety->resilience;
     if (is_string($resilience)) {
         $resilience = json_decode($resilience, true) ?? [];
@@ -44,13 +50,18 @@
             <div style="font-size: 9px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px;">
                 <i class="bi bi-flower1"></i> Transplanted
             </div>
-            @if($avgT)
+            @if($avgTCavan !== null)
                 <div style="font-size: 18px; font-weight: 800; color: var(--brand-green); line-height: 1.1; letter-spacing: -0.4px;">
-                    {{ number_format($avgT, 2) }}
-                    <small style="font-size: 10px; font-weight: 600;">t/ha</small>
+                    {{ number_format($avgTCavan, 0) }}
+                    <small style="font-size: 10px; font-weight: 600;">cavan/ha</small>
                 </div>
                 <div style="font-size: 10px; color: var(--slate-400); margin-top: 2px;">
-                    Max {{ number_format($maxT, 2) }} · {{ $variety->growth_period_transplanted ?? '—' }}d
+                    Avg · {{ number_format($avgT, 2) }} t/ha
+                </div>
+                <div style="font-size: 10px; color: var(--slate-400); margin-top: 1px;">
+                    Max {{ number_format($maxTCavan, 0) }} cavan/ha
+                    ({{ number_format($maxT, 2) }} t/ha)
+                    · {{ $variety->growth_period_transplanted ?? '—' }}d
                 </div>
             @else
                 <div style="font-size: 11px; color: var(--slate-400); font-style: italic;">No data</div>
@@ -64,13 +75,18 @@
             <div style="font-size: 9px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px;">
                 <i class="bi bi-flower2"></i> Direct-Seeded
             </div>
-            @if($avgD)
+            @if($avgDCavan !== null)
                 <div style="font-size: 18px; font-weight: 800; color: var(--brand-green); line-height: 1.1; letter-spacing: -0.4px;">
-                    {{ number_format($avgD, 2) }}
-                    <small style="font-size: 10px; font-weight: 600;">t/ha</small>
+                    {{ number_format($avgDCavan, 0) }}
+                    <small style="font-size: 10px; font-weight: 600;">cavan/ha</small>
                 </div>
                 <div style="font-size: 10px; color: var(--slate-400); margin-top: 2px;">
-                    Max {{ number_format($maxD, 2) }} · {{ $variety->growth_period_direct ?? '—' }}d
+                    Avg · {{ number_format($avgD, 2) }} t/ha
+                </div>
+                <div style="font-size: 10px; color: var(--slate-400); margin-top: 1px;">
+                    Max {{ number_format($maxDCavan, 0) }} cavan/ha
+                    ({{ number_format($maxD, 2) }} t/ha)
+                    · {{ $variety->growth_period_direct ?? '—' }}d
                 </div>
             @else
                 <div style="font-size: 11px; color: var(--slate-400); font-style: italic;">No data</div>

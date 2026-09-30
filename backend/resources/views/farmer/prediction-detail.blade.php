@@ -3,6 +3,36 @@
     $yieldCavan  = $yieldTons !== null ? t_ha_to_cavan_ha((float) $yieldTons) : null;
     $farmArea    = (float) ($farmRecord->farm->land_area_ha ?? 1.0);
     $totalCavan  = $yieldTons !== null ? cavan_total((float) $yieldTons, $farmArea) : null;
+
+    // ── Variety-relative yield class (same logic as admin) ──
+    $method       = $farmRecord->seeding_method ?? 'Transplanted';
+    $varietyModel = $farmRecord->riceVariety;
+    $methodYield  = $varietyModel ? $varietyModel->getYieldForMethod($method) : null;
+    $avgYieldTons = $methodYield->avg ?? ($varietyModel->avg_yield ?? null);
+    $avgCavan     = $avgYieldTons !== null ? t_ha_to_cavan_ha((float) $avgYieldTons) : null;
+
+    $class = null;
+    $ratio = null;
+    if ($avgYieldTons && $avgYieldTons > 0 && $yieldTons !== null) {
+        $ratio = $yieldTons / $avgYieldTons;
+        if     ($ratio >= 1.125) $class = 'High';
+        elseif ($ratio >= 0.875) $class = 'Medium';
+        else                     $class = 'Low';
+    }
+
+    // ── 80% prediction interval ──
+    $conf    = $prediction?->confidence;
+    $lo      = $prediction?->yield_lower;
+    $hi      = $prediction?->yield_upper;
+    $loCavan = $lo !== null ? t_ha_to_cavan_ha((float) $lo) : null;
+    $hiCavan = $hi !== null ? t_ha_to_cavan_ha((float) $hi) : null;
+
+    $classMap = [
+        'High'   => ['css' => 'high',   'icon' => 'check-circle-fill',         'text' => 'Mas mataas sa karaniwan ng variety na ito'],
+        'Medium' => ['css' => 'medium', 'icon' => 'exclamation-triangle-fill', 'text' => 'Katulad ng karaniwang ani ng variety na ito'],
+        'Low'    => ['css' => 'low',    'icon' => 'x-circle-fill',             'text' => 'Mas mababa sa karaniwan ng variety na ito'],
+    ];
+    $meta = $classMap[$class] ?? ['css' => 'medium', 'icon' => 'question-circle', 'text' => 'Hindi sapat ang datos para sa class'];
 @endphp
 
 <!-- ═══════════ PREDICTION RESULT ═══════════ -->
@@ -11,22 +41,10 @@
         <div class="card" style="background: var(--slate-50); border-radius: var(--radius-md); border: 1px solid var(--slate-200); border-top: 3px solid #4f46e5;">
             <div class="card-body">
                 <h6 style="color: var(--slate-800); font-weight: 700;">
-                    <i class="bi bi-cpu" style="color: #4f46e5;"></i> Random Forest Prediction
+                    <i class="bi bi-cpu" style="color: #4f46e5;"></i> XGBoost Prediction
                 </h6>
 
-                @if($prediction)
-                    @php
-                        $class      = $prediction->predicted_class;
-                        $confidence = $prediction->confidence;
-
-                        $classMap = [
-                            'High'   => ['css' => 'high',   'icon' => 'check-circle-fill',        'text' => 'Good harvest expected'],
-                            'Medium' => ['css' => 'medium', 'icon' => 'exclamation-triangle-fill','text' => 'Average harvest expected'],
-                            'Low'    => ['css' => 'low',    'icon' => 'x-circle-fill',            'text' => 'Below average expected'],
-                        ];
-                        $meta = $classMap[$class] ?? ['css' => 'medium', 'icon' => 'question-circle', 'text' => 'Unknown'];
-                    @endphp
-
+                @if($prediction && $yieldCavan !== null)
                     {{-- Big yield card --}}
                     <div class="row g-3">
                         <div class="col-md-6 offset-md-3">
@@ -39,6 +57,13 @@
                                 <div style="font-size: 11px; color: var(--slate-400); margin-top: 2px;">
                                     ({{ number_format($yieldTons, 2) }} t/ha)
                                 </div>
+
+                                @if($loCavan !== null && $hiCavan !== null)
+                                    <div class="mt-2" style="font-size: 11px; color: var(--slate-500);">
+                                        <i class="bi bi-arrows-collapse"></i>
+                                        80% range: <strong>{{ number_format($loCavan, 0) }}–{{ number_format($hiCavan, 0) }} cavan/ha</strong>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -64,52 +89,59 @@
                         </div>
                     @endif
 
-                    {{-- Classification badge --}}
+                    {{-- Yield class badge --}}
                     <div class="mt-3 text-center">
-                        <span class="badge-status {{ $meta['css'] }}" style="font-size: 13px; padding: 8px 18px;">
-                            <i class="bi bi-{{ $meta['icon'] }}"></i>
-                            {{ $class ?? 'Unknown' }} Yield
-                            @if($confidence)
-                                · {{ number_format($confidence * 100, 1) }}% confidence
-                            @endif
-                        </span>
-                        <div style="font-size: 12px; color: var(--slate-600); margin-top: 6px;">
-                            {{ $meta['text'] }}
-                        </div>
+                        @if($class)
+                            <span class="badge-status {{ $meta['css'] }}"
+                                  style="font-size: 13px; padding: 8px 18px; cursor: help;"
+                                  data-bs-toggle="tooltip"
+                                  data-bs-placement="top"
+                                  data-bs-html="true"
+                                  title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
+                                      <strong>Kumpara sa karaniwan ng variety</strong><br>
+                                      Karaniwan ({{ $method }}): <strong>{{ number_format($avgCavan, 0) }} cavan/ha</strong><br>
+                                      Ratio ng iyong hula: <strong>{{ number_format($ratio * 100, 1) }}%</strong><br><br>
+                                      <strong>Bands:</strong><br>
+                                      • High — ≥ 112.5% ng karaniwan<br>
+                                      • Medium — 87.5% – 112.5%<br>
+                                      • Low — mas mababa sa 87.5%<br><br>
+                                      <em>Kinukuwenta ito ng system — hindi galing sa model.</em>
+                                  </div>">
+                                <i class="bi bi-{{ $meta['icon'] }}"></i>
+                                {{ $class }} Yield
+                                @if($conf !== null)
+                                    · {{ number_format($conf * 100, 1) }}% confidence
+                                @endif
+                            </span>
+                            <div style="font-size: 12px; color: var(--slate-600); margin-top: 6px;">
+                                {{ $meta['text'] }}
+                            </div>
+                        @else
+                            <span class="badge-status medium" style="font-size: 13px; padding: 8px 18px;">
+                                <i class="bi bi-question-circle"></i> Walang class (kulang ang variety average)
+                            </span>
+                        @endif
                     </div>
 
-                    {{-- Confidence explanation --}}
-                    @if($confidence)
+                    {{-- Confidence explanation (XGBoost) --}}
+                    @if($conf !== null)
                         <div class="mt-3 text-center">
                             <div class="d-inline-flex align-items-center gap-2 px-3 py-2"
                                  style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius-md); font-size: 12px; color: var(--slate-600); max-width: 640px;">
                                 <i class="bi bi-info-circle" style="color: var(--brand-gold);"></i>
                                 <span style="text-align: left;">
-                                    Confidence reflects how many of the model's 800 decision trees voted for
-                                    <strong>{{ $class }}</strong>. Higher = more agreement among trees.
-                                    It is <em>not</em> a probability that the yield will occur.
+                                    Ang <strong>confidence</strong> ay galing sa <strong>80% prediction interval</strong> —
+                                    dalawang karagdagang XGBoost model (10th at 90th percentile) ang gumagawa ng range.<br>
+                                    <strong>Confidence = 1 − (haba ng range ÷ hula)</strong>.
+                                    Mas makitid ang range, mas mataas ang kumpiyansa.
+                                    <em>Hindi ito garantiya ng aktwal na ani.</em>
                                 </span>
                             </div>
                         </div>
                     @endif
-
-                    {{-- Tree vote distribution --}}
-                    @php
-                        $probas = json_decode($prediction->input_features, true)['probabilities'] ?? null;
-                    @endphp
-                    @if($probas)
-                        <div class="mt-3 text-center small" style="color: var(--slate-500);">
-                            @foreach($probas as $lbl => $p)
-                                <span class="me-3">
-                                    <strong style="color: var(--slate-700);">{{ $lbl }}:</strong>
-                                    <span style="color: var(--brand-green-dark); font-weight: 600;">{{ number_format($p * 100, 1) }}%</span>
-                                </span>
-                            @endforeach
-                        </div>
-                    @endif
                 @else
                     <div class="mt-3 text-center" style="color: var(--slate-500); font-size: 13px;">
-                        No prediction available for this farm record.
+                        Walang prediction na available para sa farm record na ito.
                     </div>
                 @endif
             </div>
@@ -151,7 +183,7 @@
                         </div>
                     </div>
                 @else
-                    <p style="color: var(--slate-500); margin: 0;">No input data available.</p>
+                    <p style="color: var(--slate-500); margin: 0;">Walang input data.</p>
                 @endif
             </div>
         </div>

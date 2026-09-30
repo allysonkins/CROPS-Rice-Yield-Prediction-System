@@ -75,7 +75,7 @@ class PredictionController extends Controller
 
     public function generateAll(Request $request)
     {
-        if (auth()->user()->role !== 'admin') {
+        if (!in_array(auth()->user()->role, ['admin', 'staff'])) {
             return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
         }
 
@@ -121,7 +121,7 @@ class PredictionController extends Controller
 
     public function regenerateAll(Request $request)
     {
-        if (auth()->user()->role !== 'admin') {
+        if (!in_array(auth()->user()->role, ['admin', 'staff'])) {
             return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
         }
 

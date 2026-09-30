@@ -107,21 +107,75 @@
     $recent = $uniquePredictions->sortByDesc('created_at')->take(5);
 @endphp
 
-<!-- WELCOME BANNER -->
+@php
+    // Weather icon selection based on description
+    $weatherIcon = 'cloud-sun';
+    $weatherDesc = strtolower($weather['description'] ?? '');
+    if ($weather) {
+        if (str_contains($weatherDesc, 'thunder') || str_contains($weatherDesc, 'storm')) $weatherIcon = 'cloud-lightning-rain';
+        elseif (str_contains($weatherDesc, 'drizzle'))                                     $weatherIcon = 'cloud-drizzle';
+        elseif (str_contains($weatherDesc, 'rain'))                                        $weatherIcon = 'cloud-rain';
+        elseif (str_contains($weatherDesc, 'snow'))                                        $weatherIcon = 'cloud-snow';
+        elseif (str_contains($weatherDesc, 'mist') || str_contains($weatherDesc, 'fog'))   $weatherIcon = 'cloud-fog2';
+        elseif (str_contains($weatherDesc, 'few clouds') || str_contains($weatherDesc, 'scattered')) $weatherIcon = 'cloud-sun';
+        elseif (str_contains($weatherDesc, 'cloud') || str_contains($weatherDesc, 'overcast'))       $weatherIcon = 'clouds';
+        elseif (str_contains($weatherDesc, 'clear'))                                       $weatherIcon = 'sun';
+    }
+@endphp
+
+<!-- WELCOME BANNER + WEATHER -->
 <div class="row g-2 mb-3">
     <div class="col-12">
         <div class="card-custom" style="border-left: 4px solid var(--gold); background: linear-gradient(135deg, #f9fafb 0%, #f0f4f2 100%); padding: 16px 22px;">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div class="d-flex align-items-center gap-2">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+
+                {{-- LEFT: Welcome --}}
+                <div class="d-flex flex-wrap align-items-center gap-2">
                     <i class="bi bi-person-badge" style="color: var(--gold); font-size: 20px;"></i>
                     <span style="font-size: 15px; font-weight: 700; color: var(--green);">
                         Welcome, {{ auth()->user()->name }}!
                     </span>
                     <span class="text-muted small">· Admin Account</span>
                 </div>
-                <span class="badge bg-light text-muted" style="font-size: 12px; padding: 6px 12px;">
-                    <i class="bi bi-clock"></i> {{ now()->format('M d, Y') }}
-                </span>
+
+                {{-- RIGHT: Weather + Date --}}
+                <div class="d-flex flex-wrap align-items-center gap-2">
+
+                    @if($weather)
+                        <div class="d-flex align-items-center gap-3 px-3 py-2"
+                             style="background: linear-gradient(135deg, #eef7ff 0%, #f7fbff 100%); border-radius: 10px; border: 1px solid #c7e2f5;">
+                            <div style="width: 38px; height: 38px; background: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #c7e2f5;">
+                                <i class="bi bi-{{ $weatherIcon }}" style="color: #0284c7; font-size: 20px;"></i>
+                            </div>
+                            <div style="line-height: 1.2;">
+                                <div style="display: flex; align-items: baseline; gap: 6px;">
+                                    <span style="font-size: 18px; font-weight: 800; color: #0c4a6e;">
+                                        {{ $weather['temperature'] ?? '—' }}°C
+                                    </span>
+                                    <span style="font-size: 11px; color: #0369a1; font-weight: 600;">
+                                        {{ $weather['description'] ?? '' }}
+                                    </span>
+                                </div>
+                                <div style="font-size: 10px; color: #0369a1; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <span><i class="bi bi-droplet"></i> {{ $weather['humidity'] ?? '—' }}%</span>
+                                    <span><i class="bi bi-cloud-rain"></i> {{ $weather['rainfall'] ?? 0 }} mm</span>
+                                    <span><i class="bi bi-wind"></i> {{ $weather['wind_speed'] ?? '—' }} km/h</span>
+                                </div>
+                            </div>
+                        </div>
+                    @else
+                        <div class="d-flex align-items-center gap-2 px-3 py-2"
+                             style="background: var(--gray-50); border-radius: 10px; border: 1px solid var(--gray-200);">
+                            <i class="bi bi-cloud-slash" style="color: var(--gray-400); font-size: 16px;"></i>
+                            <span style="font-size: 11px; color: var(--gray-500);">Weather unavailable</span>
+                        </div>
+                    @endif
+
+                    <span class="badge bg-light text-muted" style="font-size: 12px; padding: 6px 12px;">
+                        <i class="bi bi-clock"></i> {{ now()->format('M d, Y') }}
+                    </span>
+                </div>
+
             </div>
         </div>
     </div>
