@@ -49,6 +49,9 @@
             --slate-800: #1e293b;
             --slate-900: #0f172a;
 
+            /* Government tricolor stripe (matches login pages) */
+            --stripe: linear-gradient(90deg, #4a9c5d 0%, #f2b705 60%, #c0392b 100%);
+
             /* Elevation & Shadows */
             --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
             --shadow-sm: 0 2px 4px rgba(15, 23, 42, 0.05);
@@ -150,8 +153,25 @@
             overflow: hidden;
         }
 
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: var(--stripe);
+            z-index: 3;
+        }
+
+        .sidebar::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-image: repeating-linear-gradient(115deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 26px);
+        }
+
         .sidebar-brand {
-            padding: 16px 20px;
+            padding: 20px 20px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -169,12 +189,23 @@
         }
 
         .sidebar-brand img {
-            height: 44px;
-            width: auto;
-            border-radius: var(--radius-sm);
-            object-fit: contain;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            height: 46px;
+            width: 46px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
             flex-shrink: 0;
+        }
+
+        .brand-agency {
+            display: block;
+            font-size: 0.62rem;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.2;
+            white-space: nowrap;
         }
 
         .sidebar-brand-text {
@@ -191,7 +222,7 @@
         }
 
         .sidebar-brand-text h1 span {
-            color: #fbbf24;
+            color: #f2b705;
         }
 
         .sidebar-brand-text .brand-tagline {
@@ -469,6 +500,14 @@
             justify-content: space-between;
             z-index: 1020;
             transition: padding 0.2s ease;
+        }
+
+        .topbar::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--stripe);
         }
 
         .topbar-left {
@@ -1483,8 +1522,9 @@
             <a href="{{ $dashboardUrl }}" class="sidebar-brand-link">
                 <img src="{{ asset('images/logo.webp') }}" alt="CROPS Logo">
                 <div class="sidebar-brand-text">
+                    <span class="brand-agency">Santiago City</span>
                     <h1>CR<span>OPS</span></h1>
-                    <span class="brand-tagline">Agriculture System</span>
+                    <span class="brand-tagline">City Agriculture Office</span>
                 </div>
             </a>
             <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeSidebar()" aria-label="Close navigation menu">

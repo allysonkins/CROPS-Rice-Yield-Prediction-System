@@ -253,6 +253,12 @@ def predict():
             raw_low  = float(STATE.model_low.predict(vec)[0])
             raw_high = float(STATE.model_high.predict(vec)[0])
 
+            # ── Guard: quantile models should always have raw_low <= raw_high.
+            # If they're inverted (version mismatch, bad input, etc.), swap them
+            # so the interval stays sane instead of returning Lower > Upper.
+            if raw_low > raw_high:
+                raw_low, raw_high = raw_high, raw_low
+
             # Centre the interval on the point prediction and widen it
             # by the calibration factor derived during training.
             half_width = (raw_high - raw_low) / 2.0
