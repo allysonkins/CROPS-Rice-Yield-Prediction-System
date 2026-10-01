@@ -19,13 +19,11 @@ class FarmerImportController extends Controller
 
     /**
      * STEP 1 — Upload & preview
-     * Streams the CSV row-by-row into a DB staging table. Never holds the
-     * whole file in memory, never puts rows in the session.
      */
     public function preview(Request $request, FarmerImportService $service)
     {
         $request->validate([
-            'csv' => 'required|file|max:51200', // 50MB cap
+            'csv' => 'required|file|max:51200',
         ]);
 
         $file = $request->file('csv');
@@ -34,14 +32,12 @@ class FarmerImportController extends Controller
             return back()->with('error', 'Upload failed: ' . $file->getErrorMessage());
         }
 
-        // Persist the file so commit() can re-read it without the browser
-        $uuid      = (string) Str::uuid();
-        $storedDir = 'imports';
+        $uuid       = (string) Str::uuid();
+        $storedDir  = 'imports';
         $storedName = $uuid . '.csv';
 
         try {
-            $path = $file->storeAs($storedDir, $storedName, 'local');
-            // storage/app/private/... or storage/app/... depending on Laravel version
+            $path    = $file->storeAs($storedDir, $storedName, 'local');
             $absPath = Storage::disk('local')->path($path);
         } catch (\Throwable $e) {
             return back()->with('error', 'Could not save uploaded file: ' . $e->getMessage());
@@ -83,7 +79,6 @@ class FarmerImportController extends Controller
                 ' — please check storage/logs/laravel.log for details.');
         }
 
-        // Show only the first 500 rows in the preview table
         $rows = FarmerImportRow::where('batch_id', $batch->id)
             ->orderBy('line')
             ->limit(500)
@@ -110,10 +105,7 @@ class FarmerImportController extends Controller
     }
 
     /**
-     * STEP 2 — Commit
-     * Reads the stored file again, chunk-by-chunk, wrapping each chunk in a
-     * transaction. If a chunk fails, the batch is marked failed and the
-     * user gets a real error message instead of a 500.
+     * STEP 2 — Commit (single-shot, kept for compatibility)
      */
     public function commit(Request $request, FarmerImportService $service)
     {
@@ -136,7 +128,7 @@ class FarmerImportController extends Controller
         }
 
         try {
-            $result = $service->commit($batch);
+            $result = $service->commitBatch($batch);
         } catch (\Throwable $e) {
             \Log::error('Farmer import commit failed', [
                 'batch' => $batch->id,
@@ -150,7 +142,6 @@ class FarmerImportController extends Controller
                 ->with('error', 'Import failed: ' . $e->getMessage());
         }
 
-        // Cleanup
         try { @unlink($batch->stored_path); } catch (\Throwable $e) {}
         FarmerImportRow::where('batch_id', $batch->id)->delete();
         $batch->update(['status' => 'committed']);
@@ -162,6 +153,61 @@ class FarmerImportController extends Controller
         $msg .= ' Login credentials are on the Credentials page.';
 
         return redirect()->route('admin.farmers.credentials')->with('success', $msg);
+    }
+
+    /**
+     * STEP 2b — Chunked commit. Called repeatedly by the browser.
+     */
+    public function commitChunk(Request $request, FarmerImportService $service)
+    {
+        @set_time_limit(120);
+
+        $uuid = $request->input('batch_uuid');
+        if (!$uuid) {
+            return response()->json(['success' => false, 'error' => 'Missing batch reference.'], 400);
+        }
+
+        $batch = FarmerImportBatch::where('uuid', $uuid)->first();
+        if (!$batch) {
+            return response()->json(['success' => false, 'error' => 'Batch not found.'], 404);
+        }
+
+        if ($batch->status === 'committed') {
+            return response()->json([
+                'success'          => true,
+                'createdUsers'     => 0,
+                'createdFarms'     => 0,
+                'skippedFarms'     => 0,
+                'remaining'        => 0,
+                'alreadyCommitted' => true,
+            ]);
+        }
+
+        try {
+            $result = $service->commitChunk($batch, 40);
+
+            if ($result['remaining'] === 0) {
+                try { @unlink($batch->stored_path); } catch (\Throwable $e) {}
+                FarmerImportRow::where('batch_id', $batch->id)->delete();
+                $batch->update(['status' => 'committed']);
+            }
+
+            return response()->json([
+                'success'      => true,
+                'createdUsers' => $result['createdUsers'],
+                'createdFarms' => $result['createdFarms'],
+                'skippedFarms' => $result['skippedFarms'],
+                'remaining'    => $result['remaining'],
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Farmer import commit-chunk failed', [
+                'batch' => $batch->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
     }
 
     public function credentials()
@@ -189,11 +235,6 @@ class FarmerImportController extends Controller
         }, 'rsbsa_template.csv', ['Content-Type' => 'text/csv']);
     }
 
-    /**
-     * Diagnostics — visit /admin/farmers/import/diagnostics to see
-     * exactly what limits your hosting has. No auth required is fine
-     * for a temporary check; add admin middleware if you keep it.
-     */
     public function diagnostics()
     {
         $checks = [

@@ -79,9 +79,16 @@
 
 {{-- ═══════════ GRID ═══════════ --}}
 <div class="row g-3" id="varietiesGrid">
+    @php
+        // Normalize for tolerant matching (spaces / underscores / dashes / case)
+        $normalizeName = fn($s) => strtolower(preg_replace('/[\s_\-]+/', '', (string) $s));
+    @endphp
+
     @forelse($varieties as $variety)
         @php
-            $isTrained = in_array($variety->name, $trainedVarieties);
+            $needle    = $normalizeName($variety->name);
+            $isTrained = collect($trainedVarieties)
+                ->contains(fn($t) => $normalizeName($t) === $needle);
             $isHybrid  = $variety->classification === 'Hybrid';
         @endphp
         <div class="col-12 col-md-6 col-lg-4 variety-card"

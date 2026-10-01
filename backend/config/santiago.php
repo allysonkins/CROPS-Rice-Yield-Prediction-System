@@ -49,4 +49,40 @@ return [
         'Villa Gonzaga'   => ['lat' => 16.6840, 'lng' => 121.5560],
         'Villasis'        => ['lat' => 16.6880, 'lng' => 121.5580],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | ML-Trained Rice Varieties
+    |--------------------------------------------------------------------------
+    |
+    | The exact variety names the Random Forest / XGBoost model was trained on.
+    | Sourced from ml-service/feature_legend.json (the variety_* one-hot keys).
+    |
+    | Update this list whenever you retrain the model with new varieties.
+    | The RiceVarietyController matches DB names against this list (loosely —
+    | spaces, underscores, dashes, and case are ignored) to decide whether
+    | a variety card shows "In ML Model" or "Fallback Mode".
+    |
+    */
+
+    'ml_trained_varieties' => [
+        'Angelica (NSIC Rc122)',
+        'NSIC 2016 Rc 456H (Mestiso 78)',
+        'NSIC RC 402 (Tubigan 36)',
+        'NSIC Rc 480',
+        'NSIC Rc 486 (Mestiso 80)',
+        'NSIC Rc 512 (Tubigan 44)',
+        'NSIC Rc 534 (Salinas 29)',
+        'NSIC Rc 666H',
+        'NSIC Rc124H (MESTISO 4)',
+        'NSIC Rc132H (MESTISO 6)',
+        'NSIC Rc160 (Tubigan 14)',
+        'NSIC Rc204H (Mestiso 20)',
+        'NSIC Rc216 (Tubigan 17)',
+        'NSIC Rc222 (Tubigan 18)',
+        'NSIC Rc234H (MESTISO 27)',
+        'NSIC Rc440(Tubigan 39)',
+        'PSB Rc18 (Ala)',
+        'PSB Rc72H (Mestiso)',
+    ],
 ];

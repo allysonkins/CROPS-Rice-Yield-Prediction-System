@@ -12,23 +12,13 @@ use Illuminate\Support\Str;
 
 class FarmerImportService
 {
-    /**
-     * Chunk sizes — tuned for shared hosting with 30s max_execution_time
-     * and 4MB MySQL max_allowed_packet.
-     */
-    private const STAGE_CHUNK  = 500;    // rows inserted into staging per batch
-    private const COMMIT_CHUNK = 200;    // farmers created per transaction
+    private const STAGE_CHUNK  = 500;
+    private const COMMIT_CHUNK = 40;
 
     // ═════════════════════════════════════════════════════════
     // PREVIEW (streaming, stages to DB, returns summary)
     // ═════════════════════════════════════════════════════════
 
-    /**
-     * Stream the CSV row-by-row into farmer_import_rows. Never loads the
-     * whole file into memory and never puts rows in the session.
-     *
-     * @return array{total:int,new:int,duplicate:int,invalid:int,skipped:int}
-     */
     public function previewAndStage(string $absolutePath, FarmerImportBatch $batch): array
     {
         $handle = fopen($absolutePath, 'r');
@@ -36,14 +26,14 @@ class FarmerImportService
             throw new \RuntimeException('Cannot open uploaded file.');
         }
 
-        // Strip UTF-8 BOM if present (Excel / Windows exports)
+        // Strip UTF-8 BOM if present
         $firstLineRaw = fgets($handle);
         if ($firstLineRaw !== false && substr($firstLineRaw, 0, 3) === "\xEF\xBB\xBF") {
             $firstLineRaw = substr($firstLineRaw, 3);
         }
         rewind($handle);
 
-        // Auto-detect delimiter (, ; \t)
+        // Auto-detect delimiter
         $comma = substr_count((string) $firstLineRaw, ',');
         $semi  = substr_count((string) $firstLineRaw, ';');
         $tab   = substr_count((string) $firstLineRaw, "\t");
@@ -67,7 +57,9 @@ class FarmerImportService
         foreach ($required as $col) {
             if (!in_array($col, $header, true)) {
                 fclose($handle);
-                throw new \RuntimeException("Missing required column: {$col}");
+                throw new \RuntimeException(
+                    "Missing required column: {$col}. Found: " . implode(', ', $header)
+                );
             }
         }
 
@@ -76,27 +68,26 @@ class FarmerImportService
 
         $format = $hasParcelCols ? 'parcel' : 'farmer';
 
-        $summary = ['total' => 0, 'new' => 0, 'duplicate' => 0, 'invalid' => 0, 'skipped' => 0];
-        $buffer  = [];
-        $line    = 1;
+        $summary     = ['total' => 0, 'new' => 0, 'duplicate' => 0, 'invalid' => 0, 'skipped' => 0];
+        $buffer      = [];
+        $line        = 1;
+        $headerCount = count($header);
 
         while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
             $line++;
 
-            // Blank row?
             if (count($data) === 1 && trim((string) $data[0]) === '') {
                 continue;
             }
 
-            $row = array_combine(
-                $header,
-                array_pad($data, count($header), null)
-            );
+            // Trim extras + pad missing so array_combine never fails
+            $data = array_slice($data, 0, $headerCount);
+            $data = array_pad($data, $headerCount, null);
 
-            // Sanitize every cell to UTF-8
+            $row = array_combine($header, $data);
             $row = array_map(fn($v) => $this->toUtf8((string) $v), $row);
 
-            $parsed = $this->validateRow($row, $line, $format);
+            $parsed   = $this->validateRow($row, $line, $format);
             $buffer[] = $parsed;
 
             $summary['total']++;
@@ -117,68 +108,16 @@ class FarmerImportService
         return $summary;
     }
 
-    /**
-     * Legacy preview() — kept for backward compatibility with any caller
-     * still using array-based flow. Delegates to validateRow().
-     */
-    public function preview(string $absolutePath): array
-    {
-        $handle = fopen($absolutePath, 'r');
-        if (!$handle) {
-            throw new \RuntimeException('Cannot open uploaded file.');
-        }
-
-        $firstLine = fgets($handle);
-        $delimiter = substr_count((string) $firstLine, ';') > substr_count((string) $firstLine, ',') ? ';' : ',';
-        rewind($handle);
-
-        $header = fgetcsv($handle, 0, $delimiter);
-        $header = array_map(fn($h) => $this->normalizeHeader($this->toUtf8((string) $h)), $header);
-
-        $required = ['first_name', 'last_name', 'barangay'];
-        foreach ($required as $col) {
-            if (!in_array($col, $header, true)) {
-                fclose($handle);
-                throw new \RuntimeException("Missing required column: {$col}");
-            }
-        }
-
-        $format = (in_array('parcel_no', $header, true) || in_array('parcel_barangay', $header, true))
-            ? 'parcel' : 'farmer';
-
-        $rows = [];
-        $line = 1;
-        while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
-            $line++;
-            if (count($data) === 1 && trim((string) $data[0]) === '') continue;
-
-            $row = array_combine($header, array_pad($data, count($header), null));
-            $row = array_map(fn($v) => $this->toUtf8((string) $v), $row);
-            $rows[] = $this->validateRow($row, $line, $format);
-        }
-        fclose($handle);
-
-        return $rows;
-    }
-
     // ═════════════════════════════════════════════════════════
-    // COMMIT (chunked, DB-driven)
+    // COMMIT — single-shot (kept for backward compatibility)
     // ═════════════════════════════════════════════════════════
 
-    /**
-     * Commit a staged batch. Reads rows from farmer_import_rows in chunks,
-     * grouping by farmer key, and creates users + farms inside
-     * per-chunk transactions.
-     *
-     * @return array{createdUsers:int,createdFarms:int,skippedFarms:int}
-     */
     public function commitBatch(FarmerImportBatch $batch): array
     {
         $createdUsers = 0;
         $createdFarms = 0;
         $skippedFarms = 0;
 
-        // Collect unique farmer keys — one key per user we'll create
         $keys = FarmerImportRow::where('batch_id', $batch->id)
             ->where('status', 'new')
             ->select('rsbsa_number', 'phone', 'name')
@@ -194,7 +133,6 @@ class FarmerImportService
                 &$createdUsers, &$createdFarms, &$skippedFarms
             ) {
                 foreach ($keyChunk as $key) {
-                    // Fetch this farmer's staged rows
                     $query = FarmerImportRow::where('batch_id', $batch->id)
                         ->where('status', 'new');
 
@@ -203,8 +141,6 @@ class FarmerImportService
                     } elseif (str_starts_with($key, 'phone:')) {
                         $query->where('phone', substr($key, 6));
                     } else {
-                        // Name fallback (no RSBSA, no phone should have been
-                        // caught by validation — but keep for safety)
                         $query->where('name', substr($key, 5));
                     }
 
@@ -213,7 +149,6 @@ class FarmerImportService
 
                     $first = $rows->first();
 
-                    // Skip if user already exists (double-click safety)
                     $existing = User::where(function ($q) use ($first) {
                         if ($first->rsbsa_number) $q->orWhere('rsbsa_number', $first->rsbsa_number);
                         if ($first->phone)        $q->orWhere('phone', $first->phone);
@@ -245,72 +180,118 @@ class FarmerImportService
         return compact('createdUsers', 'createdFarms', 'skippedFarms');
     }
 
-    /**
-     * Legacy commit() — accepts an array of preview rows (in-memory).
-     * Still works, but the controller should prefer commitBatch().
-     */
-    public function commit(array $rows): array
-    {
-        $newRows = array_filter($rows, fn($r) => $r['status'] === 'new');
+    // ═════════════════════════════════════════════════════════
+    // COMMIT — chunked (called repeatedly by the browser)
+    // ═════════════════════════════════════════════════════════
 
-        $grouped = [];
-        foreach ($newRows as $row) {
-            $key = $row['rsbsa_number'] ?: strtolower($row['name']);
-            $grouped[$key][] = $row;
+    /**
+     * Process the next chunk of unique farmer keys. Each call:
+     *   - finds up to $limit unprocessed farmer keys
+     *   - creates the user + parcels inside per-farmer transactions
+     *   - marks the corresponding staging rows processed_at = now()
+     */
+    public function commitChunk(FarmerImportBatch $batch, int $limit = 40): array
+    {
+        // Scan a window of unprocessed rows, collect up to $limit unique keys
+        $scan = FarmerImportRow::where('batch_id', $batch->id)
+            ->where('status', 'new')
+            ->whereNull('processed_at')
+            ->orderBy('line')
+            ->limit(2000)
+            ->get(['id', 'line', 'rsbsa_number', 'phone', 'name']);
+
+        if ($scan->isEmpty()) {
+            return ['createdUsers' => 0, 'createdFarms' => 0, 'skippedFarms' => 0, 'remaining' => 0];
         }
+
+        $keys = [];
+        foreach ($scan as $r) {
+            $k = $this->farmerKey($r->rsbsa_number, $r->phone, $r->name);
+            if (!isset($keys[$k])) {
+                $keys[$k] = true;
+                if (count($keys) >= $limit) break;
+            }
+        }
+        $keys = array_keys($keys);
 
         $createdUsers = 0;
         $createdFarms = 0;
         $skippedFarms = 0;
 
-        DB::transaction(function () use ($grouped, &$createdUsers, &$createdFarms, &$skippedFarms) {
-            foreach ($grouped as $parcels) {
-                $first = $parcels[0];
+        foreach ($keys as $key) {
+            DB::transaction(function () use (
+                $key, $batch,
+                &$createdUsers, &$createdFarms, &$skippedFarms
+            ) {
+                $query = FarmerImportRow::where('batch_id', $batch->id)
+                    ->where('status', 'new')
+                    ->whereNull('processed_at');
 
-                // Coerce to object-like access
-                $firstObj = (object) $first;
-
-                if (User::where(function ($q) use ($first) {
-                    if (!empty($first['rsbsa_number'])) $q->orWhere('rsbsa_number', $first['rsbsa_number']);
-                    if (!empty($first['phone']))        $q->orWhere('phone', $first['phone']);
-                })->exists()) {
-                    continue;
+                if (str_starts_with($key, 'rsbsa:')) {
+                    $query->where('rsbsa_number', substr($key, 6));
+                } elseif (str_starts_with($key, 'phone:')) {
+                    $query->where('phone', substr($key, 6));
+                } else {
+                    $query->where('name', substr($key, 5));
                 }
 
-                $user = $this->createFarmer($firstObj);
+                $rows = $query->orderBy('line')->get();
+                if ($rows->isEmpty()) return;
+
+                $first = $rows->first();
+                $ids   = $rows->pluck('id')->all();
+
+                $exists = User::where(function ($q) use ($first) {
+                    if ($first->rsbsa_number) $q->orWhere('rsbsa_number', $first->rsbsa_number);
+                    if ($first->phone)        $q->orWhere('phone', $first->phone);
+                })->exists();
+
+                if ($exists) {
+                    FarmerImportRow::whereIn('id', $ids)->update(['processed_at' => now()]);
+                    return;
+                }
+
+                $user = $this->createFarmer($first);
                 $createdUsers++;
 
-                foreach ($parcels as $p) {
-                    if (empty($p['is_rice'])) { $skippedFarms++; continue; }
-                    if ($this->createParcelFarm($user, (object) $p, $firstObj)) {
+                foreach ($rows as $r) {
+                    if (!$r->is_rice) { $skippedFarms++; continue; }
+                    if ($this->createParcelFarm($user, $r, $first)) {
                         $createdFarms++;
                     }
                 }
 
                 log_activity('created', 'Farmer imported from RSBSA', $user, [
-                    'rsbsa_number' => $first['rsbsa_number'],
-                    'parcels'      => count($parcels),
+                    'rsbsa_number' => $first->rsbsa_number,
+                    'parcels'      => $rows->count(),
                     'source'       => 'RSBSA CSV import',
                 ]);
-            }
-        });
 
-        return compact('createdUsers', 'createdFarms', 'skippedFarms');
+                FarmerImportRow::whereIn('id', $ids)->update(['processed_at' => now()]);
+            });
+        }
+
+        $remaining = FarmerImportRow::where('batch_id', $batch->id)
+            ->where('status', 'new')
+            ->whereNull('processed_at')
+            ->count();
+
+        return compact('createdUsers', 'createdFarms', 'skippedFarms', 'remaining');
     }
 
     // ═════════════════════════════════════════════════════════
-    // ROW VALIDATION (unchanged rules)
+    // ROW VALIDATION
     // ═════════════════════════════════════════════════════════
 
     private function validateRow(array $row, int $line, string $format): array
     {
-        $rsbsa   = trim((string) ($row['rsbsa_number'] ?? ''));
-        $phone   = $this->normalizePhone((string) ($row['phone'] ?? $row['contact_number'] ?? ''));
-        $first   = trim((string) ($row['first_name'] ?? ''));
-        $middle  = trim((string) ($row['middle_name'] ?? ''));
-        $last    = trim((string) ($row['last_name'] ?? ''));
-        $brgy    = trim((string) ($row['barangay'] ?? ''));
-        $sex     = trim((string) ($row['sex'] ?? ''));
+        $rsbsa  = trim((string) ($row['rsbsa_number'] ?? ''));
+        $phone  = $this->normalizePhone((string) ($row['phone'] ?? $row['contact_number'] ?? ''));
+        $first  = trim((string) ($row['first_name'] ?? ''));
+        $middle = trim((string) ($row['middle_name'] ?? ''));
+        $last   = trim((string) ($row['last_name'] ?? ''));
+        $brgy   = trim((string) ($row['barangay'] ?? ''));
+        $sex    = trim((string) ($row['sex'] ?? ''));
 
         $parcelNo   = $format === 'parcel' ? trim((string) ($row['parcel_no'] ?? '')) : '';
         $parcelBrgy = $format === 'parcel' ? trim((string) ($row['parcel_barangay'] ?? '')) : '';
@@ -323,7 +304,6 @@ class FarmerImportService
         if ($first === '' || $last === '') $errors[] = 'Missing name';
         if ($brgy === '')                 $errors[] = 'Missing barangay';
 
-        // Rule: at least one login identifier must exist
         if ($rsbsa === '' && $phone === '') {
             $errors[] = 'Missing login identifier (need phone or RSBSA number)';
         }
@@ -331,21 +311,46 @@ class FarmerImportService
         if ($phone !== '' && !preg_match('/^09\d{9}$/', $phone)) {
             $errors[] = 'Invalid PH mobile number';
         }
-        if ($brgy !== '' && !in_array($brgy, config('santiago.barangays', []), true)) {
-            $errors[] = "Unknown barangay: {$brgy}";
-        }
-        if ($parcelBrgy !== '' && !in_array($parcelBrgy, config('santiago.barangays', []), true)) {
-            $errors[] = "Unknown parcel barangay: {$parcelBrgy}";
+
+        // ── Barangay validation (case-insensitive, skips if config empty) ──
+        $barangays = config('santiago.barangays', []);
+
+        if (!empty($barangays)) {
+            static $brgyMap = null;
+            if ($brgyMap === null) {
+                $brgyMap = [];
+                foreach ($barangays as $b) {
+                    $brgyMap[strtolower(trim($b))] = $b;
+                }
+            }
+
+            if ($brgy !== '') {
+                $key = strtolower($brgy);
+                if (!isset($brgyMap[$key])) {
+                    $errors[] = "Unknown barangay: {$brgy}";
+                } else {
+                    $brgy = $brgyMap[$key];
+                }
+            }
+
+            if ($parcelBrgy !== '') {
+                $key = strtolower($parcelBrgy);
+                if (!isset($brgyMap[$key])) {
+                    $errors[] = "Unknown parcel barangay: {$parcelBrgy}";
+                } else {
+                    $parcelBrgy = $brgyMap[$key];
+                }
+            }
         }
 
         $status = 'new';
 
         if ($rsbsa && User::where('rsbsa_number', $rsbsa)->exists()) {
-            $status = 'duplicate';
+            $status   = 'duplicate';
             $errors[] = 'RSBSA number already registered';
         }
         if ($phone && User::where('phone', $phone)->exists()) {
-            $status = 'duplicate';
+            $status   = 'duplicate';
             $errors[] = 'Phone already registered';
         }
         if (!empty($errors) && $status !== 'duplicate') {
@@ -405,7 +410,9 @@ class FarmerImportService
             'verified_by_cao_id' => auth()->id(),
         ]);
 
-        $user->setPin($pin);
+        if (method_exists($user, 'setPin')) {
+            $user->setPin($pin);
+        }
 
         return $user;
     }
@@ -416,12 +423,11 @@ class FarmerImportService
             ? "Parcel {$parcel->parcel_no} — {$first->name}"
             : "{$first->name} Farm";
 
-        // Re-upload protection
         if (Farm::where('user_id', $user->id)->where('name', $farmName)->exists()) {
             return false;
         }
 
-        $centroid = config('santiago.centroids')[$parcel->parcel_barangay ?? ''] ?? [];
+        $centroid = config('santiago.centroids', [])[$parcel->parcel_barangay ?? ''] ?? [];
 
         Farm::create([
             'user_id'      => $user->id,

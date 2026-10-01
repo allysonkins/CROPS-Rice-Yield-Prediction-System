@@ -11,10 +11,12 @@ class FarmerImportRow extends Model
         'rsbsa_number','name','first_name','middle_name','last_name',
         'sex','phone','barangay',
         'parcel_no','parcel_barangay','land_area_ha','commodity','errors',
+        'processed_at',
     ];
 
     protected $casts = [
-        'is_rice' => 'boolean',
+        'is_rice'      => 'boolean',
+        'processed_at' => 'datetime',
     ];
 
     public function batch()

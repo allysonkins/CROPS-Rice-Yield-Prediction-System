@@ -100,7 +100,9 @@ class PredictionService
         ];
 
         try {
-            $response = Http::timeout(10)->post('http://127.0.0.1:5000/predict', $input);
+            $url      = rtrim(config('services.ml.url'), '/') . '/predict';
+            $timeout  = (int) config('services.ml.timeout', 60);
+            $response = Http::timeout($timeout)->post($url, $input);
             $result   = $response->json();
 
             $yield      = $result['Predicted_Yield'] ?? null;

@@ -150,11 +150,11 @@
         <div class="side-mid">
             <h2>CROPS</h2>
             <div class="accent"></div>
-            <p>A rice yield prediction system that helps farmers and the City Agriculture Office plan every season with confidence.</p>
+            <p>A rice yield prediction system for farmers and the City Agriculture Office</p>
             <ul class="side-list">
-                <li><i class="bi bi-graph-up-arrow"></i> Rice yield predictions for your farm</li>
-                <li><i class="bi bi-patch-check-fill"></i> Farmer records verified by the CAO</li>
-                <li><i class="bi bi-shield-lock-fill"></i> Secure, role-based access</li>
+                <li><i class="bi bi-people-fill"></i> Farmer & farm management</li>
+                <li><i class="bi bi-bar-chart-fill"></i> Yield prediction & history</li>
+                <li><i class="bi bi-basket-fill"></i> Harvest tracking & reporting</li>
             </ul>
         </div>
 

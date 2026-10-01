@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 class RiceVarietyController extends Controller
 {
@@ -37,29 +39,29 @@ class RiceVarietyController extends Controller
         if (auth()->user()->role === 'farmer') {
             return response()->json([
                 'success' => false,
-                'error' => 'Farmers cannot add rice varieties.'
+                'error'   => 'Farmers cannot add rice varieties.'
             ], 403);
         }
 
         try {
             $validated = $request->validate([
-                'name' => 'required|string|max:255|unique:rice_varieties',
-                'classification' => 'required|in:Hybrid,Inbred',
-                'growth_period' => 'nullable|integer|min:60|max:200',
+                'name'                       => 'required|string|max:255|unique:rice_varieties',
+                'classification'             => 'required|in:Hybrid,Inbred',
+                'growth_period'              => 'nullable|integer|min:60|max:200',
                 'growth_period_transplanted' => 'nullable|integer|min:60|max:200',
-                'growth_period_direct' => 'nullable|integer|min:60|max:200',
-                'description' => 'nullable|string',
-                'avg_yield' => 'nullable|numeric|min:0|max:15',
-                'max_yield' => 'nullable|numeric|min:0|max:15',
-                'avg_yield_transplanted' => 'nullable|numeric|min:0|max:15',
-                'max_yield_transplanted' => 'nullable|numeric|min:0|max:15',
-                'avg_yield_direct' => 'nullable|numeric|min:0|max:15',
-                'max_yield_direct' => 'nullable|numeric|min:0|max:15',
-                'grain_quality' => 'nullable|string',
-                'disease_susceptibility' => 'nullable|string|max:255',
-                'optimal_temp_min' => 'nullable|numeric|min:10|max:40',
-                'optimal_temp_max' => 'nullable|numeric|min:10|max:40',
-                'resilience' => 'nullable|array',
+                'growth_period_direct'       => 'nullable|integer|min:60|max:200',
+                'description'                => 'nullable|string',
+                'avg_yield'                  => 'nullable|numeric|min:0|max:15',
+                'max_yield'                  => 'nullable|numeric|min:0|max:15',
+                'avg_yield_transplanted'     => 'nullable|numeric|min:0|max:15',
+                'max_yield_transplanted'     => 'nullable|numeric|min:0|max:15',
+                'avg_yield_direct'           => 'nullable|numeric|min:0|max:15',
+                'max_yield_direct'           => 'nullable|numeric|min:0|max:15',
+                'grain_quality'              => 'nullable|string',
+                'disease_susceptibility'     => 'nullable|string|max:255',
+                'optimal_temp_min'           => 'nullable|numeric|min:10|max:40',
+                'optimal_temp_max'           => 'nullable|numeric|min:10|max:40',
+                'resilience'                 => 'nullable|array',
             ]);
 
             $validated['growth_period'] = $validated['growth_period_transplanted']
@@ -69,21 +71,23 @@ class RiceVarietyController extends Controller
             $variety = RiceVariety::create($validated);
 
             log_activity('created', 'Rice variety created', $variety, [
-                'name' => $variety->name,
+                'name'           => $variety->name,
                 'classification' => $variety->classification,
             ]);
 
-            // Check if this variety is in the ML model
+            // Bust the trained-varieties cache so the new one is re-evaluated
+            $this->forgetTrainedVarietiesCache();
+
             $trainedVarieties = $this->getTrainedVarieties();
-            $isFallback = !in_array($variety->name, $trainedVarieties, true);
+            $isFallback = !$this->isVarietyTrained($variety->name, $trainedVarieties);
 
             if ($request->ajax()) {
                 return response()->json([
-                    'success' => true,
-                    'message' => $isFallback
+                    'success'     => true,
+                    'message'     => $isFallback
                         ? '✅ Rice variety "' . $variety->name . '" added! Note: this variety is not in the ML model — predictions will use numeric features only. Retrain the model to include it.'
                         : '✅ Rice variety "' . $variety->name . '" added successfully!',
-                    'data' => $variety,
+                    'data'        => $variety,
                     'is_fallback' => $isFallback,
                 ], 201);
             }
@@ -95,8 +99,8 @@ class RiceVarietyController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'errors' => $e->errors(),
-                    'error' => 'Please correct the highlighted fields.'
+                    'errors'  => $e->errors(),
+                    'error'   => 'Please correct the highlighted fields.'
                 ], 422);
             }
             return back()->withErrors($e->errors())->withInput();
@@ -105,7 +109,7 @@ class RiceVarietyController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Database error: ' . $e->getMessage()
+                    'error'   => 'Database error: ' . $e->getMessage()
                 ], 500);
             }
             return back()->with('error', 'Database error occurred.')->withInput();
@@ -114,7 +118,7 @@ class RiceVarietyController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Failed to save variety: ' . $e->getMessage()
+                    'error'   => 'Failed to save variety: ' . $e->getMessage()
                 ], 500);
             }
             return back()->with('error', 'Failed to save variety.')->withInput();
@@ -135,7 +139,7 @@ class RiceVarietyController extends Controller
         if (auth()->user()->role === 'farmer') {
             return response()->json([
                 'success' => false,
-                'error' => 'Farmers cannot edit rice varieties.'
+                'error'   => 'Farmers cannot edit rice varieties.'
             ], 403);
         }
 
@@ -143,23 +147,23 @@ class RiceVarietyController extends Controller
             $variety = RiceVariety::findOrFail($id);
 
             $validated = $request->validate([
-                'name' => ['required', 'string', 'max:255', Rule::unique('rice_varieties')->ignore($variety->id)],
-                'classification' => 'required|in:Hybrid,Inbred',
-                'growth_period' => 'nullable|integer|min:60|max:200',
+                'name'                       => ['required', 'string', 'max:255', Rule::unique('rice_varieties')->ignore($variety->id)],
+                'classification'             => 'required|in:Hybrid,Inbred',
+                'growth_period'              => 'nullable|integer|min:60|max:200',
                 'growth_period_transplanted' => 'nullable|integer|min:60|max:200',
-                'growth_period_direct' => 'nullable|integer|min:60|max:200',
-                'description' => 'nullable|string',
-                'avg_yield' => 'nullable|numeric|min:0|max:15',
-                'max_yield' => 'nullable|numeric|min:0|max:15',
-                'avg_yield_transplanted' => 'nullable|numeric|min:0|max:15',
-                'max_yield_transplanted' => 'nullable|numeric|min:0|max:15',
-                'avg_yield_direct' => 'nullable|numeric|min:0|max:15',
-                'max_yield_direct' => 'nullable|numeric|min:0|max:15',
-                'grain_quality' => 'nullable|string',
-                'disease_susceptibility' => 'nullable|string|max:255',
-                'optimal_temp_min' => 'nullable|numeric|min:10|max:40',
-                'optimal_temp_max' => 'nullable|numeric|min:10|max:40',
-                'resilience' => 'nullable|array',
+                'growth_period_direct'       => 'nullable|integer|min:60|max:200',
+                'description'                => 'nullable|string',
+                'avg_yield'                  => 'nullable|numeric|min:0|max:15',
+                'max_yield'                  => 'nullable|numeric|min:0|max:15',
+                'avg_yield_transplanted'     => 'nullable|numeric|min:0|max:15',
+                'max_yield_transplanted'     => 'nullable|numeric|min:0|max:15',
+                'avg_yield_direct'           => 'nullable|numeric|min:0|max:15',
+                'max_yield_direct'           => 'nullable|numeric|min:0|max:15',
+                'grain_quality'              => 'nullable|string',
+                'disease_susceptibility'     => 'nullable|string|max:255',
+                'optimal_temp_min'           => 'nullable|numeric|min:10|max:40',
+                'optimal_temp_max'           => 'nullable|numeric|min:10|max:40',
+                'resilience'                 => 'nullable|array',
             ]);
 
             $validated['growth_period'] = $validated['growth_period_transplanted']
@@ -179,7 +183,7 @@ class RiceVarietyController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => '✅ Rice variety "' . $variety->name . '" updated successfully!',
-                    'data' => $variety
+                    'data'    => $variety
                 ]);
             }
 
@@ -190,8 +194,8 @@ class RiceVarietyController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'errors' => $e->errors(),
-                    'error' => 'Please correct the highlighted fields.'
+                    'errors'  => $e->errors(),
+                    'error'   => 'Please correct the highlighted fields.'
                 ], 422);
             }
             return back()->withErrors($e->errors())->withInput();
@@ -200,7 +204,7 @@ class RiceVarietyController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Database error: ' . $e->getMessage()
+                    'error'   => 'Database error: ' . $e->getMessage()
                 ], 500);
             }
             return back()->with('error', 'Database error occurred.')->withInput();
@@ -209,7 +213,7 @@ class RiceVarietyController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Failed to update variety: ' . $e->getMessage()
+                    'error'   => 'Failed to update variety: ' . $e->getMessage()
                 ], 500);
             }
             return back()->with('error', 'Failed to update variety.')->withInput();
@@ -225,11 +229,14 @@ class RiceVarietyController extends Controller
         $variety = RiceVariety::findOrFail($id);
 
         log_activity('deleted', 'Rice variety deleted', $variety, [
-            'name' => $variety->name,
+            'name'           => $variety->name,
             'classification' => $variety->classification,
         ]);
 
         $variety->delete();
+
+        // Bust the cache so future lookups reflect the change
+        $this->forgetTrainedVarietiesCache();
 
         return redirect()->route('admin.rice-varieties.index')
             ->with('success', 'Rice variety deleted successfully!');
@@ -239,17 +246,17 @@ class RiceVarietyController extends Controller
     {
         try {
             $variety = RiceVariety::findOrFail($id);
-            $method = $request->query('method', 'Transplanted');
-            $yield = $variety->getYieldForMethod($method);
+            $method  = $request->query('method', 'Transplanted');
+            $yield   = $variety->getYieldForMethod($method);
             return response()->json([
                 'success' => true,
-                'avg' => $yield->avg,
-                'max' => $yield->max,
+                'avg'     => $yield->avg,
+                'max'     => $yield->max,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to fetch yield data: ' . $e->getMessage()
+                'error'   => 'Failed to fetch yield data: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -266,38 +273,157 @@ class RiceVarietyController extends Controller
 
     /**
      * Read the one-hot variety columns the ML model was trained on.
-     * Reads from feature_legend.json, filters out numeric variety_* fields.
+     *
+     * Source priority:
+     *   1. Render ML service over HTTP (cached 6h)
+     *   2. Local feature_legend.json (dev / XAMPP)
+     *   3. Empty array (everything shows as fallback)
      */
     private function getTrainedVarieties(): array
-    {
+{
+    $hardcoded = config('santiago.ml_trained_varieties', []);
+    if (!empty($hardcoded)) {
+        return $hardcoded;
+    }
+
+    return Cache::remember('ml.trained_varieties', now()->addHours(6), function () {
+        $remote = $this->fetchTrainedVarietiesFromService();
+        if (!empty($remote)) {
+            return $remote;
+        }
+
         $path = $this->findMlFile('feature_legend.json');
         if (!$path) return [];
 
         $legend = json_decode(file_get_contents($path), true) ?? [];
+        return $this->extractVarietyNames($legend);
+    });
+}
 
-        // These start with "variety_" but are numeric, not one-hot columns
+    /**
+     * Query the Render ML service for its feature legend.
+     * Returns [] on any failure so the caller can fall back.
+     */
+    private function fetchTrainedVarietiesFromService(): array
+    {
+        $base = rtrim((string) config('services.ml.url', ''), '/');
+        if ($base === '') return [];
+
+        $endpoint = (string) config('services.ml.endpoint', '/features');
+        $timeout  = (int)    config('services.ml.timeout', 10);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->get($base . $endpoint);
+
+            if (!$response->ok()) {
+                \Log::warning('ML service returned non-OK', [
+                    'url'    => $base . $endpoint,
+                    'status' => $response->status(),
+                    'body'   => substr((string) $response->body(), 0, 500),
+                ]);
+                return [];
+            }
+
+            $data = $response->json();
+            if (!is_array($data)) return [];
+
+            // Accept several common response shapes.
+            if (isset($data['features']) && is_array($data['features'])) {
+                return $this->extractVarietyNames($data['features']);
+            }
+            if (isset($data['feature_legend']) && is_array($data['feature_legend'])) {
+                return $this->extractVarietyNames($data['feature_legend']);
+            }
+            if (isset($data['feature_names']) && is_array($data['feature_names'])) {
+                return $this->extractVarietyNames($data['feature_names']);
+            }
+            if (isset($data['varieties']) && is_array($data['varieties'])) {
+                return array_values(array_unique($data['varieties']));
+            }
+
+            // Bare list or bare map
+            return $this->extractVarietyNames($data);
+
+        } catch (\Throwable $e) {
+            \Log::warning('ML service fetch failed', [
+                'url'   => $base . $endpoint,
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Given a legend (list or map of feature names), pull out the
+     * variety_* entries and strip the prefix. Numeric variety_* fields
+     * are ignored.
+     */
+    private function extractVarietyNames($legend): array
+    {
+        if (!is_array($legend)) return [];
+
+        $keys     = array_keys($legend);
+        $isList   = $keys === range(0, count($keys) - 1);
+        $features = $isList ? array_values($legend) : $keys;
+
         $numericVarietyFields = [
             'variety_maturity_days',
             'variety_max_yield',
             'variety_avg_yield',
         ];
 
-        $trained = [];
-        foreach (array_keys($legend) as $feat) {
-            if (str_starts_with($feat, 'variety_')
-                && !in_array($feat, $numericVarietyFields, true)) {
-                $trained[] = substr($feat, strlen('variety_'));
-            }
+        $out = [];
+        foreach ($features as $feat) {
+            if (!is_string($feat)) continue;
+            if (!str_starts_with($feat, 'variety_')) continue;
+            if (in_array($feat, $numericVarietyFields, true)) continue;
+            $out[] = substr($feat, strlen('variety_'));
         }
 
-        return $trained;
+        return array_values(array_unique($out));
     }
 
     /**
-     * Get the timestamp of the last model training.
+     * Loose match: strip spaces, underscores, dashes, and lowercase
+     * so "NSIC Rc 222" and "NSIC_Rc222" both match.
+     */
+    private function isVarietyTrained(string $name, array $trainedVarieties): bool
+    {
+        $norm = fn($s) => strtolower(preg_replace('/[\s_\-]+/', '', $s));
+        $needle = $norm($name);
+        foreach ($trainedVarieties as $t) {
+            if ($norm($t) === $needle) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Timestamp of the last model training.
+     * Prefers the remote service, falls back to a local pkl file.
      */
     private function getLastTrainedDate(): string
     {
+        $base = rtrim((string) config('services.ml.url', ''), '/');
+        if ($base !== '') {
+            try {
+                $response = Http::timeout(3)
+                    ->acceptJson()
+                    ->get($base . '/model-info');
+
+                if ($response->ok()) {
+                    $info = $response->json();
+                    $ts   = $info['trained_at'] ?? $info['last_trained'] ?? null;
+                    if ($ts) {
+                        return date('M d, Y g:i A', strtotime($ts));
+                    }
+                }
+            } catch (\Throwable $e) {
+                // silent — fall through to local file
+            }
+        }
+
         $path = $this->findMlFile('model_rf.pkl');
         if (!$path) return 'Not trained yet';
 
@@ -306,6 +432,7 @@ class RiceVarietyController extends Controller
 
     /**
      * Search common relative paths for a file in the ml-service folder.
+     * Only used in dev / XAMPP. On Hostinger this returns null.
      */
     private function findMlFile(string $filename): ?string
     {

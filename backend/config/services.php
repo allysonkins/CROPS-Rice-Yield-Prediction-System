@@ -35,4 +35,21 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Machine Learning Service (Render-hosted)
+    |--------------------------------------------------------------------------
+    |
+    | Base URL of the FastAPI/Flask ML service running on Render. Used by
+    | RiceVarietyController to fetch the feature legend (trained varieties)
+    | so the admin UI doesn't wrongly flag every variety as "fallback".
+    |
+    */
+
+    'ml' => [
+        'url'      => env('ML_SERVICE_URL', ''),
+        'endpoint' => env('ML_FEATURES_ENDPOINT', '/features'),
+        'timeout'  => env('ML_SERVICE_TIMEOUT', 10),
+    ],
+
 ];

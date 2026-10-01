@@ -155,6 +155,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get ('/admin/farmers/import',             [FarmerImportController::class, 'form'])->name('admin.farmers.import.form');
     Route::post('/admin/farmers/import/preview',     [FarmerImportController::class, 'preview'])->name('admin.farmers.import.preview');
     Route::post('/admin/farmers/import/commit',      [FarmerImportController::class, 'commit'])->name('admin.farmers.import.commit');
+    Route::post('/admin/farmers/import/commit-chunk',[FarmerImportController::class, 'commitChunk'])->name('admin.farmers.import.commit-chunk');
     Route::get ('/admin/farmers/import/credentials', [FarmerImportController::class, 'credentials'])->name('admin.farmers.import.credentials');
     Route::get ('/admin/farmers/import/template',    [FarmerImportController::class, 'template'])->name('admin.farmers.import.template');
     Route::get ('/admin/farmers/import/diagnostics', [FarmerImportController::class, 'diagnostics'])->name('admin.farmers.import.diagnostics');

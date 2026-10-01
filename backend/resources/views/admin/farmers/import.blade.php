@@ -39,7 +39,6 @@
             <i class="bi bi-info-circle"></i>
             Server upload limit: <strong>{{ $uploadMax }}</strong> &nbsp;·&nbsp;
             POST limit: <strong>{{ $postMax }}</strong>.
-            For files bigger than this, ask your host to raise the limits or split the CSV into smaller chunks.
         </div>
 
         <form action="{{ route('admin.farmers.import.preview') }}" method="POST"
@@ -146,15 +145,27 @@
         </div>
 
         @if($summary['new'] > 0)
-            <form action="{{ route('admin.farmers.import.commit') }}" method="POST" class="mt-3">
-                @csrf
-                <input type="hidden" name="batch_uuid" value="{{ $batch->uuid }}">
-                <button class="btn btn-success" id="commitBtn">
+            <div class="mt-3">
+                <button type="button" class="btn btn-success" id="commitBtn" onclick="startChunkedImport()">
                     <i class="bi bi-check-circle"></i>
                     Import {{ number_format($summary['new']) }} Farmers
                 </button>
                 <a href="{{ route('admin.farmers.import.form') }}" class="btn btn-secondary">Cancel</a>
-            </form>
+
+                <div id="importProgress" style="display:none; margin-top:16px;">
+                    <div class="d-flex justify-content-between mb-1" style="font-size:12px;">
+                        <span class="fw-semibold" style="color:#495057;">Importing…</span>
+                        <span id="importProgressText" class="text-muted">Starting…</span>
+                    </div>
+                    <div class="progress" style="height:22px; border-radius:8px; background:#e9ecef;">
+                        <div id="importProgressBar"
+                             class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar"
+                             style="width:0%; background:#198754; font-size:12px; font-weight:700;">0%</div>
+                    </div>
+                    <div id="importProgressError" class="alert alert-danger" style="display:none; margin-top:10px;"></div>
+                </div>
+            </div>
         @else
             <div class="alert alert-info mt-3">
                 No new farmers to import. All rows are duplicates or invalid.
@@ -168,25 +179,133 @@
 
 @push('scripts')
 <script>
-    // Client-side file size guard — fail fast before the request even leaves
-    document.getElementById('csvFile')?.addEventListener('change', function() {
-        const maxBytes = 50 * 1024 * 1024; // 50MB matches server validation
+    // Client-side file size guard
+    document.getElementById('csvFile')?.addEventListener('change', function () {
+        const maxBytes = 50 * 1024 * 1024;
         if (this.files[0] && this.files[0].size > maxBytes) {
             alert('File too large. Maximum is 50MB. Split the CSV and import in chunks.');
             this.value = '';
         }
     });
 
-    // Show loading state on submit
-    document.getElementById('importForm')?.addEventListener('submit', function() {
+    // Upload spinner
+    document.getElementById('importForm')?.addEventListener('submit', function () {
         const btn = document.getElementById('submitBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading & parsing... (this may take a minute)';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading & parsing… (this may take a minute)';
+        }
     });
 
-    document.getElementById('commitBtn')?.addEventListener('click', function() {
-        this.disabled = true;
-        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing... (do not close this tab)';
-    });
+    // ─── Chunked import ─────────────────────────────────────
+    // Only defined when we actually have a previewed batch.
+    @isset($batch)
+    let importing = false;
+
+    async function startChunkedImport() {
+        if (importing) return;
+        importing = true;
+
+        const total     = {{ (int) ($summary['new'] ?? 0) }};
+        const batchUuid = '{{ $batch->uuid }}';
+
+        const btn      = document.getElementById('commitBtn');
+        const progress = document.getElementById('importProgress');
+        const bar      = document.getElementById('importProgressBar');
+        const text     = document.getElementById('importProgressText');
+        const errBox   = document.getElementById('importProgressError');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importing…';
+        progress.style.display = 'block';
+        errBox.style.display = 'none';
+
+        let totalUsers = 0;
+        let totalFarms = 0;
+        let lastRemaining = null;
+        let stuckCount = 0;
+        let consecutiveErrors = 0;
+        const MAX_ERRORS = 3;
+
+        while (true) {
+            try {
+                const res = await fetch('{{ route('admin.farmers.import.commit-chunk') }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ batch_uuid: batchUuid }),
+                });
+
+                if (!res.ok) {
+                    throw new Error('Server returned ' + res.status);
+                }
+
+                const data = await res.json();
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown error');
+                }
+
+                totalUsers += data.createdUsers || 0;
+                totalFarms += data.createdFarms || 0;
+
+                const done = Math.max(0, total - (data.remaining || 0));
+                const pct  = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 100;
+                bar.style.width = pct + '%';
+                bar.textContent = pct + '%';
+                text.textContent = totalUsers + ' farmers, ' + totalFarms + ' farms created — ' + data.remaining + ' remaining';
+
+                consecutiveErrors = 0;
+
+                if (data.remaining === 0) {
+                    break;
+                }
+
+                if (data.remaining === lastRemaining) {
+                    stuckCount++;
+                    if (stuckCount >= 3) {
+                        throw new Error('Import stalled — remaining count is not decreasing. Check laravel.log.');
+                    }
+                } else {
+                    stuckCount = 0;
+                }
+                lastRemaining = data.remaining;
+
+            } catch (err) {
+                consecutiveErrors++;
+                console.error('Import chunk failed:', err);
+
+                if (consecutiveErrors >= MAX_ERRORS) {
+                    errBox.style.display = 'block';
+                    errBox.innerHTML =
+                        '<strong>Import stopped.</strong> ' + err.message +
+                        '<br>Created so far: <strong>' + totalUsers + ' farmers</strong>, ' +
+                        totalFarms + ' farms.' +
+                        '<br><small>Check <code>storage/logs/laravel.log</code>. ' +
+                        'You can safely click Retry — already-created farmers are skipped.</small>';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Retry';
+                    importing = false;
+                    return;
+                }
+
+                await new Promise(r => setTimeout(r, 1000 * consecutiveErrors));
+            }
+        }
+
+        text.innerHTML = '<span style="color:#198754; font-weight:700;">✓ Done — '
+            + totalUsers + ' farmers, ' + totalFarms + ' farms</span>';
+        bar.classList.remove('progress-bar-animated');
+        bar.style.width = '100%';
+        bar.textContent = '100%';
+
+        setTimeout(() => {
+            window.location.href = '{{ route('admin.farmers.credentials') }}';
+        }, 1200);
+    }
+    @endisset
 </script>
 @endpush
