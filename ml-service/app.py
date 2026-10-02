@@ -106,13 +106,11 @@ class ModelState:
             self.feature_names = list(joblib.load(feat_p)) if feat_p and os.path.isfile(feat_p) else []
             self.version = version
 
-            # Quantile models live next to the main one
             low_p  = _derive_sibling(model_p, '_low')
             high_p = _derive_sibling(model_p, '_high')
             self.model_low  = joblib.load(low_p)  if os.path.isfile(low_p)  else None
             self.model_high = joblib.load(high_p) if os.path.isfile(high_p) else None
 
-            # Calibration factor
             if interval_p and os.path.isfile(interval_p):
                 try:
                     self.interval_scale = float(joblib.load(interval_p))
@@ -198,6 +196,47 @@ def compute_confidence(point, low, high):
     return float(np.clip(1.0 - relative_width, 0.0, 1.0))
 
 
+def _extract_trained_varieties():
+    """
+    Pull the trained variety names out of the feature legend.
+
+    The feature legend contains keys like 'variety_NSIC_Rc222' for
+    each trained variety, plus three numeric variety_* fields that
+    are NOT one-hot columns. We filter those out.
+    """
+    numeric_fields = {
+        'variety_maturity_days',
+        'variety_max_yield',
+        'variety_avg_yield',
+    }
+    out = set()
+    for feat in STATE.legend.keys():
+        if not isinstance(feat, str):
+            continue
+        if not feat.startswith('variety_'):
+            continue
+        if feat in numeric_fields:
+            continue
+        out.add(feat[len('variety_'):])
+    return sorted(out)
+
+
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        "service":  "CROPS ML Service",
+        "status":   "running",
+        "version":  STATE.version,
+        "endpoints": [
+            "GET  /health",
+            "GET  /features",
+            "GET  /legend",
+            "POST /predict",
+            "POST /reload",
+        ],
+    })
+
+
 @app.route('/health', methods=['GET'])
 def health():
     STATE.ensure_loaded()
@@ -213,6 +252,28 @@ def health():
 @app.route('/legend', methods=['GET'])
 def get_legend():
     return jsonify(STATE.legend)
+
+
+@app.route('/features', methods=['GET'])
+def features():
+    """
+    Feature legend + trained variety names.
+
+    Consumed by the Laravel RiceVarietyController to decide whether
+    a given variety was part of the training data ('In ML Model')
+    or is a post-training addition ('Fallback Mode').
+    """
+    STATE.ensure_loaded()
+    return jsonify({
+        "features":         STATE.legend,
+        "feature_legend":   STATE.legend,
+        "feature_names":    list(STATE.feature_names),
+        "varieties":        _extract_trained_varieties(),
+        "model_version":    STATE.version,
+        "feature_count":    len(STATE.feature_names),
+        "quantile_enabled": STATE.model_low is not None and STATE.model_high is not None,
+        "interval_scale":   STATE.interval_scale,
+    })
 
 
 @app.route('/reload', methods=['POST'])
@@ -253,14 +314,9 @@ def predict():
             raw_low  = float(STATE.model_low.predict(vec)[0])
             raw_high = float(STATE.model_high.predict(vec)[0])
 
-            # ── Guard: quantile models should always have raw_low <= raw_high.
-            # If they're inverted (version mismatch, bad input, etc.), swap them
-            # so the interval stays sane instead of returning Lower > Upper.
             if raw_low > raw_high:
                 raw_low, raw_high = raw_high, raw_low
 
-            # Centre the interval on the point prediction and widen it
-            # by the calibration factor derived during training.
             half_width = (raw_high - raw_low) / 2.0
             half_width *= STATE.interval_scale
 
@@ -292,4 +348,3 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f'[START] CROPS ML Service on http://0.0.0.0:{port}')
     app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
-
