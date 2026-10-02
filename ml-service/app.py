@@ -183,27 +183,27 @@ def preprocess_input(data, feature_names):
 
 def compute_confidence(point, low, high):
     """
-    Confidence = 1 - (interval width / point prediction)
-    Narrow interval -> high confidence.
+    Confidence = 1 - (half_width / point)
+
+    half_width is the ± uncertainty of the prediction interval.
+    Using half-width (not full width) avoids double-counting the
+    two-sided nature of the interval.
+
+    Example: point=4.15, range=[3.03, 5.28]
+      half_width = 1.125
+      confidence = 1 - 1.125/4.15 = 0.729  →  73%
     """
-    low  = min(float(low),  float(point))
-    high = max(float(high), float(point))
+    point = float(point)
+    low   = min(float(low),  point)
+    high  = max(float(high), point)
 
-    width = high - low
-    denom = max(abs(float(point)), 1.0)
-    relative_width = width / denom
+    half_width = (high - low) / 2.0
+    denom = max(abs(point), 1.0)
 
-    return float(np.clip(1.0 - relative_width, 0.0, 1.0))
+    return float(np.clip(1.0 - (half_width / denom), 0.0, 1.0))
 
 
 def _extract_trained_varieties():
-    """
-    Pull the trained variety names out of the feature legend.
-
-    The feature legend contains keys like 'variety_NSIC_Rc222' for
-    each trained variety, plus three numeric variety_* fields that
-    are NOT one-hot columns. We filter those out.
-    """
     numeric_fields = {
         'variety_maturity_days',
         'variety_max_yield',
@@ -256,13 +256,6 @@ def get_legend():
 
 @app.route('/features', methods=['GET'])
 def features():
-    """
-    Feature legend + trained variety names.
-
-    Consumed by the Laravel RiceVarietyController to decide whether
-    a given variety was part of the training data ('In ML Model')
-    or is a post-training addition ('Fallback Mode').
-    """
     STATE.ensure_loaded()
     return jsonify({
         "features":         STATE.legend,
