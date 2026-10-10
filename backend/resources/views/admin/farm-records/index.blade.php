@@ -510,6 +510,20 @@
 @push('scripts')
 @if(auth()->user()->role !== 'farmer')
 <script>
+    // ── Execute <script> tags inside HTML injected via innerHTML ──
+    // Browsers do not run scripts inserted this way, so we clone them.
+    window.executeInjectedScripts = function(container) {
+        if (!container) return;
+        container.querySelectorAll('script').forEach(oldScript => {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
             new bootstrap.Tooltip(el, { container: 'body' });
@@ -773,9 +787,14 @@
         })
         .then(r => r.text())
         .then(html => {
+            const content = document.getElementById('modalContent');
             document.getElementById('modalLoading').style.display = 'none';
-            document.getElementById('modalContent').style.display = 'block';
-            document.getElementById('modalContent').innerHTML = html;
+            content.style.display = 'block';
+            content.innerHTML = html;
+
+            // ← Run the inline <script> from the injected partial
+            executeInjectedScripts(content);
+
             const form = document.getElementById('farmRecordForm');
             if (form) form.addEventListener('submit', handleFormSubmit);
         })
@@ -799,9 +818,14 @@
         })
         .then(r => r.text())
         .then(html => {
+            const content = document.getElementById('modalContent');
             document.getElementById('modalLoading').style.display = 'none';
-            document.getElementById('modalContent').style.display = 'block';
-            document.getElementById('modalContent').innerHTML = html;
+            content.style.display = 'block';
+            content.innerHTML = html;
+
+            // ← Run the inline <script> from the injected partial
+            executeInjectedScripts(content);
+
             const form = document.getElementById('farmRecordForm');
             if (form) form.addEventListener('submit', handleFormSubmit);
         })
@@ -1033,19 +1057,4 @@
     });
 </script>
 @endif
-@endpush
-
-@push('styles')
-<style>
-    #paginationList button:not(:disabled):hover {
-        background: var(--brand-green-light) !important;
-        border-color: var(--brand-green) !important;
-        color: var(--brand-green-dark) !important;
-        transform: translateY(-1px);
-    }
-    @media (max-width: 575.98px) {
-        #paginationBar { justify-content: center !important; }
-        #paginationList button { min-width: 30px !important; height: 30px !important; padding: 0 8px !important; font-size: 12px !important; }
-    }
-</style>
 @endpush

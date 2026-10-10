@@ -114,7 +114,7 @@ class RiceVarietyController extends Controller
             }
             return back()->with('error', 'Database error occurred.')->withInput();
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {   // ← was \Exception
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -209,7 +209,7 @@ class RiceVarietyController extends Controller
             }
             return back()->with('error', 'Database error occurred.')->withInput();
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {   // ← was \Exception
             if ($request->ajax()) {
                 return response()->json([
                     'success' => false,
@@ -275,30 +275,41 @@ class RiceVarietyController extends Controller
      * Read the one-hot variety columns the ML model was trained on.
      *
      * Source priority:
-     *   1. Render ML service over HTTP (cached 6h)
-     *   2. Local feature_legend.json (dev / XAMPP)
-     *   3. Empty array (everything shows as fallback)
+     *   1. Hardcoded config (fastest, zero I/O)
+     *   2. Render ML service over HTTP (cached 6h)
+     *   3. Local feature_legend.json (dev / XAMPP)
+     *   4. Empty array (everything shows as fallback)
      */
     private function getTrainedVarieties(): array
-{
-    $hardcoded = config('santiago.ml_trained_varieties', []);
-    if (!empty($hardcoded)) {
-        return $hardcoded;
-    }
-
-    return Cache::remember('ml.trained_varieties', now()->addHours(6), function () {
-        $remote = $this->fetchTrainedVarietiesFromService();
-        if (!empty($remote)) {
-            return $remote;
+    {
+        $hardcoded = config('santiago.ml_trained_varieties', []);
+        if (!empty($hardcoded)) {
+            return $hardcoded;
         }
 
-        $path = $this->findMlFile('feature_legend.json');
-        if (!$path) return [];
+        return Cache::remember('ml.trained_varieties', now()->addHours(6), function () {
+            $remote = $this->fetchTrainedVarietiesFromService();
+            if (!empty($remote)) {
+                return $remote;
+            }
 
-        $legend = json_decode(file_get_contents($path), true) ?? [];
-        return $this->extractVarietyNames($legend);
-    });
-}
+            $path = $this->findMlFile('feature_legend.json');
+            if (!$path) return [];
+
+            $legend = json_decode(file_get_contents($path), true) ?? [];
+            return $this->extractVarietyNames($legend);
+        });
+    }
+
+    /**
+     * Drop the trained-varieties cache so the next call re-fetches.
+     * Called after store() and destroy() so the new/deleted variety
+     * is reflected immediately in the "In ML Model / Fallback Mode" badge.
+     */
+    private function forgetTrainedVarietiesCache(): void
+    {
+        Cache::forget('ml.trained_varieties');
+    }
 
     /**
      * Query the Render ML service for its feature legend.
@@ -329,7 +340,6 @@ class RiceVarietyController extends Controller
             $data = $response->json();
             if (!is_array($data)) return [];
 
-            // Accept several common response shapes.
             if (isset($data['features']) && is_array($data['features'])) {
                 return $this->extractVarietyNames($data['features']);
             }
@@ -343,7 +353,6 @@ class RiceVarietyController extends Controller
                 return array_values(array_unique($data['varieties']));
             }
 
-            // Bare list or bare map
             return $this->extractVarietyNames($data);
 
         } catch (\Throwable $e) {

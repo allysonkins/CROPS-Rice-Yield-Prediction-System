@@ -19,7 +19,6 @@
 
 {{-- ═══════════════ GREETING + WEATHER ═══════════════ --}}
 @php
-    // Pick an icon from the weather description
     $weatherIcon = 'cloud-sun';
     $weatherDesc = strtolower($weather['description'] ?? '');
     if ($weather) {
@@ -44,11 +43,13 @@
                 {{ $greeting }}, {{ explode(' ', $user->name)[0] }}! 🌾
             </h4>
             <div style="font-size: 13px; color: var(--slate-500);">
-                @if($thisSeason)
-                    May <strong style="color: var(--brand-green);">{{ $thisSeason->riceVariety->name }}</strong>
+                @if($thisSeason && $focusFarm)
+                    May <strong style="color: var(--brand-green);">{{ $thisSeason->riceVariety->name ?? 'pananim' }}</strong>
                     kang tumutubo sa <strong>{{ $focusFarm->name }}</strong>.
+                @elseif($focusFarm)
+                    Wala kang aktibong pananim sa {{ $focusFarm->name }}.
                 @else
-                    Wala kang aktibong pananim sa ngayon.
+                    Magrehistro muna ng iyong bukid para makapagsimula.
                 @endif
             </div>
         </div>
@@ -100,8 +101,38 @@
     </div>
 </div>
 
+{{-- ═══════════════ NO FARMS NOTICE ═══════════════ --}}
+@if(!$focusFarm)
+    <div class="card-custom mb-3" style="border-left: 4px solid var(--brand-gold); background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div style="width: 52px; height: 52px; border-radius: 14px; background: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #fde68a;">
+                <i class="bi bi-geo-alt-fill" style="color: var(--brand-gold); font-size: 24px;"></i>
+            </div>
+            <div style="flex: 1; min-width: 220px;">
+                <div style="font-size: 15px; font-weight: 800; color: #92400e; margin-bottom: 4px;">
+                    Wala ka pang nakarehistrong bukid
+                </div>
+                <div style="font-size: 13px; color: #78350f; line-height: 1.5;">
+                    Para makapagtala ng pananim at makakuha ng yield prediction, kailangan mo munang magrehistro ng kahit isang bukid.
+                </div>
+            </div>
+            <div style="flex-shrink: 0;">
+                @if($isVerified)
+                    <a href="{{ route('farmer.farms.create') }}" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Magrehistro ng Bukid
+                    </a>
+                @else
+                    <button class="btn btn-success" disabled title="Available after CAO verification">
+                        <i class="bi bi-lock"></i> Hintayin ang CAO verification
+                    </button>
+                @endif
+            </div>
+        </div>
+    </div>
+@endif
+
 {{-- ═══════════════ FARM SWITCHER ═══════════════ --}}
-@if($farms->count() > 1)
+@if($focusFarm && $farms->count() > 1)
     <div class="card-custom mb-3" style="padding: 12px 16px;">
         <div class="d-flex flex-wrap align-items-center gap-2">
             <span style="font-size: 11px; font-weight: 700; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.4px;">
@@ -127,12 +158,12 @@
                 <div class="label">Aktibong Pananim</div>
                 <div class="value" style="font-size: 24px;">
                     {{ $thisSeason ? 1 : 0 }}
-                    @if($farms->count() > 1)
+                    @if($focusFarm && $farms->count() > 1)
                         <span style="font-size: 11px; color: var(--slate-400); font-weight: 500;">sa {{ $focusFarm->name }}</span>
                     @endif
                 </div>
                 <div class="text-muted small">
-                    {{ $thisSeason ? $thisSeason->riceVariety->name : 'Walang tumutubo' }}
+                    {{ $thisSeason?->riceVariety?->name ?? 'Walang tumutubo' }}
                 </div>
             </div>
             <div class="stat-icon"><i class="bi bi-flower1" style="color: var(--brand-green);"></i></div>
@@ -152,8 +183,10 @@
                     @endif
                 </div>
                 <div class="text-muted small">
-                    @if($expectedTons)
+                    @if($expectedTons && $focusFarm)
                         ≈ {{ number_format($expectedTons, 2) }} t sa {{ $focusFarm->name }}
+                    @elseif($expectedTons)
+                        ≈ {{ number_format($expectedTons, 2) }} t
                     @else
                         Wala pang tantya
                     @endif
@@ -213,7 +246,7 @@
 </div>
 
 {{-- ═══════════════ RICE VARIETY RECOMMENDATIONS ═══════════════ --}}
-@if(!empty($recommendations))
+@if(!empty($recommendations) && $focusFarm)
     <div class="card-custom mb-3" style="border-left: 4px solid #4f46e5;">
         <div class="card-title" style="font-size: 14px;">
             <i class="bi bi-stars" style="color: #4f46e5;"></i>
@@ -299,6 +332,7 @@
                 Kasalukuyang Pananim
             </div>
 
+            {{-- ─── STATE 1: Has an active season ─── --}}
             @if($thisSeason)
                 @php
                     $class = null;
@@ -321,7 +355,6 @@
                     $predCavan = $thisPred && $thisPred->predicted_yield_tons_ha !== null
                         ? t_ha_to_cavan_ha((float) $thisPred->predicted_yield_tons_ha) : null;
 
-                    // Total cavan for the whole farm
                     $farmArea = (float) ($focusFarm->land_area_ha ?? 1.0);
                     $totalCavan = $predCavan !== null ? $predCavan * $farmArea : null;
                 @endphp
@@ -376,7 +409,7 @@
                                 onclick="openFarmerHarvestModal(this)"
                                 data-record-id="{{ $thisSeason->id }}"
                                 data-farm="{{ $focusFarm->name }}"
-                                data-variety="{{ $thisSeason->riceVariety->name }}"
+                                data-variety="{{ $thisSeason->riceVariety->name ?? 'N/A' }}"
                                 data-season="{{ $thisSeason->season }} {{ $thisSeason->year }}"
                                 data-predicted-tons="{{ $thisPred && $thisPred->predicted_yield_tons_ha ? number_format($thisPred->predicted_yield_tons_ha, 2, '.', '') : '' }}"
                                 data-predicted-cavan="{{ $predCavan !== null ? number_format($predCavan, 0, '.', '') : '' }}">
@@ -384,6 +417,29 @@
                         </button>
                     @endif
                 </div>
+
+            {{-- ─── STATE 2: No farm registered yet ─── --}}
+            @elseif(!$focusFarm)
+                <div class="text-center py-5">
+                    <i class="bi bi-geo-alt" style="font-size: 42px; color: var(--slate-300);"></i>
+                    <h6 class="mt-3 mb-1" style="color: var(--slate-700); font-weight: 700;">
+                        Wala ka pang nakarehistrong bukid
+                    </h6>
+                    <p style="font-size: 13px; color: var(--slate-500); margin-bottom: 16px;">
+                        Magrehistro muna ng iyong bukid bago ka makapagtala ng pananim.
+                    </p>
+                    @if($isVerified)
+                        <a href="{{ route('farmer.farms.create') }}" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> Magrehistro ng Bukid
+                        </a>
+                    @else
+                        <button class="btn btn-success" disabled title="Available after CAO verification">
+                            <i class="bi bi-lock"></i> Hintayin ang CAO verification
+                        </button>
+                    @endif
+                </div>
+
+            {{-- ─── STATE 3: Has farm, but no active season logged ─── --}}
             @else
                 <div class="text-center py-5">
                     <i class="bi bi-flower3" style="font-size: 42px; color: var(--slate-300);"></i>
@@ -431,7 +487,7 @@
                             {{ $lastHarvest->riceVariety->name ?? 'N/A' }}
                         </div>
                         <div style="font-size: 11px; color: var(--slate-500); margin-top: 2px;">
-                            {{ $focusFarm->name }} · {{ $lastHarvest->season }} {{ $lastHarvest->year }}
+                            {{ $focusFarm->name ?? 'N/A' }} · {{ $lastHarvest->season }} {{ $lastHarvest->year }}
                         </div>
                     </div>
 
@@ -469,7 +525,7 @@
                         <div class="mt-3" style="font-size: 11px; color: var(--slate-500);">
                             <i class="bi bi-info-circle"></i>
                             Kabuuang ani: <strong>{{ number_format($totalTons, 2) }} t</strong>
-                            sa {{ number_format($focusFarm->land_area_ha, 2) }} ha
+                            sa {{ number_format($focusFarm->land_area_ha ?? 1, 2) }} ha
                         </div>
                     @endif
                 </div>

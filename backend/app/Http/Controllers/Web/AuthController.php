@@ -36,7 +36,7 @@ class AuthController extends Controller
         $password   = $request->input('password');
         $remember   = $request->boolean('remember');
 
-        // Farmers can't log in with an email
+        // Farmers can't log in with an email — that's for staff/admin
         if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
             throw ValidationException::withMessages([
                 'identifier' => 'Use your phone number or RSBSA number to log in. Staff can log in at the Staff Login page.',
@@ -46,7 +46,7 @@ class AuthController extends Controller
         $rateKey = 'farmer.login.' . strtolower($identifier) . '|' . $request->ip();
         $this->checkRateLimit($rateKey, $request);
 
-        // Find farmer by phone OR rsbsa_number
+        // Find farmer by phone OR rsbsa_number (both normalised)
         $user = $this->findFarmerByIdentifier($identifier);
 
         if (!$user || !Hash::check($password, $user->password)) {
@@ -144,10 +144,21 @@ class AuthController extends Controller
     // HELPERS
     // ══════════════════════════════════════════════════════════
 
+    /**
+     * Find a farmer by phone OR RSBSA number.
+     *
+     * Phone path: strips non-digits, normalises +63/9xx to 09xx.
+     * RSBSA path: uppercases and strips spaces/dashes/underscores on
+     *             both sides, so "rsbsa-2026-0061", "RSBSA 2026 0061",
+     *             and "RSBSA-2026-0061" all match the stored value.
+     */
     private function findFarmerByIdentifier(string $identifier): ?User
     {
-        // Normalize PH phone number
+        $identifier = trim($identifier);
+
+        // ── 1. Phone path ──────────────────────────────────────
         $digits = preg_replace('/\D/', '', $identifier);
+
         if (str_starts_with($digits, '639')) {
             $digits = '0' . substr($digits, 2);
         } elseif (str_starts_with($digits, '9') && strlen($digits) === 10) {
@@ -155,11 +166,45 @@ class AuthController extends Controller
         }
 
         if (preg_match('/^09\d{9}$/', $digits)) {
-            return User::where('role', 'farmer')->where('phone', $digits)->first();
+            $user = User::where('role', 'farmer')->where('phone', $digits)->first();
+            if ($user) {
+                return $user;
+            }
         }
 
-        // Fallback: RSBSA number
-        return User::where('role', 'farmer')->where('rsbsa_number', $identifier)->first();
+        // ── 2. RSBSA path ──────────────────────────────────────
+        // Normalise both sides: uppercase, strip spaces/dashes/underscores.
+        // Uses raw SQL so a single query matches all common variants.
+        $needle = $this->normalizeRsbsa($identifier);
+
+        if ($needle !== '') {
+            $user = User::where('role', 'farmer')
+                ->whereNotNull('rsbsa_number')
+                ->whereRaw(
+                    "UPPER(REPLACE(REPLACE(REPLACE(rsbsa_number, ' ', ''), '-', ''), '_', '')) = ?",
+                    [$needle]
+                )
+                ->first();
+
+            if ($user) {
+                return $user;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Normalise an RSBSA number for comparison.
+     *   "rsbsa-2026-0061"  → "RSBSA20260061"
+     *   "RSBSA 2026 0061"  → "RSBSA20260061"
+     *   "RSBSA_2026_0061"  → "RSBSA20260061"
+     */
+    private function normalizeRsbsa(string $value): string
+    {
+        return strtoupper(
+            preg_replace('/[\s\-_]+/', '', trim($value))
+        );
     }
 
     private function checkRateLimit(string $key, Request $request): void

@@ -587,6 +587,25 @@
 
 @push('scripts')
 {{-- ═══════════════════════════════════════════════════════════
+     SHARED HELPERS — available to ALL farmers
+     ═══════════════════════════════════════════════════════════ --}}
+<script>
+    // ── Execute <script> tags inside HTML injected via innerHTML ──
+    // Browsers do not run scripts inserted this way, so we clone them.
+    window.executeInjectedScripts = function(container) {
+        if (!container) return;
+        container.querySelectorAll('script').forEach(oldScript => {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    };
+</script>
+
+{{-- ═══════════════════════════════════════════════════════════
      VARIETY DETAIL MODAL — available to ALL farmers
      ═══════════════════════════════════════════════════════════ --}}
 <script>
@@ -908,9 +927,14 @@
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => {
+                const content = document.getElementById('farmerFarmRecordModalContent');
                 document.getElementById('farmerFarmRecordModalLoading').style.display = 'none';
-                document.getElementById('farmerFarmRecordModalContent').style.display = 'block';
-                document.getElementById('farmerFarmRecordModalContent').innerHTML = html;
+                content.style.display = 'block';
+                content.innerHTML = html;
+
+                // ← Run the inline <script> from the injected partial
+                executeInjectedScripts(content);
+
                 const form = document.getElementById('farmerFarmRecordForm');
                 if (form) form.addEventListener('submit', submitFarmerFarmRecord);
             })
@@ -931,9 +955,14 @@
         fetch('/farmer/farm-records/' + id + '/edit', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => {
+                const content = document.getElementById('farmerFarmRecordModalContent');
                 document.getElementById('farmerFarmRecordModalLoading').style.display = 'none';
-                document.getElementById('farmerFarmRecordModalContent').style.display = 'block';
-                document.getElementById('farmerFarmRecordModalContent').innerHTML = html;
+                content.style.display = 'block';
+                content.innerHTML = html;
+
+                // ← Run the inline <script> from the injected partial
+                executeInjectedScripts(content);
+
                 const form = document.getElementById('farmerFarmRecordForm');
                 if (form) form.addEventListener('submit', submitFarmerFarmRecord);
             })
@@ -948,6 +977,21 @@
     function submitFarmerFarmRecord(e) {
         e.preventDefault();
         const form = e.target;
+
+        // ── Belt-and-suspenders: sync cavan → tons right before submit ──
+        // (In case the inline listener didn't attach for any reason.)
+        const syncPairs = [
+            ['farmerHistoricalCavan', 'farmerHistoricalTons'],
+            ['farmerActualCavan',     'farmerActualTons'],
+        ];
+        syncPairs.forEach(([cavanId, tonsId]) => {
+            const c = document.getElementById(cavanId);
+            const t = document.getElementById(tonsId);
+            if (!c || !t) return;
+            const v = parseFloat(c.value);
+            t.value = (!isNaN(v) && v >= 0) ? (v * CAVAN_TO_TONS).toFixed(4) : '';
+        });
+
         const btn = form.querySelector('button[type="submit"]');
         const original = btn.innerHTML;
         btn.disabled = true;

@@ -491,13 +491,74 @@
 
 @push('scripts')
 <script>
+    // ═══════════════════════════════════════════════════════════
+    // SAFE FETCH — never throws "Unexpected token '<'" again
+    // ═══════════════════════════════════════════════════════════
+    async function safeFetchJson(url, options = {}) {
+        let response;
+        try {
+            response = await fetch(url, options);
+        } catch (netErr) {
+            // Network-level failure (DNS, offline, CORS)
+            return {
+                ok: false,
+                status: 0,
+                error: 'Network error. Please check your connection and try again.',
+                raw: String(netErr),
+            };
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        const isJson = contentType.includes('application/json');
+
+        // ── Non-JSON response → server error page ──
+        if (!isJson) {
+            const raw = await response.text();
+            // Log the raw HTML so admins can inspect it in devtools
+            console.error('[safeFetchJson] Non-JSON response from', url, '\n', raw.slice(0, 800));
+
+            // Try to pull a human-readable reason out of the HTML
+            let hint = '';
+            if (response.status === 419)        hint = 'Your session expired. Refresh the page and try again.';
+            else if (response.status === 500)   hint = 'The server hit an error processing your request.';
+            else if (response.status === 504)   hint = 'The request timed out on the server.';
+            else if (response.status === 503)   hint = 'The prediction service is temporarily unavailable.';
+            else                                hint = 'The server returned an unexpected response.';
+
+            return {
+                ok: false,
+                status: response.status,
+                error: hint,
+                raw,
+            };
+        }
+
+        // ── JSON response ──
+        try {
+            const data = await response.json();
+            return { ok: response.ok, status: response.status, data };
+        } catch (parseErr) {
+            return {
+                ok: false,
+                status: response.status,
+                error: 'Server sent malformed JSON. Please try again.',
+                raw: String(parseErr),
+            };
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // TOOLTIPS
+    // ═══════════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
             new bootstrap.Tooltip(el, { container: 'body' });
         });
     });
 
-    // ─── FILTERING + PAGINATION ─────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // FILTERING + PAGINATION
+    // ═══════════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', function() {
         const searchInput    = document.getElementById('searchPrediction');
         const barangaySelect = document.getElementById('filterBarangay');
@@ -676,7 +737,6 @@
             resetAndRender();
         });
 
-        // ── Reset button ──
         resetBtn?.addEventListener('click', function() {
             searchInput.value = '';
             barangaySelect.value = 'all';
@@ -722,11 +782,10 @@
     let regenerateModal = null;
 
     function openRegenerateModal() {
-        // Reset to default state every time the modal is opened
         document.getElementById('regenerateConfirmBody').style.display = 'block';
         document.getElementById('regenerateLoadingBody').style.display = 'none';
         document.getElementById('regenerateSuccessBody').style.display = 'none';
-        document.getElementById('regenerateErrorBody').style.display  = 'none';
+        document.getElementById('regenerateErrorBody').style.display   = 'none';
 
         document.getElementById('regenerateFooter').style.display = 'flex';
         document.getElementById('regenerateFooter').innerHTML = `
@@ -747,7 +806,7 @@
         regenerateModal.show();
     }
 
-    function confirmRegenerate() {
+    async function confirmRegenerate() {
         if (regenerateInProgress) return;
         regenerateInProgress = true;
 
@@ -759,82 +818,79 @@
         document.getElementById('regenerateFooter').style.display      = 'none';
         document.getElementById('regenerateCloseBtn').disabled         = true;
 
-        fetch('{{ route("admin.predictions.regenerate-all") }}', {
+        const result = await safeFetchJson('{{ route("admin.predictions.regenerate-all") }}', {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                 'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
             },
-        })
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('regenerateLoadingBody').style.display = 'none';
-            document.getElementById('regenerateCloseBtn').disabled = false;
+        });
 
-            if (data.success) {
-                // ── SUCCESS ──
-                document.getElementById('regenerateSuccessBody').style.display = 'block';
-                document.getElementById('regenerateSuccessMessage').textContent =
-                    data.message || 'All predictions regenerated.';
+        document.getElementById('regenerateLoadingBody').style.display = 'none';
+        document.getElementById('regenerateCloseBtn').disabled = false;
 
-                const errBox  = document.getElementById('regenerateSuccessErrors');
-                const errList = document.getElementById('regenerateSuccessErrorsList');
-                errList.innerHTML = '';
-                if (data.failed > 0 && Array.isArray(data.errors) && data.errors.length) {
-                    data.errors.forEach(e => {
-                        const li = document.createElement('li');
-                        li.textContent = e;
-                        errList.appendChild(li);
-                    });
-                    errBox.style.display = 'block';
-                } else {
-                    errBox.style.display = 'none';
-                }
+        const data = result.data || {};
+        const wasSuccess = result.ok && data.success === true;
 
-                // Footer gets a single "Done" action that reloads the page
-                document.getElementById('regenerateFooter').style.display = 'flex';
-                document.getElementById('regenerateFooter').innerHTML = `
-                    <button type="button" class="btn btn-success" onclick="location.reload()">
-                        <i class="bi bi-check-circle"></i> Done
-                    </button>
-                `;
+        if (wasSuccess) {
+            // ── SUCCESS ──
+            document.getElementById('regenerateSuccessBody').style.display = 'block';
+            document.getElementById('regenerateSuccessMessage').textContent =
+                data.message || 'All predictions regenerated.';
 
+            const errBox  = document.getElementById('regenerateSuccessErrors');
+            const errList = document.getElementById('regenerateSuccessErrorsList');
+            errList.innerHTML = '';
+            if (data.failed > 0 && Array.isArray(data.errors) && data.errors.length) {
+                data.errors.forEach(e => {
+                    const li = document.createElement('li');
+                    li.textContent = e;
+                    errList.appendChild(li);
+                });
+                errBox.style.display = 'block';
             } else {
-                // ── FAILURE ──
-                document.getElementById('regenerateErrorBody').style.display = 'block';
-                document.getElementById('regenerateErrorMessage').textContent =
-                    data.error || 'Unknown error occurred.';
-
-                document.getElementById('regenerateFooter').style.display = 'flex';
-                document.getElementById('regenerateFooter').innerHTML = `
-                    <button type="button" class="btn btn-secondary" onclick="closeRegenerateModal()">
-                        <i class="bi bi-x-circle"></i> Close
-                    </button>
-                    <button type="button" class="btn btn-warning" onclick="openRegenerateModal()">
-                        <i class="bi bi-arrow-repeat"></i> Try Again
-                    </button>
-                `;
-                regenerateInProgress = false;
+                errBox.style.display = 'none';
             }
-        })
-        .catch(err => {
-            document.getElementById('regenerateLoadingBody').style.display = 'none';
-            document.getElementById('regenerateErrorBody').style.display   = 'block';
-            document.getElementById('regenerateErrorMessage').textContent  = 'Network error: ' + err;
-            document.getElementById('regenerateCloseBtn').disabled         = false;
 
             document.getElementById('regenerateFooter').style.display = 'flex';
             document.getElementById('regenerateFooter').innerHTML = `
-                <button type="button" class="btn btn-secondary" onclick="closeRegenerateModal()">
-                    <i class="bi bi-x-circle"></i> Close
-                </button>
-                <button type="button" class="btn btn-warning" onclick="openRegenerateModal()">
-                    <i class="bi bi-arrow-repeat"></i> Try Again
+                <button type="button" class="btn btn-success" onclick="location.reload()">
+                    <i class="bi bi-check-circle"></i> Done
                 </button>
             `;
-            regenerateInProgress = false;
-        });
+        } else {
+            // ── FAILURE (JSON error, HTML error page, network error) ──
+            let message = data.error
+                || result.error
+                || 'Rice yield prediction failed. Please try again.';
+
+            // If validation errors were returned, flatten them
+            if (data.errors && typeof data.errors === 'object') {
+                const flat = Object.values(data.errors).flat().join(' ');
+                if (flat) message = flat;
+            }
+
+            showRegenerateError(message);
+        }
+
+        regenerateInProgress = false;
+    }
+
+    function showRegenerateError(message) {
+        document.getElementById('regenerateErrorBody').style.display = 'block';
+        document.getElementById('regenerateErrorMessage').textContent = message;
+
+        document.getElementById('regenerateFooter').style.display = 'flex';
+        document.getElementById('regenerateFooter').innerHTML = `
+            <button type="button" class="btn btn-secondary" onclick="closeRegenerateModal()">
+                <i class="bi bi-x-circle"></i> Close
+            </button>
+            <button type="button" class="btn btn-warning" onclick="openRegenerateModal()">
+                <i class="bi bi-arrow-repeat"></i> Try Again
+            </button>
+        `;
     }
 
     function closeRegenerateModal() {
@@ -842,44 +898,43 @@
     }
 
     // ─── GENERATE ALL ───────────────────────────────────────
-    function generateAll() {
+    async function generateAll() {
         const btn = document.getElementById('generateAllBtn');
         const originalHTML = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
 
-        fetch('{{ route("admin.predictions.generate-all") }}', {
+        const result = await safeFetchJson('{{ route("admin.predictions.generate-all") }}', {
             method: 'POST',
             headers: {
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                 'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
                 'Content-Type': 'application/json',
             },
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                if (data.generated === 0) {
-                    alert('No pending farm records to predict.');
-                    btn.innerHTML = originalHTML;
-                    btn.disabled = false;
-                } else {
-                    let msg = `✅ ${data.message}`;
-                    if (data.failed > 0 && data.errors?.length) msg += '\n\nFailed:\n' + data.errors.join('\n');
-                    alert(msg);
-                    location.reload();
-                }
-            } else {
-                alert('Error: ' + (data.error || 'Unknown'));
+        });
+
+        const data = result.data || {};
+
+        if (result.ok && data.success === true) {
+            if (data.generated === 0) {
+                alert('No pending farm records to predict.');
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
+            } else {
+                let msg = `✅ ${data.message}`;
+                if (data.failed > 0 && data.errors?.length) msg += '\n\nFailed:\n' + data.errors.join('\n');
+                alert(msg);
+                location.reload();
             }
-        })
-        .catch(err => {
-            alert('Network error: ' + err);
+        } else {
+            const message = data.error
+                || result.error
+                || 'Rice yield prediction failed. Please try again.';
+            alert('Prediction failed:\n\n' + message + '\n\nPlease try again.');
             btn.innerHTML = originalHTML;
             btn.disabled = false;
-        });
+        }
     }
 
     // ─── VIEW MODAL ─────────────────────────────────────────
@@ -896,7 +951,9 @@
             document.getElementById('viewModalLoading').style.display = 'block';
             document.getElementById('viewModalContent').style.display = 'none';
 
-            fetch('/admin/predictions/' + farmRecordId)
+            fetch('/admin/predictions/' + farmRecordId, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
                 .then(response => response.text())
                 .then(html => {
                     document.getElementById('viewModalLoading').style.display = 'none';
@@ -916,7 +973,9 @@
         document.getElementById('varietyDetailLoading').style.display = 'block';
         document.getElementById('varietyDetailContent').style.display = 'none';
 
-        fetch('/admin/rice-varieties/' + id + '/details')
+        fetch('/admin/rice-varieties/' + id + '/details', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
             .then(response => response.text())
             .then(html => {
                 document.getElementById('varietyDetailLoading').style.display = 'none';
@@ -934,6 +993,7 @@
     @endif
 </script>
 @endpush
+
 
 @push('styles')
 <style>

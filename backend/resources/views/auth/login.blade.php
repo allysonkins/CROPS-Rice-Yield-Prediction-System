@@ -25,14 +25,15 @@
         @csrf
 
         <div class="mb-3">
-            <label for="identifier" class="form-label">Phone Number</label>
+            <label for="identifier" class="form-label">Phone Number or RSBSA Number</label>
             <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
                 <input type="text" id="identifier" name="identifier" class="form-control"
-                       value="{{ old('identifier') }}" placeholder="09171234567"
-                       inputmode="numeric" pattern="[0-9\-]*" autocomplete="username" required autofocus>
+                       value="{{ old('identifier') }}"
+                       placeholder="09171234567 or RSBSA-2026-0061"
+                       inputmode="text" autocomplete="username" required autofocus>
             </div>
-            <div class="helper">Or your RSBSA number</div>
+            <div class="helper">Use your phone number or your RSBSA number.</div>
         </div>
 
         <div class="mb-4">

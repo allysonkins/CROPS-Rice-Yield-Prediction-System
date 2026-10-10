@@ -1535,52 +1535,64 @@
         <!-- Sidebar Navigation Menu -->
         <nav class="sidebar-nav">
 
-            {{-- ═══════════════ FARMER NAVIGATION ═══════════════ --}}
-            @if($isFarmer)
-                <div class="nav-label">My Farm</div>
+            {{-- ══════════════════════════════════════════════════════════
+     FARMER NAVIGATION
+     Grouped by workflow: Main → Farm Management → Insights → Info → Account
+     ══════════════════════════════════════════════════════════ --}}
+@if($isFarmer)
 
-                <a href="{{ $dashboardUrl }}" class="{{ request()->routeIs($dashboardRoute) ? 'active' : '' }}">
-                    <i class="bi bi-speedometer2"></i>
-                    <span>Dashboard</span>
-                </a>
+    {{-- ─────────── MAIN ─────────── --}}
+    <div class="nav-label">Main</div>
 
-                <a href="{{ route('farmer.farms.index') }}" class="{{ request()->routeIs('farmer.farms.*') ? 'active' : '' }}">
-                    <i class="bi bi-geo-alt-fill"></i>
-                    <span>My Farms</span>
-                </a>
+    <a href="{{ $dashboardUrl }}" class="{{ request()->routeIs($dashboardRoute) ? 'active' : '' }}">
+        <i class="bi bi-speedometer2"></i>
+        <span>Dashboard</span>
+    </a>
 
-                <a href="{{ route('farmer.farm-records.index') }}" class="{{ request()->routeIs('farmer.farm-records.*') ? 'active' : '' }}">
-                    <i class="bi bi-clipboard-data-fill"></i>
-                    <span>My Seasons</span>
-                </a>
+    {{-- ─────────── FARM MANAGEMENT ─────────── --}}
+    <div class="nav-label">Farm Management</div>
 
-                <a href="{{ route('farmer.predictions.index') }}" class="{{ request()->routeIs('farmer.predictions.*') ? 'active' : '' }}">
-                    <i class="bi bi-graph-up-arrow"></i>
-                    <span>My Predictions</span>
-                </a>
+    <a href="{{ route('farmer.farms.index') }}" class="{{ request()->routeIs('farmer.farms.*') ? 'active' : '' }}">
+        <i class="bi bi-geo-alt-fill"></i>
+        <span>My Farms</span>
+    </a>
 
-                <a href="{{ route('farmer.advisories.index') }}" class="{{ request()->routeIs('farmer.advisories.*') ? 'active' : '' }}">
-                    <i class="bi bi-megaphone-fill"></i>
-                    <span>Advisories</span>
-                </a>
+    <a href="{{ route('farmer.farm-records.index') }}" class="{{ request()->routeIs('farmer.farm-records.*') ? 'active' : '' }}">
+        <i class="bi bi-clipboard-data-fill"></i>
+        <span>My Seasons</span>
+    </a>
 
-                <a href="{{ route('farmer.rice-varieties.index') }}" class="{{ request()->routeIs('farmer.rice-varieties.*') ? 'active' : '' }}">
-                    <i class="bi bi-flower1"></i>
-                    <span>Rice Varieties</span>
-                </a>
-                
-                <div class="nav-label">Account</div>
+    {{-- ─────────── PREDICTIONS & INSIGHTS ─────────── --}}
+    <div class="nav-label">Predictions &amp; Insights</div>
 
-                <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
-                    <i class="bi bi-person-gear"></i>
-                    <span>My Profile</span>
-                </a>
+    <a href="{{ route('farmer.predictions.index') }}" class="{{ request()->routeIs('farmer.predictions.*') ? 'active' : '' }}">
+        <i class="bi bi-graph-up-arrow"></i>
+        <span>My Predictions</span>
+    </a>
 
-                <button type="button" class="sidebar-nav-btn" onclick="showLogoutModal()">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span>Sign Out</span>
-                </button>
-            @endif
+    <a href="{{ route('farmer.rice-varieties.index') }}" class="{{ request()->routeIs('farmer.rice-varieties.*') ? 'active' : '' }}">
+        <i class="bi bi-flower1"></i>
+        <span>Rice Varieties</span>
+    </a>
+
+    {{-- ─────────── INFORMATION ─────────── --}}
+    <div class="nav-label">Information</div>
+
+    <a href="{{ route('farmer.advisories.index') }}" class="{{ request()->routeIs('farmer.advisories.*') ? 'active' : '' }}">
+        <i class="bi bi-megaphone-fill"></i>
+        <span>Advisories</span>
+    </a>
+
+    {{-- ─────────── ACCOUNT ─────────── --}}
+    <div class="nav-label">Account</div>
+
+    <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
+        <i class="bi bi-person-gear"></i>
+        <span>My Profile</span>
+    </a>
+
+
+@endif
 
             {{-- ═══════════════ ADMIN & STAFF NAVIGATION ═══════════════ --}}
             @if($isAdmin || $isStaff)
@@ -1675,11 +1687,6 @@
                     <i class="bi bi-person-gear"></i>
                     <span>My Profile</span>
                 </a>
-
-                <button type="button" class="sidebar-nav-btn" onclick="showLogoutModal()">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span>Sign Out</span>
-                </button>
             @endif
 
         </nav>
