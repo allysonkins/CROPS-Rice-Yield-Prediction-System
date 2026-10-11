@@ -49,7 +49,6 @@ desktop.ini
 
 # Composer
 composer.phar
-composer.lock
 
 # NPM
 package-lock.json
