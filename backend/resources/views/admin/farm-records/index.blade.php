@@ -4,55 +4,26 @@
 
 @section('content')
 @php
-    $activeYear = $yearFilter ?? (string) now()->year;
+    $activeYear = $yearFilter ?? 'all';
 @endphp
 
-<div class="d-flex justify-content-end align-items-center mb-4">
-    @if(auth()->user()->role !== 'farmer')
-        <button type="button" class="btn btn-success" onclick="openFarmRecordModal()">
-            <i class="bi bi-plus-circle"></i> Add Farm Record
-        </button>
-    @endif
-    <span class="badge bg-secondary ms-2">{{ $farmRecords->count() }} Records</span>
-</div>
-
-<!-- Stats Cards -->
-<div class="row g-2 mb-4">
-    <div class="col-6 col-lg-3">
-        <div class="stat-card">
-            <div class="stat-info">
-                <div class="label">Total Records</div>
-                <div class="value">{{ $farmRecords->count() }}</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-clipboard-data-fill"></i></div>
-        </div>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h4 style="font-weight: 800; color: var(--slate-900); margin: 0;">
+            <i class="bi bi-clipboard-data-fill" style="color: var(--brand-green);"></i>
+            Farm Records
+        </h4>
+        <p class="text-muted mb-0" style="font-size: 12.5px;">
+            Every planting season — what was planted, where, when, and its harvest status.
+        </p>
     </div>
-    <div class="col-6 col-lg-3">
-        <div class="stat-card">
-            <div class="stat-info">
-                <div class="label">Farms</div>
-                <div class="value">{{ $farmRecords->pluck('farm_id')->unique()->count() }}</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-geo-alt-fill"></i></div>
-        </div>
-    </div>
-    <div class="col-6 col-lg-3">
-        <div class="stat-card">
-            <div class="stat-info">
-                <div class="label">Varieties</div>
-                <div class="value">{{ $farmRecords->pluck('rice_variety_id')->unique()->count() }}</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-flower1"></i></div>
-        </div>
-    </div>
-    <div class="col-6 col-lg-3">
-        <div class="stat-card">
-            <div class="stat-info">
-                <div class="label">Avg Fertilizer</div>
-                <div class="value">{{ number_format($farmRecords->avg('fertilizer_kg_ha'), 1) }} kg/ha</div>
-            </div>
-            <div class="stat-icon"><i class="bi bi-droplet"></i></div>
-        </div>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+        @if(auth()->user()->role !== 'farmer')
+            <button type="button" class="btn btn-success" onclick="openFarmRecordModal()">
+                <i class="bi bi-plus-circle"></i> Add Farm Record
+            </button>
+        @endif
+        <span class="badge-count">{{ $farmRecords->count() }} Records</span>
     </div>
 </div>
 
@@ -61,7 +32,7 @@
     <div class="col-12">
         <div class="card-custom" style="padding: 16px 20px;">
 
-            {{-- ─────────── ROW 1: Search + Location ─────────── --}}
+            {{-- ROW 1: Search + Location --}}
             <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 
                 {{-- SEARCH --}}
@@ -70,7 +41,7 @@
                         <span class="input-group-text" style="background: var(--gray-50); border: none; color: var(--gray-400);">
                             <i class="bi bi-search"></i>
                         </span>
-                        <input type="text" id="searchFarmRecord" class="form-control" placeholder="Search by farmer, variety, season..." style="border: none; background: var(--gray-50); font-size: 13px;">
+                        <input type="text" id="searchFarmRecord" class="form-control" placeholder="Search by farmer, farm, variety, season..." style="border: none; background: var(--gray-50); font-size: 13px;">
                     </div>
                 </div>
 
@@ -113,7 +84,7 @@
                 </button>
             </div>
 
-            {{-- ─────────── ROW 2: Pills + Advanced filters ─────────── --}}
+            {{-- ROW 2: Pills + Advanced filters --}}
             <div class="d-flex flex-wrap align-items-center gap-3 pt-3" style="border-top: 1px dashed var(--gray-200);">
 
                 {{-- SEASON GROUP --}}
@@ -133,7 +104,7 @@
                     <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Status</span>
                     <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
                         <button class="filter-btn status-btn active" data-status="all"        style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
-                        <button class="filter-btn status-btn"        data-status="Vegetative" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Vegetative</button>
+                        <button class="filter-btn status-btn"        data-status="Vegetative" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Growing</button>
                         <button class="filter-btn status-btn"        data-status="Harvested"  style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Harvested</button>
                     </div>
                 </div>
@@ -162,6 +133,20 @@
                     </select>
                 </div>
 
+                <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
+
+                {{-- PER PAGE --}}
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Per Page</span>
+                    <select id="perPageSelect" class="form-select" title="Records per page"
+                            style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; width: auto; min-width: 100px;">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+
             </div>
         </div>
     </div>
@@ -182,33 +167,16 @@
         <table class="table table-sm table-hover align-middle mb-0">
             <thead>
                 <tr>
-                    <th>#</th>
+                    <th>Farmer</th>
                     <th>Farm</th>
                     <th>Variety</th>
                     <th>Season / Year</th>
                     <th>Fertilizer (kg/ha)</th>
                     <th>Actual Yield</th>
                     <th>Expected Yield (t/ha)</th>
-                    <th>
-                        Predicted Yield
-                        <i class="bi bi-question-circle-fill"
-                           style="font-size: 12px; color: var(--gray-400); cursor: help;"
-                           data-bs-toggle="tooltip"
-                           data-bs-placement="top"
-                           data-bs-html="true"
-                           title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
-                               <strong>XGBoost prediction</strong><br>
-                               Point yield estimated by the ML model.<br><br>
-                               <strong>Class is variety-relative</strong> — compared against the variety's own average yield for the chosen seeding method.<br><br>
-                               • <strong>High</strong> — ≥ 112.5% of variety average<br>
-                               • <strong>Medium</strong> — 87.5% – 112.5%<br>
-                               • <strong>Low</strong> — below 87.5%<br><br>
-                               <em>Class is derived in the application — not a model output.</em>
-                           </div>"></i>
-                    </th>
                     <th>Status</th>
                     @if(auth()->user()->role !== 'farmer')
-                        <th style="white-space: nowrap; min-width: 170px;">Actions</th>
+                        <th style="white-space: nowrap; min-width: 200px;">Actions</th>
                     @endif
                 </tr>
             </thead>
@@ -220,8 +188,15 @@
                             $expected = $record->riceVariety->getYieldForMethod($record->seeding_method);
                         }
 
+                        $farmerName = $record->farm->user->name ?? 'Unassigned';
+                        $farmerMeta = $record->farm->user
+                            ? ($record->farm->user->rsbsa_number ?: $record->farm->user->phone)
+                            : null;
+
                         $searchData = strtolower(
-                            ($record->farm->user->name ?? '') . ' ' .
+                            $farmerName . ' ' .
+                            ($farmerMeta ?? '') . ' ' .
+                            ($record->farm->name ?? '') . ' ' .
                             ($record->riceVariety->name ?? '') . ' ' .
                             ($record->season ?? '') . ' ' .
                             ($record->year ?? '')
@@ -233,8 +208,6 @@
                         $prediction  = $record->latest_xgboost_prediction;
                         $predicted   = $prediction?->predicted_yield_tons_ha;
                         $confidence  = $prediction?->confidence;
-                        $lo          = $prediction?->yield_lower;
-                        $hi          = $prediction?->yield_upper;
                         $yieldClass  = $record->predicted_yield_class;
                         $badge       = $record->predicted_yield_badge;
                         $ratio       = $record->predicted_yield_ratio;
@@ -250,7 +223,16 @@
                         data-season="{{ $seasonNorm }}"
                         data-has-prediction="{{ $hasPrediction ? '1' : '0' }}"
                         data-has-actual="{{ $hasActual ? '1' : '0' }}">
-                        <td class="row-index">{{ $loop->iteration }}</td>
+                        <td>
+                            @if($farmerName !== 'Unassigned')
+                                <span style="color: var(--brand-green); font-weight: 600;">{{ $farmerName }}</span>
+                                @if($farmerMeta)
+                                    <br><small class="text-muted">{{ $farmerMeta }}</small>
+                                @endif
+                            @else
+                                <span class="text-muted">Unassigned</span>
+                            @endif
+                        </td>
                         <td>
                             <strong>{{ $record->farm->name ?? 'N/A' }}</strong>
                             <br><small class="text-muted">{{ $record->farm->barangay ?? '' }}</small>
@@ -283,41 +265,6 @@
                             @endif
                         </td>
                         <td>
-                            @if($hasPrediction)
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <strong style="color: #0f4c2b;">{{ number_format($predicted, 2) }}</strong>
-                                    @if($yieldClass)
-                                        <span class="badge-status {{ $badge }}"
-                                              style="cursor: help;"
-                                              data-bs-toggle="tooltip"
-                                              data-bs-placement="top"
-                                              data-bs-html="true"
-                                              title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
-                                                  <strong>Variety-relative class</strong><br>
-                                                  Predicted yield: <strong>{{ number_format($predicted, 2) }} t/ha</strong><br>
-                                                  Variety average ({{ $record->seeding_method ?? 'Transplanted' }}): <strong>{{ number_format($avgYield, 2) }} t/ha</strong><br>
-                                                  Ratio: <strong>{{ number_format($ratio * 100, 1) }}%</strong> of average<br>
-                                                  @if($confidence !== null)
-                                                      Confidence: <strong>{{ number_format($confidence * 100, 1) }}%</strong><br>
-                                                  @endif
-                                                  @if($lo !== null && $hi !== null)
-                                                      80% interval: <strong>{{ number_format($lo, 2) }} – {{ number_format($hi, 2) }} t/ha</strong>
-                                                  @endif
-                                              </div>">
-                                            <span class="dot"></span> {{ $yieldClass }}
-                                        </span>
-                                    @endif
-                                </div>
-                                @if($confidence !== null)
-                                    <small class="text-muted d-block" style="font-size: 10px; margin-top: 2px;">
-                                        {{ number_format($confidence * 100, 1) }}% confidence
-                                    </small>
-                                @endif
-                            @else
-                                <span class="text-muted">—</span>
-                            @endif
-                        </td>
-                        <td>
                             <span class="badge {{ $record->status_badge_class }}">
                                 <i class="bi {{ $record->status_icon }}"></i>
                                 {{ $record->status ?? 'N/A' }}
@@ -331,6 +278,14 @@
                                 <button type="button" class="btn btn-sm btn-secondary" onclick="editFarmRecord({{ $record->id }})" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+
+                                @if($hasPrediction)
+                                    <a href="{{ route('admin.predictions.history', $record->id) }}"
+                                       class="btn btn-sm btn-secondary"
+                                       title="View prediction history">
+                                        <i class="bi bi-graph-up-arrow"></i>
+                                    </a>
+                                @endif
 
                                 @if($record->status === 'Vegetative')
                                     <button type="button"
@@ -366,7 +321,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 9 : 8 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">
                                 @if($activeYear !== 'all')
@@ -380,7 +335,7 @@
                 @endforelse
 
                 <tr id="noFilterResults" style="display: none;">
-                    <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
+                    <td colspan="{{ auth()->user()->role !== 'farmer' ? 9 : 8 }}" class="text-center py-4 text-muted">
                         <i class="bi bi-search" style="font-size: 28px;"></i>
                         <p class="mt-2 mb-0">No farm records match your filters.</p>
                     </td>
@@ -392,15 +347,7 @@
     {{-- PAGINATION --}}
     <div id="paginationBar" class="d-none" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--slate-200);">
         <div class="d-flex align-items-center gap-2" style="font-size: 12px; color: var(--slate-500);">
-            <span>Show</span>
-            <select id="perPageSelect" class="form-select form-select-sm" style="width: auto; border-radius: 8px; border: 1px solid var(--slate-200); font-size: 12px; padding: 4px 26px 4px 10px; appearance: none; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 8px center; background-size: 10px;">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-            </select>
-            <span>entries</span>
-            <span id="paginationInfo" style="margin-left: 6px;"></span>
+            <span id="paginationInfo"></span>
         </div>
         <nav aria-label="Farm record pagination">
             <ul id="paginationList" class="pagination mb-0" style="display: flex; align-items: center; gap: 4px; list-style: none; padding: 0; margin: 0;"></ul>
@@ -510,8 +457,6 @@
 @push('scripts')
 @if(auth()->user()->role !== 'farmer')
 <script>
-    // ── Execute <script> tags inside HTML injected via innerHTML ──
-    // Browsers do not run scripts inserted this way, so we clone them.
     window.executeInjectedScripts = function(container) {
         if (!container) return;
         container.querySelectorAll('script').forEach(oldScript => {
@@ -615,10 +560,8 @@
 
             const start = (currentPage - 1) * perPage;
             const end = start + perPage;
-            matching.slice(start, end).forEach((row, i) => {
+            matching.slice(start, end).forEach((row) => {
                 row.style.display = '';
-                const c = row.querySelector('.row-index');
-                if (c) c.textContent = start + i + 1;
             });
 
             if (noResults) noResults.style.display = (total === 0 && allRows.length > 0) ? '' : 'none';
@@ -732,7 +675,6 @@
             resetAndRender();
         });
 
-        // ── Reset button ──
         resetBtn?.addEventListener('click', function() {
             searchInput.value = '';
             barangaySelect.value = 'all';
@@ -774,7 +716,7 @@
     });
 
     // ═══════════════════════════════════════════════════════════
-    // FARM RECORD MODAL HANDLERS
+    // MODAL HANDLERS
     // ═══════════════════════════════════════════════════════════
     function openFarmRecordModal() {
         document.getElementById('modalTitle').textContent = 'Add Farm Record';
@@ -791,8 +733,6 @@
             document.getElementById('modalLoading').style.display = 'none';
             content.style.display = 'block';
             content.innerHTML = html;
-
-            // ← Run the inline <script> from the injected partial
             executeInjectedScripts(content);
 
             const form = document.getElementById('farmRecordForm');
@@ -822,8 +762,6 @@
             document.getElementById('modalLoading').style.display = 'none';
             content.style.display = 'block';
             content.innerHTML = html;
-
-            // ← Run the inline <script> from the injected partial
             executeInjectedScripts(content);
 
             const form = document.getElementById('farmRecordForm');
@@ -929,9 +867,6 @@
         });
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // MARK AS HARVESTED
-    // ═══════════════════════════════════════════════════════════
     function openHarvestModal(btn) {
         const id          = btn.dataset.recordId;
         const farm        = btn.dataset.farm;

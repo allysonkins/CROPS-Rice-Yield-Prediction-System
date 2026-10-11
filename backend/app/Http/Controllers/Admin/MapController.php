@@ -55,11 +55,17 @@ class MapController extends Controller
                 }
             }
 
+            // RSBSA first, fall back to phone if no RSBSA
+            $farmerMeta = $farm->user
+                ? ($farm->user->rsbsa_number ?: $farm->user->phone)
+                : null;
+
             return [
                 'id'             => $farm->id,
                 'name'           => $farm->name,
                 'barangay'       => $farm->barangay,
                 'farmer'         => $farm->user->name ?? 'Unassigned',
+                'farmer_meta'    => $farmerMeta,
                 'lat'            => $farm->latitude,
                 'lng'            => $farm->longitude,
                 'land_area'      => $farm->land_area_ha,

@@ -15,71 +15,89 @@ use Illuminate\Database\QueryException;
 
 class FarmRecordController extends Controller
 {
-    public function index(Request $request)
-{
-    $user = auth()->user();
+       public function index(Request $request)
+    {
+        $user = auth()->user();
 
-    $baseQuery = FarmRecord::with([
-        'farm',
-        'riceVariety',
-        'predictions' => fn($q) => $q->where('model_type', 'XGBoost')->orderByDesc('created_at'),
-    ]);
+        $baseQuery = FarmRecord::query()
+            ->with([
+                'farm.user',
+                'riceVariety',
+                'predictions' => fn ($q) => $q->where('model_type', 'XGBoost')->orderByDesc('created_at'),
+            ]);
 
-    if ($user->role === 'farmer') {
-        $farmIds = Farm::where('user_id', $user->id)->pluck('id');
-        $baseQuery->whereIn('farm_id', $farmIds);
+        if ($user->role === 'farmer') {
+            $farmIds = Farm::where('user_id', $user->id)->pluck('id');
+            $baseQuery->whereIn('farm_id', $farmIds);
+        }
+
+        // ── Sorting ──
+        $sort = $request->input('sort', 'created_at');
+        $direction = $request->input('direction', 'desc');
+        $allowedSorts = ['season', 'year', 'created_at', 'farm_id', 'rice_variety_id', 'fertilizer_kg_ha', 'status'];
+        if (!in_array($sort, $allowedSorts)) $sort = 'created_at';
+        if (!in_array($direction, ['asc', 'desc'])) $direction = 'desc';
+
+        // ── Year filter — defaults to the CURRENT year ──
+        $currentYear = (int) now()->year;
+        $yearFilter  = $request->input('year', (string) $currentYear);
+
+        $availableYears = (clone $baseQuery)
+            ->select('year')
+            ->distinct()
+            ->orderBy('year', 'desc')
+            ->pluck('year')
+            ->filter()
+            ->map(fn ($y) => (int) $y);
+
+        // Ensure the current year always shows in the dropdown,
+        // even if no records exist for it yet.
+        if (!$availableYears->contains($currentYear)) {
+            $availableYears->prepend($currentYear);
+            $availableYears = $availableYears->sortDesc()->values();
+        }
+
+        if ($yearFilter !== 'all' && is_numeric($yearFilter)) {
+            $baseQuery->where('year', (int) $yearFilter);
+        }
+
+        // ── Growing seasons first, Harvested last ──
+        // Then apply the requested sort within each group.
+        $statusPriority = "CASE WHEN farm_records.status = 'Vegetative' THEN 0 ELSE 1 END";
+
+        $baseQuery
+            ->orderByRaw("{$statusPriority} ASC")
+            ->orderBy($sort, $direction)
+            ->orderByDesc('created_at');
+
+        $farmRecords = $baseQuery->get();
+
+        $sortParams = ['sort' => $sort, 'direction' => $direction];
+
+        $farms = $user->role === 'farmer'
+            ? Farm::where('user_id', $user->id)->orderBy('name')->get()
+            : Farm::orderBy('name')->get();
+
+        $varieties = RiceVariety::orderBy('name')->get(['id', 'name']);
+
+        $barangays = Farm::query()
+            ->when($user->role === 'farmer', fn ($q) => $q->where('user_id', $user->id))
+            ->select('barangay')->distinct()->orderBy('barangay')
+            ->pluck('barangay')->filter();
+
+        return view('admin.farm-records.index', compact(
+            'farmRecords',
+            'farms',
+            'varieties',
+            'barangays',
+            'sortParams',
+            'availableYears',
+            'yearFilter',
+            'currentYear'
+        ));
     }
 
-    // ── Sorting ─────────────────────────────────────────────
-    $sort = $request->input('sort', 'created_at');
-    $direction = $request->input('direction', 'desc');
-
-    $allowedSorts = ['season', 'year', 'created_at', 'farm_id', 'rice_variety_id', 'fertilizer_kg_ha', 'status'];
-    if (!in_array($sort, $allowedSorts)) $sort = 'created_at';
-    if (!in_array($direction, ['asc', 'desc'])) $direction = 'desc';
-
-    // ── Year filter ─────────────────────────────────────────
-    $currentYear = (int) now()->year;
-    $yearFilter  = $request->input('year', (string) $currentYear);
-
-    $availableYears = (clone $baseQuery)
-        ->select('year')
-        ->distinct()
-        ->orderBy('year', 'desc')
-        ->pluck('year')
-        ->filter()
-        ->map(fn($y) => (int) $y);
-
-    if (!$availableYears->contains($currentYear)) {
-        $availableYears->prepend($currentYear);
-        $availableYears = $availableYears->sortDesc()->values();
-    }
-
-    if ($yearFilter !== 'all' && is_numeric($yearFilter)) {
-        $baseQuery->where('year', (int) $yearFilter);
-    }
-
-    $baseQuery->orderBy($sort, $direction);
-    $farmRecords = $baseQuery->get();
-
-    $sortParams = ['sort' => $sort, 'direction' => $direction];
-
-    $farms = $user->role === 'farmer'
-        ? Farm::where('user_id', $user->id)->get()
-        : Farm::orderBy('name')->get();
-
-    $varieties = RiceVariety::orderBy('name')->get();
-
-    return view('admin.farm-records.index', compact(
-        'farmRecords',
-        'farms',
-        'varieties',
-        'sortParams',
-        'availableYears',
-        'yearFilter',
-        'currentYear'
-    ));
-}
+    // ─── Everything below is unchanged ──────────────────────────────
 
     public function create()
     {
@@ -114,8 +132,6 @@ class FarmRecordController extends Controller
                 $validated['actual_yield_tons_ha'] = null;
             }
 
-            // ── Planting-time weather snapshot ──
-            // Feeds the ML retraining pipeline. Failures are non-fatal.
             try {
                 $weather = app(WeatherService::class)->getWeather();
                 $validated['weather_temperature'] = $weather['temperature'] ?? null;
@@ -128,7 +144,6 @@ class FarmRecordController extends Controller
 
             $record = FarmRecord::create($validated);
 
-            // Auto-generate prediction for Vegetative records
             if ($record->status === 'Vegetative') {
                 try {
                     app(PredictionService::class)->predict($record);
@@ -205,7 +220,6 @@ class FarmRecordController extends Controller
                 'seeding_method' => 'nullable|string|max:255',
             ]);
 
-            // Refresh planting-time weather snapshot if stale (>7 days)
             if ($farmRecord->weather_captured_at === null || $farmRecord->weather_captured_at->diffInDays(now()) >= 7) {
                 try {
                     $weather = app(WeatherService::class)->getWeather();
@@ -256,13 +270,6 @@ class FarmRecordController extends Controller
         }
     }
 
-    /**
-     * Quick action: mark a Vegetative record as Harvested with the actual yield.
-     *
-     * Harvest marks the end of the season, so we also capture a *second*
-     * weather snapshot (harvest-day) alongside the planting-time one. The
-     * ML retraining pipeline can then learn from both.
-     */
     public function markHarvested(Request $request, $id)
     {
         if (auth()->user()->role === 'farmer') {
@@ -285,10 +292,6 @@ class FarmRecordController extends Controller
                 'actual_yield_tons_ha' => $validated['actual_yield_tons_ha'],
             ];
 
-            // ── Harvest-day weather snapshot ──
-            // A second snapshot at the end of the season. Combined with the
-            // planting-time snapshot, the model can learn signals like
-            // "yield after a dry harvest month". Non-fatal on failure.
             try {
                 $weather = app(WeatherService::class)->getWeather();
                 $updateData['harvest_weather_temperature'] = $weather['temperature'] ?? null;
@@ -299,8 +302,6 @@ class FarmRecordController extends Controller
                 \Log::warning('Harvest weather capture failed', ['error' => $e->getMessage()]);
             }
 
-            // Backfill planting-time weather if it was missing (legacy records
-            // created before the weather columns existed).
             if ($farmRecord->weather_captured_at === null) {
                 try {
                     $weather = app(WeatherService::class)->getWeather();
@@ -314,10 +315,6 @@ class FarmRecordController extends Controller
             }
 
             $farmRecord->update($updateData);
-
-            // Keep the prediction so we can compare Predicted vs Actual later.
-            // This is the feedback loop that tells farmers (and the CAO) how
-            // accurate the model is.
 
             log_activity('updated', 'Farm record marked as harvested', $farmRecord, [
                 'farm'          => $farmRecord->farm->name ?? 'N/A',
@@ -351,7 +348,6 @@ class FarmRecordController extends Controller
 
         $farmRecord = FarmRecord::with(['farm', 'riceVariety', 'predictions'])->findOrFail($id);
 
-        // Capture info for the activity log BEFORE deletion
         $farmName    = $farmRecord->farm->name ?? 'N/A';
         $varietyName = $farmRecord->riceVariety->name ?? 'N/A';
         $season      = $farmRecord->season ?? 'N/A';
@@ -360,12 +356,8 @@ class FarmRecordController extends Controller
 
         DB::beginTransaction();
         try {
-            // Delete all associated predictions first
             $farmRecord->predictions()->delete();
-
-            // Then delete the farm record itself
             $farmRecord->delete();
-
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();

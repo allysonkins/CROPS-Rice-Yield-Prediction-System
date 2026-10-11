@@ -865,62 +865,6 @@
         }
         .alert-custom-danger i.alert-icon { color: var(--brand-danger); }
 
-        /* Pending Farmer Verification Banner */
-        .pending-banner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-            border: 1px solid #fde68a;
-            border-left: 5px solid var(--brand-gold);
-            border-radius: var(--radius-lg);
-            padding: 18px 22px;
-            margin-bottom: 24px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .pending-banner-left {
-            display: flex;
-            align-items: flex-start;
-            gap: 14px;
-            min-width: 0;
-        }
-
-        .pending-banner .icon {
-            font-size: 1.8rem;
-            color: var(--brand-gold);
-            flex-shrink: 0;
-            line-height: 1;
-            margin-top: 2px;
-        }
-
-        .pending-banner .body strong {
-            display: block;
-            color: #92400e;
-            font-size: 0.95rem;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .pending-banner .body p {
-            margin: 0;
-            font-size: 0.85rem;
-            color: #78350f;
-            line-height: 1.5;
-        }
-
-        .pending-banner .badge-pending {
-            background: #f59e0b;
-            color: #ffffff;
-            font-size: 0.72rem;
-            font-weight: 800;
-            padding: 5px 12px;
-            border-radius: var(--radius-full);
-            letter-spacing: 0.8px;
-            flex-shrink: 0;
-            box-shadow: 0 2px 4px rgba(217, 119, 6, 0.3);
-        }
 
         /* ══════════════════════════════════════════════════════════
            6. MODAL DESIGN SYSTEM
@@ -1362,15 +1306,6 @@
                 grid-template-columns: repeat(2, 1fr);
             }
 
-            .pending-banner {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .pending-banner .badge-pending {
-                align-self: flex-start;
-                margin-top: 6px;
-            }
         }
 
         /* Mobile Phones (< 576px) */
@@ -1535,67 +1470,9 @@
         <!-- Sidebar Navigation Menu -->
         <nav class="sidebar-nav">
 
-            {{-- ══════════════════════════════════════════════════════════
-     FARMER NAVIGATION
-     Grouped by workflow: Main → Farm Management → Insights → Info → Account
-     ══════════════════════════════════════════════════════════ --}}
-@if($isFarmer)
+            {{-- ═══════════════ FARMER NAVIGATION ═══════════════ --}}
+            @if($isFarmer)
 
-    {{-- ─────────── MAIN ─────────── --}}
-    <div class="nav-label">Main</div>
-
-    <a href="{{ $dashboardUrl }}" class="{{ request()->routeIs($dashboardRoute) ? 'active' : '' }}">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-    </a>
-
-    {{-- ─────────── FARM MANAGEMENT ─────────── --}}
-    <div class="nav-label">Farm Management</div>
-
-    <a href="{{ route('farmer.farms.index') }}" class="{{ request()->routeIs('farmer.farms.*') ? 'active' : '' }}">
-        <i class="bi bi-geo-alt-fill"></i>
-        <span>My Farms</span>
-    </a>
-
-    <a href="{{ route('farmer.farm-records.index') }}" class="{{ request()->routeIs('farmer.farm-records.*') ? 'active' : '' }}">
-        <i class="bi bi-clipboard-data-fill"></i>
-        <span>My Seasons</span>
-    </a>
-
-    {{-- ─────────── PREDICTIONS & INSIGHTS ─────────── --}}
-    <div class="nav-label">Predictions &amp; Insights</div>
-
-    <a href="{{ route('farmer.predictions.index') }}" class="{{ request()->routeIs('farmer.predictions.*') ? 'active' : '' }}">
-        <i class="bi bi-graph-up-arrow"></i>
-        <span>My Predictions</span>
-    </a>
-
-    <a href="{{ route('farmer.rice-varieties.index') }}" class="{{ request()->routeIs('farmer.rice-varieties.*') ? 'active' : '' }}">
-        <i class="bi bi-flower1"></i>
-        <span>Rice Varieties</span>
-    </a>
-
-    {{-- ─────────── INFORMATION ─────────── --}}
-    <div class="nav-label">Information</div>
-
-    <a href="{{ route('farmer.advisories.index') }}" class="{{ request()->routeIs('farmer.advisories.*') ? 'active' : '' }}">
-        <i class="bi bi-megaphone-fill"></i>
-        <span>Advisories</span>
-    </a>
-
-    {{-- ─────────── ACCOUNT ─────────── --}}
-    <div class="nav-label">Account</div>
-
-    <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
-        <i class="bi bi-person-gear"></i>
-        <span>My Profile</span>
-    </a>
-
-
-@endif
-
-            {{-- ═══════════════ ADMIN & STAFF NAVIGATION ═══════════════ --}}
-            @if($isAdmin || $isStaff)
                 <div class="nav-label">Main</div>
 
                 <a href="{{ $dashboardUrl }}" class="{{ request()->routeIs($dashboardRoute) ? 'active' : '' }}">
@@ -1603,37 +1480,61 @@
                     <span>Dashboard</span>
                 </a>
 
-                <a href="{{ route('admin.predictions.index') }}" class="{{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}">
-                    <i class="bi bi-graph-up-arrow"></i>
-                    <span>Predictions</span>
+                <div class="nav-label">Farm Data</div>
+
+                <a href="{{ route('farmer.farms.index') }}" class="{{ request()->routeIs('farmer.farms.*') ? 'active' : '' }}">
+                    <i class="bi bi-geo-alt-fill"></i>
+                    <span>My Farms</span>
                 </a>
 
-                <a href="{{ route('admin.rice-varieties.index') }}" class="{{ request()->routeIs('admin.rice-varieties.*') ? 'active' : '' }}">
+                <a href="{{ route('farmer.farm-records.index') }}" class="{{ request()->routeIs('farmer.farm-records.*') ? 'active' : '' }}">
+                    <i class="bi bi-clipboard-data-fill"></i>
+                    <span>My Seasons</span>
+                </a>
+
+                <div class="nav-label">Analysis</div>
+
+                <a href="{{ route('farmer.predictions.index') }}" class="{{ request()->routeIs('farmer.predictions.*') ? 'active' : '' }}">
+                    <i class="bi bi-graph-up-arrow"></i>
+                    <span>My Predictions</span>
+                </a>
+
+                <a href="{{ route('farmer.rice-varieties.index') }}" class="{{ request()->routeIs('farmer.rice-varieties.*') ? 'active' : '' }}">
                     <i class="bi bi-flower1"></i>
                     <span>Rice Varieties</span>
                 </a>
 
-                <div class="nav-label">People</div>
+                <div class="nav-label">Information</div>
 
-                @if($isAdmin)
-                    <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-                        <i class="bi bi-person-badge-fill"></i>
-                        <span>Staff Accounts</span>
-                    </a>
-                @endif
-
-                <a href="{{ route('admin.farmers.index') }}" class="{{ request()->routeIs('admin.farmers.*') ? 'active' : '' }}">
-                    <i class="bi bi-people-fill"></i>
-                    <span>Farmers List</span>
-                    @php
-                        $pendingCount = \App\Models\User::where('role', 'farmer')->whereNull('verified_by_cao_at')->count();
-                    @endphp
-                    @if($pendingCount > 0)
-                        <span class="badge bg-warning text-dark ms-auto" title="{{ $pendingCount }} pending verification">{{ $pendingCount }}</span>
-                    @endif
+                <a href="{{ route('farmer.advisories.index') }}" class="{{ request()->routeIs('farmer.advisories.*') ? 'active' : '' }}">
+                    <i class="bi bi-megaphone-fill"></i>
+                    <span>Advisories</span>
                 </a>
 
-                <div class="nav-label">Land &amp; Records</div>
+                <div class="nav-label">Account</div>
+
+                <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
+                    <i class="bi bi-person-gear"></i>
+                    <span>My Profile</span>
+                </a>
+
+                <button type="button" class="sidebar-nav-btn" onclick="showLogoutModal()">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span>Sign Out</span>
+                </button>
+            @endif
+
+            {{-- ═══════════════ ADMIN & STAFF NAVIGATION ═══════════════ --}}
+            @if($isAdmin || $isStaff)
+
+                <div class="nav-label">Main</div>
+
+                <a href="{{ $dashboardUrl }}" class="{{ request()->routeIs($dashboardRoute) ? 'active' : '' }}">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                <div class="nav-label">Farm Data</div>
 
                 <a href="{{ route('admin.map') }}" class="{{ request()->routeIs('admin.map') ? 'active' : '' }}">
                     <i class="bi bi-map-fill"></i>
@@ -1652,12 +1553,42 @@
                     <span>Farm Records</span>
                 </a>
 
-                <div class="nav-label">Alerts &amp; Reports</div>
+                <div class="nav-label">Analysis</div>
 
+                <a href="{{ route('admin.predictions.index') }}" class="{{ request()->routeIs('admin.predictions.*') ? 'active' : '' }}">
+                    <i class="bi bi-graph-up-arrow"></i>
+                    <span>Predictions</span>
+                </a>
+
+                <a href="{{ route('admin.rice-varieties.index') }}" class="{{ request()->routeIs('admin.rice-varieties.*') ? 'active' : '' }}">
+                    <i class="bi bi-flower1"></i>
+                    <span>Rice Varieties</span>
+                </a>
+
+                <div class="nav-label">People</div>
+
+                <a href="{{ route('admin.farmers.index') }}" class="{{ request()->routeIs('admin.farmers.*') ? 'active' : '' }}">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Farmers List</span>
+                </a>
+
+                @if($isAdmin)
+                    <a href="{{ route('admin.users.index') }}" class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+                        <i class="bi bi-person-badge-fill"></i>
+                        <span>Staff Accounts</span>
+                    </a>
+                @endif
+
+                <div class="nav-label">Alerts &amp; Reports</div>
 
                 <a href="{{ route('admin.advisories.index') }}" class="{{ request()->routeIs('admin.advisories.*') ? 'active' : '' }}">
                     <i class="bi bi-megaphone-fill"></i>
                     <span>Advisories</span>
+                </a>
+
+                <a href="{{ route('admin.reports.index') }}" class="{{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
+                    <i class="bi bi-file-earmark-bar-graph-fill"></i>
+                    <span>Reports</span>
                 </a>
 
                 @if($isAdmin)
@@ -1667,20 +1598,6 @@
                     </a>
                 @endif
 
-                <a href="{{ route('admin.reports.index') }}" class="{{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
-                    <i class="bi bi-file-earmark-bar-graph-fill"></i>
-                    <span>Reports</span>
-                </a>
-<!--
-                                                @if($isAdmin)
-                    <div class="nav-label">Machine Learning</div>
-
-                    <a href="{{ route('admin.ml.index') }}" class="{{ request()->routeIs('admin.ml.*') ? 'active' : '' }}">
-                        <i class="bi bi-cpu-fill"></i>
-                        <span>Model Training</span>
-                    </a>
-                @endif
--->
                 <div class="nav-label">Account</div>
 
                 <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}">
@@ -1797,23 +1714,7 @@
                     @endif
                 </div>
 
-                <!-- ═══ Pending Farmer Account Notice ═══ -->
-                @if($isFarmer && !$user->verified_by_cao_at)
-                    <section class="pending-banner" aria-live="polite">
-                        <div class="pending-banner-left">
-                            <i class="bi bi-shield-exclamation icon"></i>
-                            <div class="body">
-                                <strong>Your account is currently awaiting CAO Verification</strong>
-                                <p>
-                                    You can review existing records and overview information. Recording new farm seasons,
-                                    modifying farm boundaries, and running yield predictions will become active as soon as the
-                                    City Agriculture Office verifies your registered profile.
-                                </p>
-                            </div>
-                        </div>
-                        <span class="badge-pending">VERIFICATION PENDING</span>
-                    </section>
-                @endif
+                                {{-- Farmer verification banner removed: all farmers are auto-verified on creation --}}
 
                 <!-- Yield Page View Content -->
                 @yield('content')

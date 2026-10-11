@@ -47,24 +47,11 @@
             <i class="bi bi-people-fill"></i> Farmers Directory
         </h4>
         <p class="page-header-desc">
-            Registered farmers in Santiago City, RSBSA verification status, and linked farm records.
+            Registered farmers in Santiago City with RSBSA records and linked farm data.
         </p>
     </div>
     <div class="d-flex align-items-center gap-2 flex-wrap">
         @if(auth()->user()->role === 'admin')
-            @php
-                $pendingCount = \App\Models\User::where('role', 'farmer')
-                    ->whereNull('verified_by_cao_at')
-                    ->count();
-            @endphp
-
-            <a href="{{ route('admin.farmers.pending') }}" class="btn btn-outline-warning">
-                <i class="bi bi-hourglass-split"></i> Pending
-                @if($pendingCount > 0)
-                    <span class="badge bg-danger ms-1">{{ $pendingCount }}</span>
-                @endif
-            </a>
-
             <a href="{{ route('admin.farmers.credentials') }}" class="btn btn-outline-success">
                 <i class="bi bi-key-fill"></i> Credentials
             </a>

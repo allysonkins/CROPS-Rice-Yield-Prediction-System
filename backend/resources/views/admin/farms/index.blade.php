@@ -18,9 +18,7 @@
             overflow: hidden;
             z-index: 1;
         }
-        .leaflet-control-zoom {
-            z-index: 1050 !important;
-        }
+        .leaflet-control-zoom { z-index: 1050 !important; }
 
         .farm-list-scroll {
             max-height: 560px;
@@ -56,15 +54,26 @@
             border-color: var(--brand-green) !important;
             color: var(--brand-green-dark) !important;
         }
+
+        .farmer-name-link {
+            cursor: pointer;
+            color: var(--brand-green);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .farmer-name-link:hover {
+            color: var(--brand-green-dark);
+            text-decoration: none;
+        }
     </style>
 
     <div class="page-header">
         <div>
             <h4 class="page-header-title">
-                
+                <i class="bi bi-grid-3x3-gap-fill"></i> Manage Farms
             </h4>
             <p class="page-header-desc">
-               
+                All registered farms with their assigned farmers, barangays, and land area.
             </p>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -130,7 +139,7 @@
             </span>
         </div>
 
-        {{-- FILTER BAR (single row) --}}
+        {{-- FILTER BAR --}}
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 
             {{-- SEARCH --}}
@@ -144,6 +153,16 @@
                            style="border: none; background: var(--gray-50); font-size: 12px; padding: 0.4rem 0.7rem;">
                 </div>
             </div>
+
+            {{-- FARMER FILTER --}}
+            <select id="farmsFilterFarmer" class="form-select"
+                    style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; appearance: none; cursor: pointer; width: auto; min-width: 180px;">
+                <option value="all">All Farmers</option>
+                <option value="__unassigned__">— Unassigned —</option>
+                @foreach($farmers as $farmer)
+                    <option value="{{ $farmer->name }}">{{ $farmer->name }}</option>
+                @endforeach
+            </select>
 
             {{-- BARANGAY --}}
             <select id="farmsFilterBarangay" class="form-select"
@@ -174,10 +193,9 @@
             <table class="table table-sm table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Farm Name</th>
-                        <th>Barangay</th>
                         <th>Farmer</th>
+                        <th>Farm</th>
+                        <th>Barangay</th>
                         <th>Area (ha)</th>
                         <th>Soil Type</th>
                         <th>Coordinates</th>
@@ -191,23 +209,41 @@
                 <tbody id="farmsListBody">
                     @forelse($farms as $farm)
                         @php
-                            $hasCoords = $farm->latitude && $farm->longitude;
+                            $hasCoords  = $farm->latitude && $farm->longitude;
                             $isAssigned = $farm->user_id !== null;
+                            $farmerName = $farm->user->name ?? 'Unassigned';
+                            $farmerMeta = $farm->user->rsbsa_number ?? $farm->user->phone ?? null;
                             $searchText = strtolower(
                                 ($farm->name ?? '') . ' ' .
-                                ($farm->user->name ?? '') . ' ' .
+                                $farmerName . ' ' .
+                                ($farmerMeta ?? '') . ' ' .
                                 ($farm->barangay ?? '')
                             );
                         @endphp
                         <tr class="farms-row"
                             data-search="{{ $searchText }}"
                             data-barangay="{{ $farm->barangay ?? '' }}"
+                            data-farmer="{{ $farmerName }}"
                             data-assign="{{ $isAssigned ? 'assigned' : 'unassigned' }}"
                             data-geo="{{ $hasCoords ? 'with' : 'without' }}">
-                            <td class="farms-row-index">{{ $loop->iteration }}</td>
+                            <td>
+                                @if($isAssigned)
+                                    <span class="farmer-name-link"
+                                          onclick="filterByFarmer('{{ addslashes($farmerName) }}')"
+                                          title="Click to filter by this farmer">
+                                        {{ $farmerName }}
+                                    </span>
+                                    @if($farmerMeta)
+                                        <br><small class="text-muted">{{ $farmerMeta }}</small>
+                                    @endif
+                                @else
+                                    <span class="badge" style="background: var(--brand-gold-light); color: #92400e; font-size: 10px; padding: 3px 8px; border: 1px solid #fde68a;">
+                                        <i class="bi bi-person-dash"></i> Unassigned
+                                    </span>
+                                @endif
+                            </td>
                             <td><strong>{{ $farm->name }}</strong></td>
                             <td>{{ $farm->barangay }}</td>
-                            <td>{{ $farm->user->name ?? 'Unassigned' }}</td>
                             <td>{{ number_format($farm->land_area_ha, 2) }}</td>
                             <td>{{ $farm->soil_type }}</td>
                             <td>
@@ -239,7 +275,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="text-center py-4 text-muted">
+                            <td colspan="7" class="text-center py-4 text-muted">
                                 <i class="bi bi-inbox" style="font-size: 28px;"></i>
                                 <p class="mt-2 mb-0">No farms yet.</p>
                                 @if(auth()->user()->role === 'admin')
@@ -252,7 +288,7 @@
                     @endforelse
 
                     <tr id="farmsNoResults" style="display: none;">
-                        <td colspan="8" class="text-center py-4 text-muted">
+                        <td colspan="7" class="text-center py-4 text-muted">
                             <i class="bi bi-search" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No farms match your filters.</p>
                         </td>
@@ -297,6 +333,21 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+    // ============================================================
+    // Filter by farmer — called when a farmer name is clicked
+    // ============================================================
+    function filterByFarmer(name) {
+        const sel = document.getElementById('farmsFilterFarmer');
+        if (!sel) return;
+        for (const opt of sel.options) {
+            if (opt.value === name) {
+                sel.value = name;
+                sel.dispatchEvent(new Event('change'));
+                return;
+            }
+        }
+    }
+
     @if(auth()->user()->role === 'admin')
     // ============================================================
     // MODAL MAP STATE
@@ -578,6 +629,7 @@
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         const searchInput    = document.getElementById('farmsSearch');
+        const farmerSelect   = document.getElementById('farmsFilterFarmer');
         const barangaySelect = document.getElementById('farmsFilterBarangay');
         const assignBtns     = document.querySelectorAll('.farms-filter-btn[data-assign]');
         const geoBtns        = document.querySelectorAll('.farms-filter-btn[data-geo]');
@@ -595,25 +647,35 @@
         let perPage = parseInt(perPageSelect?.value || '25', 10);
 
         function getMatchingRows() {
-            const search     = searchInput.value.toLowerCase().trim();
-            const barangay   = barangaySelect.value;
-            const activeA    = document.querySelector('.farms-filter-btn[data-assign].active');
+            const search       = searchInput.value.toLowerCase().trim();
+            const farmerVal    = farmerSelect ? farmerSelect.value : 'all';
+            const barangay     = barangaySelect.value;
+            const activeA      = document.querySelector('.farms-filter-btn[data-assign].active');
             const assignFilter = activeA ? activeA.dataset.assign : 'all';
-            const activeG    = document.querySelector('.farms-filter-btn[data-geo].active');
-            const geoFilter  = activeG ? activeG.dataset.geo : 'all';
+            const activeG      = document.querySelector('.farms-filter-btn[data-geo].active');
+            const geoFilter    = activeG ? activeG.dataset.geo : 'all';
 
             return allRows.filter(row => {
                 const sd = row.dataset.search || '';
                 const rb = row.dataset.barangay || '';
+                const rf = row.dataset.farmer || '';
                 const ra = row.dataset.assign || '';
                 const rg = row.dataset.geo || '';
 
-                const matchesSearch   = sd.includes(search);
+                const matchesSearch = sd.includes(search);
+
+                let matchesFarmer = true;
+                if (farmerVal === '__unassigned__') {
+                    matchesFarmer = (ra === 'unassigned');
+                } else if (farmerVal !== 'all') {
+                    matchesFarmer = (rf === farmerVal);
+                }
+
                 const matchesBarangay = (barangay === 'all' || rb === barangay);
                 const matchesAssign   = (assignFilter === 'all' || ra === assignFilter);
                 const matchesGeo      = (geoFilter === 'all' || rg === geoFilter);
 
-                return matchesSearch && matchesBarangay && matchesAssign && matchesGeo;
+                return matchesSearch && matchesFarmer && matchesBarangay && matchesAssign && matchesGeo;
             });
         }
 
@@ -629,10 +691,8 @@
 
             const start = (currentPage - 1) * perPage;
             const end = start + perPage;
-            matching.slice(start, end).forEach((row, i) => {
+            matching.slice(start, end).forEach(row => {
                 row.style.display = '';
-                const c = row.querySelector('.farms-row-index');
-                if (c) c.textContent = start + i + 1;
             });
 
             if (noResults) noResults.style.display = (total === 0 && allRows.length > 0) ? '' : 'none';
@@ -702,6 +762,7 @@
         function resetAndRender() { currentPage = 1; renderPagination(); }
 
         searchInput.addEventListener('input', resetAndRender);
+        farmerSelect?.addEventListener('change', resetAndRender);
         barangaySelect.addEventListener('change', resetAndRender);
 
         assignBtns.forEach(btn => {

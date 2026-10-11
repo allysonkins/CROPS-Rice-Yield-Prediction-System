@@ -21,6 +21,10 @@ class PredictionService
     /**
      * Run prediction for a farm record.
      *
+     * Every persist (fresh generate or regenerate) creates a new row so the
+     * history page can show the full audit trail of predictions for a record.
+     * The main predictions page dedups to the latest row per farm record.
+     *
      * @return array{
      *     success: bool,
      *     error?: string,
@@ -31,7 +35,7 @@ class PredictionService
      *     prediction?: Prediction|null
      * }
      */
-    public function predict(FarmRecord $farmRecord, bool $persist = true): array
+    public function predict(FarmRecord $farmRecord, bool $persist = true, bool $update = false): array
     {
         $farmRecord->loadMissing(['farm', 'riceVariety']);
 
@@ -123,8 +127,7 @@ class PredictionService
             $prediction = null;
 
             if ($persist && $farmRecord->exists) {
-                $prediction = Prediction::create([
-                    'farm_record_id'          => $farmRecord->id,
+                $payload = [
                     'model_type'              => 'XGBoost',
                     'predicted_yield_tons_ha' => $yield,
                     'confidence'              => $confidence,
@@ -134,7 +137,15 @@ class PredictionService
                         'input'   => $input,
                         'weather' => $weather,
                     ]),
-                ]);
+                ];
+
+                // Every persist creates a new row. The history page reads all
+                // rows for a farm record; the main predictions page dedups to
+                // the latest one per record.
+                $prediction = Prediction::create(array_merge(
+                    ['farm_record_id' => $farmRecord->id],
+                    $payload
+                ));
             }
 
             return [

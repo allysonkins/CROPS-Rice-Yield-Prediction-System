@@ -7,10 +7,10 @@ use App\Http\Controllers\Admin\RiceVarietyController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Web\AuthController;
 use App\Http\Controllers\Web\EmailVerificationController;
-use App\Http\Controllers\Web\FarmerRegistrationController;
 use App\Http\Controllers\Admin\MapController;
 use App\Http\Controllers\Admin\AdvisoryController;
 use App\Http\Controllers\Admin\PredictionController;
+use App\Http\Controllers\Admin\PredictionComparisonController;
 use App\Http\Controllers\Admin\FarmRecordController;
 use App\Http\Controllers\Admin\FarmController;
 use App\Http\Controllers\Admin\LogController;
@@ -24,6 +24,7 @@ use App\Http\Controllers\Farmer\FarmRecordController as FarmerFarmRecordControll
 use App\Http\Controllers\Farmer\RiceVarietyController as FarmerRiceVarietyController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\ModelTrainingController;
+
 
 Route::get('/', function () {
     return redirect('/login');
@@ -45,10 +46,11 @@ Route::post('/staff/login', [AuthController::class, 'loginStaff'])->name('staff.
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 // ============================================================
-// FARMER SELF-REGISTRATION (public)
+// FARMER SELF-REGISTRATION — DISABLED
 // ============================================================
-Route::get ('/farmer/register', [FarmerRegistrationController::class, 'showForm'])->name('farmer.register');
-Route::post('/farmer/register', [FarmerRegistrationController::class, 'register'])->name('farmer.register.submit');
+// Only farmers registered by the CAO (individually or via the
+// RSBSA bulk-import tool) can log in. No public sign-up.
+// See: Admin\FarmerController and Admin\FarmerImportController.
 
 // ============================================================
 // EMAIL VERIFICATION ROUTES
@@ -83,6 +85,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================================
     // 2. PREDICTIONS
     // ============================================================
+    Route::get('/admin/predictions/compare', [PredictionComparisonController::class, 'index'])
+    ->name('admin.predictions.compare');
+Route::post('/admin/predictions/compare/data', [PredictionComparisonController::class, 'data'])
+    ->name('admin.predictions.compare.data');
     Route::get('/admin/predictions', [PredictionController::class, 'index'])->name('admin.predictions.index');
     Route::get('/admin/predictions/create', [PredictionController::class, 'create'])->name('admin.predictions.create');
     Route::post('/admin/predictions', [PredictionController::class, 'store'])->name('admin.predictions.store');
@@ -148,7 +154,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 9. FARMERS LIST
     // ============================================================
     // CRITICAL ORDER: named routes MUST come BEFORE the resource route,
-    // otherwise /admin/farmers/import, /pending, /credentials, and /slip
+    // otherwise /admin/farmers/import, /credentials, and /slip
     // get bound as {farmer} = "import" or {farmer} = "credentials".
 
     // 9a. Bulk RSBSA import
@@ -160,19 +166,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get ('/admin/farmers/import/template',    [FarmerImportController::class, 'template'])->name('admin.farmers.import.template');
     Route::get ('/admin/farmers/import/diagnostics', [FarmerImportController::class, 'diagnostics'])->name('admin.farmers.import.diagnostics');
 
-    // 9b. CAO verification queue
-    Route::get   ('/admin/farmers/pending',     [FarmerController::class, 'pending'])->name('admin.farmers.pending');
-    Route::post  ('/admin/farmers/{id}/verify', [FarmerController::class, 'verify'])->name('admin.farmers.verify');
-    Route::delete('/admin/farmers/{id}/reject', [FarmerController::class, 'reject'])->name('admin.farmers.reject');
-
-    // 9c. Credentials + PIN management
+    // 9b. Credentials + PIN management
     Route::get ('/admin/farmers/credentials',    [FarmerController::class, 'credentials'])->name('admin.farmers.credentials');
     Route::post('/admin/farmers/{id}/reset-pin', [FarmerController::class, 'resetPin'])->name('admin.farmers.reset-pin');
     Route::get ('/admin/farmers/{id}/slip',      [FarmerController::class, 'slip'])->name('admin.farmers.slip');
     Route::post('/admin/farmers/credentials/generate-pins-chunk', [FarmerController::class, 'generatePinsChunk'])
         ->name('admin.farmers.generate-pins-chunk');
 
-    // 9d. Standard resource routes
+    // 9c. Standard resource routes
     Route::resource('/admin/farmers', FarmerController::class)->names('admin.farmers');
 
     // ============================================================
@@ -202,7 +203,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/status/{id}', [ModelTrainingController::class, 'status'])->name('status');
         Route::get('/runs/{id}',   [ModelTrainingController::class, 'show'])->name('show');
     });
-
 
     // ============================================================
     // 12. UNIFIED PROFILE

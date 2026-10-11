@@ -52,8 +52,11 @@
     </form>
 
     <div class="card-foot">
-        <p>New farmer?</p>
-        <a href="{{ route('farmer.register') }}">Create your account <i class="bi bi-arrow-right"></i></a>
+        <p style="font-size: 12px; color: var(--gray-500); margin: 0; line-height: 1.6;">
+            <i class="bi bi-info-circle"></i>
+            Only farmers registered with the <strong>City Agriculture Office</strong> can log in.
+            If you are not yet in the system, please visit the CAO to register your RSBSA number.
+        </p>
     </div>
     <div class="secure-note"><i class="bi bi-lock-fill"></i> Your connection to this system is secured.</div>
 @endsection

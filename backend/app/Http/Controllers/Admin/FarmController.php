@@ -12,6 +12,7 @@ class FarmController extends Controller
     public function index()
     {
         $farms = Farm::with('user')->orderBy('name')->get();
+
         $farmers = User::where('role', 'farmer')->orderBy('name')->get();
 
         return view('admin.farms.index', compact('farms', 'farmers'));

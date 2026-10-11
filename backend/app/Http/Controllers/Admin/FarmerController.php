@@ -51,16 +51,16 @@ class FarmerController extends Controller
         }
 
         $farmer = User::create([
-            'name'              => $request->name,
-            'email'             => $email,
-            'password'          => Hash::make($request->password),
-            'phone'             => $request->phone ?: null,
-            'rsbsa_number'      => $request->rsbsa_number ?: null,
-            'role'              => 'farmer',
-            'barangay'          => $request->barangay,
-            'email_verified_at' => now(),
-            'verified_by_cao_at'=> now(),           // admin-created = auto-verified
-            'verified_by_cao_id'=> auth()->id(),
+            'name'               => $request->name,
+            'email'              => $email,
+            'password'           => Hash::make($request->password),
+            'phone'              => $request->phone ?: null,
+            'rsbsa_number'       => $request->rsbsa_number ?: null,
+            'role'               => 'farmer',
+            'barangay'           => $request->barangay,
+            'email_verified_at'  => now(),
+            'verified_by_cao_at' => now(),          // admin-created = auto-verified
+            'verified_by_cao_id' => auth()->id(),
         ]);
 
         log_activity('created', 'Farmer account created', $farmer, [
@@ -166,55 +166,6 @@ class FarmerController extends Controller
     }
 
     // ═══════════════════════════════════════════════════════════
-    // CAO VERIFICATION QUEUE
-    // ═══════════════════════════════════════════════════════════
-
-    public function pending()
-    {
-        $pending = User::where('role', 'farmer')
-            ->whereNull('verified_by_cao_at')
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return view('admin.farmers.pending', compact('pending'));
-    }
-
-    public function verify($id)
-    {
-        $farmer = User::where('role', 'farmer')->findOrFail($id);
-
-        if ($farmer->verified_by_cao_at) {
-            return back()->with('error', 'This farmer is already verified.');
-        }
-
-        $farmer->verified_by_cao_at = now();
-        $farmer->verified_by_cao_id = auth()->id();
-        $farmer->save();
-
-        log_activity('verified', 'Farmer verified by CAO', $farmer, [
-            'verified_by' => auth()->user()->name,
-            'farmer'      => $farmer->name,
-        ]);
-
-        return back()->with('success', "{$farmer->name} has been verified.");
-    }
-
-    public function reject($id)
-    {
-        $farmer = User::where('role', 'farmer')->findOrFail($id);
-
-        log_activity('rejected', 'Farmer registration rejected by CAO', $farmer, [
-            'rejected_by' => auth()->user()->name,
-            'farmer'      => $farmer->name,
-            'phone'       => $farmer->phone,
-        ]);
-
-        $farmer->delete();
-
-        return back()->with('success', 'Farmer registration rejected and removed.');
-    }
-
-    // ═══════════════════════════════════════════════════════════
     // CREDENTIALS / PIN MANAGEMENT
     // ═══════════════════════════════════════════════════════════
 
@@ -265,58 +216,57 @@ class FarmerController extends Controller
             ->with('reset_pin_farmer', $farmer->name)
             ->with('success', "New PIN generated for {$farmer->name}.");
     }
-    
+
     /**
- * Chunked generation of missing PINs.
- * Called repeatedly by the credentials page until all PINs are set.
- * Processes up to $chunkSize farmers per request so no single request
- * exceeds shared-hosting timeouts.
- */
-public function generatePinsChunk(Request $request)
-{
-    if (auth()->user()->role !== 'admin') {
-        return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
-    }
-
-    $chunkSize = 200;
-
-    try {
-        $farmers = \App\Models\User::where('role', 'farmer')
-            ->whereNull('pin_encrypted')
-            ->orderBy('id')
-            ->limit($chunkSize)
-            ->get();
-
-        $generated = 0;
-        foreach ($farmers as $farmer) {
-            $pin = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $farmer->setPin($pin);   // encrypts + saves pin_encrypted & pin_generated_at
-            $generated++;
+     * Chunked generation of missing PINs.
+     * Called repeatedly by the credentials page until all PINs are set.
+     * Processes up to $chunkSize farmers per request so no single request
+     * exceeds shared-hosting timeouts.
+     */
+    public function generatePinsChunk(Request $request)
+    {
+        if (auth()->user()->role !== 'admin') {
+            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
         }
 
-        $remaining = \App\Models\User::where('role', 'farmer')
-            ->whereNull('pin_encrypted')
-            ->count();
+        $chunkSize = 200;
 
-        return response()->json([
-            'success'   => true,
-            'generated' => $generated,
-            'remaining' => $remaining,
-        ]);
+        try {
+            $farmers = \App\Models\User::where('role', 'farmer')
+                ->whereNull('pin_encrypted')
+                ->orderBy('id')
+                ->limit($chunkSize)
+                ->get();
 
-    } catch (\Throwable $e) {
-        \Log::error('Generate all PINs failed', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
+            $generated = 0;
+            foreach ($farmers as $farmer) {
+                $pin = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $farmer->setPin($pin);   // encrypts + saves pin_encrypted & pin_generated_at
+                $generated++;
+            }
 
-        return response()->json([
-            'success' => false,
-            'error'   => $e->getMessage(),
-        ], 500);
+            $remaining = \App\Models\User::where('role', 'farmer')
+                ->whereNull('pin_encrypted')
+                ->count();
+
+            return response()->json([
+                'success'   => true,
+                'generated' => $generated,
+                'remaining' => $remaining,
+            ]);
+
+        } catch (\Throwable $e) {
+            \Log::error('Generate all PINs failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
     }
-}
-
 
     /**
      * Standalone printable slip for one farmer.
