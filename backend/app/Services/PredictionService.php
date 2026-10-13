@@ -101,6 +101,8 @@ class PredictionService
             'temperature_avg'          => (float) ($weather['temperature'] ?? 28),
             'rainfall_mm'              => (float) ($weather['rainfall'] ?? 0),
             'humidity_avg'             => (float) ($weather['humidity'] ?? 75),
+
+            'water_source'             => $farmRecord->water_source ?? 'Rainfed',
         ];
 
         try {

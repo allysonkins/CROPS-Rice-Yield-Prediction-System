@@ -171,7 +171,7 @@
     {{-- ROW 2: Pills + Advanced filters (Farm Records style) --}}
     <div class="d-flex flex-wrap align-items-center gap-3 pt-3" style="border-top: 1px dashed var(--gray-200);">
 
-        {{-- SEASON GROUP --}}
+                {{-- SEASON GROUP --}}
         <div class="d-flex align-items-center gap-2">
             <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Season</span>
             <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
@@ -189,6 +189,11 @@
                         class="filter-btn season-btn {{ request('season') === 'Wet' ? 'active' : '' }}"
                         style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; {{ request('season') === 'Wet' ? 'background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05);' : 'background: transparent; color: var(--gray-600);' }} white-space: nowrap;">
                     Wet
+                </button>
+                <button type="submit" name="season" value="Off-Season"
+                        class="filter-btn season-btn {{ request('season') === 'Off-Season' ? 'active' : '' }}"
+                        style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; {{ request('season') === 'Off-Season' ? 'background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05);' : 'background: transparent; color: var(--gray-600);' }} white-space: nowrap;">
+                    Off-Season
                 </button>
             </div>
         </div>
@@ -216,6 +221,26 @@
                 </button>
             </div>
         </div>
+    
+
+
+                {{-- Water source --}}
+        <select name="water_source" class="form-select form-select-sm" title="Filter by water source"
+                style="width: auto; min-width: 150px; font-size: 12px;">
+            <option value="" {{ !request('water_source') ? 'selected' : '' }}>Any Water</option>
+            <option value="Rainfed"   {{ request('water_source') === 'Rainfed'   ? 'selected' : '' }}>Rainfed</option>
+            <option value="Irrigated" {{ request('water_source') === 'Irrigated' ? 'selected' : '' }}>Irrigated</option>
+            <option value="Both"      {{ request('water_source') === 'Both'      ? 'selected' : '' }}>Both</option>
+        </select>
+
+        {{-- Confidence tier --}}
+        <select name="confidence" class="form-select form-select-sm" title="Filter by confidence level"
+                style="width: auto; min-width: 150px; font-size: 12px;">
+            <option value="all" {{ request('confidence', 'all') === 'all' ? 'selected' : '' }}>Any Confidence</option>
+            <option value="high"   {{ request('confidence') === 'high'   ? 'selected' : '' }}>High (≥90%)</option>
+            <option value="medium" {{ request('confidence') === 'medium' ? 'selected' : '' }}>Medium (70–90%)</option>
+            <option value="low"    {{ request('confidence') === 'low'    ? 'selected' : '' }}>Low (&lt;70%)</option>
+        </select>
 
         <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
 
@@ -259,7 +284,11 @@
             'Variety'       => request('variety') ? optional($varieties->firstWhere('id', request('variety')))->name : null,
             'Season'        => request('season'),
             'Record Status' => request('record_status') ? (request('record_status') === 'Vegetative' ? 'Growing' : 'Harvested') : null,
+            'Water'         => request('water_source'),
+            'Confidence' => request('confidence') && request('confidence') !== 'all' ? ucfirst(request('confidence')) : null,
             'Barangay'      => request('barangay'),
+            'From'          => request('from'),
+            'To'            => request('to'),
             'Search'        => request('q'),
         ]);
     @endphp

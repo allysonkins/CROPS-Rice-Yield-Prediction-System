@@ -88,13 +88,11 @@
             <div class="d-flex flex-wrap align-items-center gap-3 pt-3" style="border-top: 1px dashed var(--gray-200);">
 
                 {{-- SEASON GROUP --}}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Season</span>
-                    <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
                         <button class="filter-btn season-btn active" data-season="all" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
                         <button class="filter-btn season-btn"        data-season="Dry" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Dry</button>
                         <button class="filter-btn season-btn"        data-season="Wet" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Wet</button>
-                    </div>
+                        <button class="filter-btn season-btn"        data-season="Off" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Off-Season</button>
                 </div>
 
                 <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
@@ -111,16 +109,18 @@
 
                 <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
 
-                {{-- PREDICTION FILTER --}}
+                {{-- WATER SOURCE GROUP --}}
                 <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Prediction</span>
-                    <select id="filterPrediction" class="form-select" title="Filter by prediction availability"
-                            style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; width: auto; min-width: 130px;">
-                        <option value="all">Any</option>
-                        <option value="with">Available</option>
-                        <option value="without">Missing</option>
-                    </select>
+                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Water</span>
+                    <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                        <button class="filter-btn water-btn active" data-water="all"       style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
+                        <button class="filter-btn water-btn"        data-water="Rainfed"   style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Rainfed</button>
+                        <button class="filter-btn water-btn"        data-water="Irrigated" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Irrigated</button>
+                        <button class="filter-btn water-btn"        data-water="Both"      style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Both</button>
+                    </div>
                 </div>
+
+                <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
 
                 {{-- ACTUAL YIELD FILTER --}}
                 <div class="d-flex align-items-center gap-2">
@@ -172,6 +172,7 @@
                     <th>Variety</th>
                     <th>Season / Year</th>
                     <th>Fertilizer (kg/ha)</th>
+                    <th>Water</th>
                     <th>Actual Yield</th>
                     <th>Expected Yield (t/ha)</th>
                     <th>Status</th>
@@ -203,7 +204,7 @@
                         );
                         $barangay = $record->farm->barangay ?? '';
                         $status   = $record->status ?? '';
-                        $seasonNorm = str_replace(' Season', '', $record->season ?? '');
+                        $seasonNorm = $record->season_label;
 
                         $prediction  = $record->latest_xgboost_prediction;
                         $predicted   = $prediction?->predicted_yield_tons_ha;
@@ -221,7 +222,7 @@
                         data-barangay="{{ $barangay }}"
                         data-status="{{ $status }}"
                         data-season="{{ $seasonNorm }}"
-                        data-has-prediction="{{ $hasPrediction ? '1' : '0' }}"
+                        data-water="{{ $record->water_source ?? '' }}"
                         data-has-actual="{{ $hasActual ? '1' : '0' }}">
                         <td>
                             @if($farmerName !== 'Unassigned')
@@ -250,6 +251,23 @@
                         </td>
                         <td>{{ number_format($record->fertilizer_kg_ha, 2) }}</td>
                         <td>
+                            @if($record->water_source === 'Rainfed')
+                                <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-gold);"></span> Rainfed
+                                </span>
+                            @elseif($record->water_source === 'Irrigated')
+                                <span class="badge-status" style="background: #dbeafe; color: #1e40af; border-color: #bfdbfe; font-size: 11px;">
+                                    <span class="dot" style="background: #1d4ed8;"></span> Irrigated
+                                </span>
+                            @elseif($record->water_source === 'Both')
+                                <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-green);"></span> Both
+                                </span>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
+                        <td>
                             @if($record->status === 'Harvested')
                                 {{ $record->actual_yield_tons_ha ? number_format($record->actual_yield_tons_ha, 2) : 'N/A' }}
                             @else
@@ -265,11 +283,20 @@
                             @endif
                         </td>
                         <td>
-                            <span class="badge {{ $record->status_badge_class }}">
-                                <i class="bi {{ $record->status_icon }}"></i>
-                                {{ $record->status ?? 'N/A' }}
-                            </span>
-                        </td>
+    @if($record->status === 'Harvested')
+        <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+            <span class="dot" style="background: var(--brand-green);"></span>
+            Harvested
+        </span>
+    @elseif($record->status === 'Vegetative')
+        <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+            <span class="dot" style="background: var(--brand-gold);"></span>
+            Growing
+        </span>
+    @else
+        <span class="text-muted">—</span>
+    @endif
+</td>
                         @if(auth()->user()->role !== 'farmer')
                             <td style="white-space: nowrap;">
                                 <button type="button" class="btn btn-sm btn-secondary" onclick="viewFarmRecord({{ $record->id }})" title="View Details">
@@ -321,7 +348,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 9 : 8 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">
                                 @if($activeYear !== 'all')
@@ -335,7 +362,7 @@
                 @endforelse
 
                 <tr id="noFilterResults" style="display: none;">
-                    <td colspan="{{ auth()->user()->role !== 'farmer' ? 9 : 8 }}" class="text-center py-4 text-muted">
+                    <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
                         <i class="bi bi-search" style="font-size: 28px;"></i>
                         <p class="mt-2 mb-0">No farm records match your filters.</p>
                     </td>
@@ -481,10 +508,10 @@
     document.addEventListener('DOMContentLoaded', function() {
         const searchInput      = document.getElementById('searchFarmRecord');
         const barangaySelect   = document.getElementById('filterBarangay');
-        const predictionSelect = document.getElementById('filterPrediction');
         const actualSelect     = document.getElementById('filterActual');
         const statusBtns       = document.querySelectorAll('.status-btn');
         const seasonBtns       = document.querySelectorAll('.season-btn');
+        const waterBtns        = document.querySelectorAll('.water-btn');
         const allRows          = Array.from(document.querySelectorAll('#farmRecordsBody .record-row'));
         const noResults        = document.getElementById('noFilterResults');
         const visibleCount     = document.getElementById('visibleCount');
@@ -502,49 +529,49 @@
         function hasActiveFilters() {
             const activeStatus = document.querySelector('.status-btn.active');
             const activeSeason = document.querySelector('.season-btn.active');
+            const activeWater  = document.querySelector('.water-btn.active');
             return (
                 searchInput.value.trim() !== '' ||
                 barangaySelect.value !== 'all' ||
-                (predictionSelect && predictionSelect.value !== 'all') ||
                 (actualSelect && actualSelect.value !== 'all') ||
                 (activeStatus && activeStatus.dataset.status !== 'all') ||
-                (activeSeason && activeSeason.dataset.season !== 'all')
+                (activeSeason && activeSeason.dataset.season !== 'all') ||
+                (activeWater && activeWater.dataset.water !== 'all')
             );
         }
 
         function getMatchingRows() {
             const search     = searchInput.value.toLowerCase().trim();
             const barangay   = barangaySelect.value;
-            const predFilter = predictionSelect ? predictionSelect.value : 'all';
             const actFilter  = actualSelect ? actualSelect.value : 'all';
             const activeStatus = document.querySelector('.status-btn.active');
             const status = activeStatus ? activeStatus.dataset.status : 'all';
             const activeSeason = document.querySelector('.season-btn.active');
             const season = activeSeason ? activeSeason.dataset.season : 'all';
+            const activeWater = document.querySelector('.water-btn.active');
+            const water = activeWater ? activeWater.dataset.water : 'all';
 
             return allRows.filter(row => {
                 const sd  = row.dataset.search || '';
                 const rb  = row.dataset.barangay || '';
                 const rs  = row.dataset.status || '';
                 const rsn = row.dataset.season || '';
-                const hp  = row.dataset.hasPrediction || '0';
+                const rw  = row.dataset.water || '';
                 const ha  = row.dataset.hasActual || '0';
 
                 const matchesSearch   = sd.includes(search);
                 const matchesBarangay = (barangay === 'all' || rb === barangay);
                 const matchesStatus   = (status === 'all' || rs === status);
                 const matchesSeason   = (season === 'all' || rsn === season);
+                const matchesWater    = (water === 'all' || rw === water);
 
-                let matchesPrediction = true;
-                if (predFilter === 'with')    matchesPrediction = (hp === '1');
-                if (predFilter === 'without') matchesPrediction = (hp === '0');
 
                 let matchesActual = true;
                 if (actFilter === 'with')    matchesActual = (ha === '1');
                 if (actFilter === 'without') matchesActual = (ha === '0');
 
                 return matchesSearch && matchesBarangay && matchesStatus
-                    && matchesSeason && matchesPrediction && matchesActual;
+                        && matchesSeason && matchesWater && matchesActual;
             });
         }
 
@@ -635,7 +662,6 @@
 
         searchInput.addEventListener('input', resetAndRender);
         barangaySelect.addEventListener('change', resetAndRender);
-        predictionSelect?.addEventListener('change', resetAndRender);
         actualSelect?.addEventListener('change', resetAndRender);
 
         statusBtns.forEach(btn => {
@@ -670,6 +696,22 @@
             });
         });
 
+        waterBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                waterBtns.forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--gray-600)';
+                    b.style.boxShadow = 'none';
+                    b.classList.remove('active');
+                });
+                this.style.background = 'white';
+                this.style.color = 'var(--gray-900)';
+                this.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                this.classList.add('active');
+                resetAndRender();
+            });
+        });
+
         perPageSelect?.addEventListener('change', function() {
             perPage = parseInt(this.value, 10) || 25;
             resetAndRender();
@@ -678,7 +720,6 @@
         resetBtn?.addEventListener('click', function() {
             searchInput.value = '';
             barangaySelect.value = 'all';
-            if (predictionSelect) predictionSelect.value = 'all';
             if (actualSelect) actualSelect.value = 'all';
 
             statusBtns.forEach(b => {
@@ -707,6 +748,20 @@
                 seasonAll.style.color = 'var(--gray-900)';
                 seasonAll.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
                 seasonAll.classList.add('active');
+            }
+
+            waterBtns.forEach(b => {
+                b.style.background = 'transparent';
+                b.style.color = 'var(--gray-600)';
+                b.style.boxShadow = 'none';
+                b.classList.remove('active');
+            });
+            const waterAll = document.querySelector('.water-btn[data-water="all"]');
+            if (waterAll) {
+                waterAll.style.background = 'white';
+                waterAll.style.color = 'var(--gray-900)';
+                waterAll.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+                waterAll.classList.add('active');
             }
 
             resetAndRender();
@@ -992,4 +1047,19 @@
     });
 </script>
 @endif
+@endpush
+
+@push('styles')
+<style>
+    #paginationList button:not(:disabled):hover {
+        background: var(--brand-green-light) !important;
+        border-color: var(--brand-green) !important;
+        color: var(--brand-green-dark) !important;
+        transform: translateY(-1px);
+    }
+    @media (max-width: 575.98px) {
+        #paginationBar { justify-content: center !important; }
+        #paginationList button { min-width: 30px !important; height: 30px !important; padding: 0 8px !important; font-size: 12px !important; }
+    }
+</style>
 @endpush

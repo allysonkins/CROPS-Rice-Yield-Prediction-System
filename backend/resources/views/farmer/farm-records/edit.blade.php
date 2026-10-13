@@ -74,6 +74,17 @@
             </select>
         </div>
 
+<div class="col-md-6">
+    <label class="form-label fw-semibold">Pinagmulan ng Tubig</label>
+    <select name="water_source" class="form-select">
+        <option value="">Piliin...</option>
+        <option value="Rainfed"   {{ old('water_source') == 'Rainfed'   ? 'selected' : '' }}>Ulan lamang (Rainfed)</option>
+        <option value="Irrigated" {{ old('water_source') == 'Irrigated' ? 'selected' : '' }}>Nagsasagawa ng irigasyon</option>
+        <option value="Both"      {{ old('water_source') == 'Both'      ? 'selected' : '' }}>Pareho (ulan at irigasyon)</option>
+    </select>
+    <small class="text-muted">Paano nadiligan ang pananim?</small>
+</div>
+
         @if($farmRecord->status === 'Vegetative')
             <div class="col-12">
                 <div class="alert alert-info d-flex align-items-center mb-0" style="border-radius: 10px; padding: 10px 16px;">

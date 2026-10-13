@@ -37,19 +37,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Machine Learning Service (Render-hosted)
+    | OpenWeather (current weather for Santiago City)
     |--------------------------------------------------------------------------
     |
-    | Base URL of the FastAPI/Flask ML service running on Render. Used by
-    | RiceVarietyController to fetch the feature legend (trained varieties)
-    | so the admin UI doesn't wrongly flag every variety as "fallback".
+    | Used by App\Services\WeatherService to populate planting-time and
+    | harvest-time weather snapshots on farm records, and to display the
+    | current conditions widget on the dashboard.
+    |
+    */
+
+    'openweather' => [
+        'key'     => env('OPENWEATHER_API_KEY'),
+        'city'    => env('OPENWEATHER_CITY', 'Santiago'),
+        'country' => env('OPENWEATHER_COUNTRY', 'PH'),
+        'units'   => env('OPENWEATHER_UNITS', 'metric'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Machine Learning Service (Render-hosted or local Flask)
+    |--------------------------------------------------------------------------
+    |
+    | Base URL of the ML service. Used by PredictionService to generate
+    | yield predictions, and by RiceVarietyController to fetch the
+    | feature legend (trained varieties).
     |
     */
 
     'ml' => [
         'url'      => env('ML_SERVICE_URL', ''),
         'endpoint' => env('ML_FEATURES_ENDPOINT', '/features'),
-        'timeout'  => env('ML_SERVICE_TIMEOUT', 10),
+        'timeout'  => env('ML_SERVICE_TIMEOUT', 60),
     ],
 
 ];

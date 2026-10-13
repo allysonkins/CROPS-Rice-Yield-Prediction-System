@@ -58,7 +58,6 @@ class PredictionController extends Controller
             $query->whereDate('created_at', '<=', $to);
         }
 
-
         // Farm name / id
         if ($farm = trim((string) $request->input('farm'))) {
             $query->whereHas('farmRecord.farm', function ($q) use ($farm) {
@@ -72,17 +71,40 @@ class PredictionController extends Controller
             $query->whereHas('farmRecord', fn ($q) => $q->where('rice_variety_id', $varietyId));
         }
 
-        // Season (accept "Dry", "Wet", "Dry Season", "Wet Season")
+                // Season — accepts 'Dry' | 'Wet' | 'Off-Season'
         if ($season = $request->input('season')) {
             $query->whereHas('farmRecord', function ($q) use ($season) {
-                $q->where('season', 'like', "%{$season}%")
-                  ->orWhere('season', $season . ' Season');
+                if ($season === 'Off-Season') {
+                    $q->where(function ($q2) {
+                        $q2->where('season', 'Off-Season')
+                           ->orWhere('season', 'Off Season');
+                    });
+                } else {
+                    $q->where('season', 'like', "%{$season}%");
+                }
             });
         }
 
         // ── Farm record status (Vegetative / Harvested) ──
         if ($recordStatus = $request->input('record_status')) {
             $query->whereHas('farmRecord', fn ($q) => $q->where('status', $recordStatus));
+        }
+
+        // ── Water source (Rainfed / Irrigated / Both) ──
+        if ($waterSource = $request->input('water_source')) {
+            $query->whereHas('farmRecord', fn ($q) => $q->where('water_source', $waterSource));
+        }
+
+        // ── Confidence tier (high >= 0.90 / medium 0.70-0.90 / low < 0.70) ──
+        if (($conf = $request->input('confidence')) && $conf !== 'all') {
+            if ($conf === 'high') {
+                $query->where('confidence', '>=', 0.90);
+            } elseif ($conf === 'medium') {
+                $query->where('confidence', '>=', 0.70)
+                      ->where('confidence', '<', 0.90);
+            } elseif ($conf === 'low') {
+                $query->where('confidence', '<', 0.70);
+            }
         }
 
         // Barangay

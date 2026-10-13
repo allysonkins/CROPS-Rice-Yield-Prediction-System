@@ -257,6 +257,7 @@
                         <th>Farm</th>
                         <th>Variety</th>
                         <th>Season / Year</th>
+                        <th>Water</th>
                         <th>
                             Predicted
                             <i class="bi bi-question-circle-fill"
@@ -330,6 +331,7 @@
                             data-barangay="{{ $barangay }}"
                             data-status="{{ $record->status }}"
                             data-season="{{ $seasonNorm }}"
+                            data-water="{{ $record->water_source ?? '' }}"
                             data-has-prediction="{{ $hasPrediction ? '1' : '0' }}"
                             data-has-actual="{{ $hasActual ? '1' : '0' }}">
                             <td class="row-index">{{ $loop->iteration }}</td>
@@ -353,6 +355,23 @@
                                     {{ $record->year ?? '—' }}
                                 </span>
                                 <br><small class="text-muted">{{ $record->season ?? '' }}</small>
+                            </td>
+                            <td>
+                                @if($record->water_source === 'Rainfed')
+                                    <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                        <span class="dot" style="background: var(--brand-gold);"></span> Rainfed
+                                    </span>
+                                @elseif($record->water_source === 'Irrigated')
+                                    <span class="badge-status" style="background: #dbeafe; color: #1e40af; border-color: #bfdbfe; font-size: 11px;">
+                                        <span class="dot" style="background: #1d4ed8;"></span> Irrigated
+                                    </span>
+                                @elseif($record->water_source === 'Both')
+                                    <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                        <span class="dot" style="background: var(--brand-green);"></span> Both
+                                    </span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
                             </td>
                             <td>
                                 @if($predCavan !== null)
@@ -440,7 +459,7 @@
                     @endforeach
 
                     <tr id="noFilterResults" style="display: none;">
-                        <td colspan="{{ $isVerified ? 8 : 7 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ $isVerified ? 9 : 8 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-search" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No seasons match your filters.</p>
                         </td>

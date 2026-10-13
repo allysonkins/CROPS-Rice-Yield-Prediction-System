@@ -34,8 +34,9 @@
                 <option value="">Select Season...</option>
                 <option value="Dry Season" {{ old('season', $farmRecord->season) == 'Dry Season' ? 'selected' : '' }}>Dry Season</option>
                 <option value="Wet Season" {{ old('season', $farmRecord->season) == 'Wet Season' ? 'selected' : '' }}>Wet Season</option>
+                <option value="Off-Season" {{ old('season', $farmRecord->season) == 'Off-Season' ? 'selected' : '' }}>Off-Season</option>
             </select>
-            <small class="text-muted">Predictions only available for Dry and Wet seasons.</small>
+            <small class="text-muted">Predictions are calibrated for Dry and Wet seasons.</small>
         </div>
 
         <div class="col-md-6">
@@ -72,6 +73,17 @@
                 <option value="Transplanted" {{ old('seeding_method', $farmRecord->seeding_method) == 'Transplanted' ? 'selected' : '' }}>Transplanted</option>
                 <option value="Direct-Seeded" {{ old('seeding_method', $farmRecord->seeding_method) == 'Direct-Seeded' ? 'selected' : '' }}>Direct-Seeded</option>
             </select>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Water Source</label>
+            <select name="water_source" class="form-select">
+                <option value="">Select...</option>
+                <option value="Rainfed"   {{ old('water_source', $farmRecord->water_source) == 'Rainfed'   ? 'selected' : '' }}>Rainfed (rain only)</option>
+                <option value="Irrigated" {{ old('water_source', $farmRecord->water_source) == 'Irrigated' ? 'selected' : '' }}>Irrigated (pump or canal)</option>
+                <option value="Both"      {{ old('water_source', $farmRecord->water_source) == 'Both'      ? 'selected' : '' }}>Both (rain + irrigation)</option>
+            </select>
+            <small class="text-muted">How was the crop watered?</small>
         </div>
 
         {{-- Status is fixed on this form:

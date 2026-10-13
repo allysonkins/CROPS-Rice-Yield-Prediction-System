@@ -59,6 +59,26 @@
                     <tr><td><strong>Variety:</strong></td><td>{{ $farmRecord->riceVariety->name ?? 'N/A' }}</td></tr>
                     <tr><td><strong>Season:</strong></td><td>{{ $farmRecord->season ?? 'N/A' }} {{ $farmRecord->year ?? '' }}</td></tr>
                     <tr><td><strong>Method:</strong></td><td>{{ $farmRecord->seeding_method ?? '—' }}</td></tr>
+                    <tr>
+                        <td><strong>Water:</strong></td>
+                        <td>
+                            @if($farmRecord->water_source === 'Rainfed')
+                                <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-gold);"></span> Rainfed
+                                </span>
+                            @elseif($farmRecord->water_source === 'Irrigated')
+                                <span class="badge-status" style="background: #dbeafe; color: #1e40af; border-color: #bfdbfe; font-size: 11px;">
+                                    <span class="dot" style="background: #1d4ed8;"></span> Irrigated
+                                </span>
+                            @elseif($farmRecord->water_source === 'Both')
+                                <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-green);"></span> Both
+                                </span>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
+                    </tr>
                 </table>
             </div>
         </div>

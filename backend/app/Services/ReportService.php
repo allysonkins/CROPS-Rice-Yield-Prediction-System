@@ -12,24 +12,82 @@ use Illuminate\Support\Facades\DB;
 
 class ReportService
 {
-    /**
-     * Master payload — every report (PDF/Excel) uses this.
-     */
+    protected array $filters  = [];
+    protected array $sections = [];
+
+    public function withFilters(array $filters): self
+    {
+        $this->filters = $filters;
+        return $this;
+    }
+
+    public function withSections(array $sections): self
+    {
+        $this->sections = $sections;
+        return $this;
+    }
+
     public function build(): array
     {
         return [
             'generated_at' => now(),
             'overview'     => $this->overview(),
-            'farmers'      => $this->farmers(),
-            'farms'        => $this->farms(),
-            'farm_records' => $this->farmRecords(),
-            'predictions'  => $this->predictions(),
             'by_barangay'  => $this->byBarangay(),
             'by_variety'   => $this->byVariety(),
-            'accuracy'     => $this->predictionAccuracy(),
             'top_farms'    => $this->topFarms(),
             'low_farms'    => $this->lowFarms(),
+            'farm_records' => $this->farmRecords(),
+            'predictions'  => $this->predictions(),
+            'farmers'      => $this->farmers(),
+            'farms'        => $this->farms(),
         ];
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FILTER-AWARE QUERY BUILDERS
+    // ═══════════════════════════════════════════════════════════
+
+    protected function farmRecordQuery()
+    {
+        return FarmRecord::query()
+            ->when($this->filters['year_from'] ?? null,   fn ($q, $v) => $q->where('year', '>=', (int) $v))
+            ->when($this->filters['year_to']   ?? null,   fn ($q, $v) => $q->where('year', '<=', (int) $v))
+            ->when($this->filters['season']    ?? null,   fn ($q, $v) => $q->where('season', 'like', "%{$v}%"))
+            ->when($this->filters['status']    ?? null,   fn ($q, $v) => $q->where('status', $v))
+            ->when($this->filters['water_source'] ?? null, fn ($q, $v) => $q->where('water_source', $v))
+            ->when($this->filters['variety_id'] ?? null,  fn ($q, $v) => $q->where('rice_variety_id', $v))
+            ->when($this->filters['barangay'] ?? null,    fn ($q, $v) => $q->whereHas('farm', fn ($q2) => $q2->where('barangay', $v)))
+            ->when($this->filters['farmer_id'] ?? null,   fn ($q, $v) => $q->whereHas('farm', fn ($q2) => $q2->where('user_id', $v)));
+    }
+
+    protected function farmQuery()
+    {
+        return Farm::query()
+            ->when($this->filters['barangay'] ?? null,  fn ($q, $v) => $q->where('barangay', $v))
+            ->when($this->filters['farmer_id'] ?? null, fn ($q, $v) => $q->where('user_id', $v));
+    }
+
+    protected function farmerQuery()
+    {
+        return User::where('role', 'farmer')
+            ->when($this->filters['barangay'] ?? null,  fn ($q, $v) => $q->where('barangay', $v))
+            ->when($this->filters['farmer_id'] ?? null, fn ($q, $v) => $q->where('id', $v));
+    }
+
+    protected function predictionQuery()
+    {
+        return Prediction::query()
+            ->where('model_type', 'XGBoost')
+            ->whereHas('farmRecord', function ($q) {
+                $q->when($this->filters['year_from'] ?? null, fn ($q2, $v) => $q2->where('year', '>=', (int) $v))
+                  ->when($this->filters['year_to']   ?? null, fn ($q2, $v) => $q2->where('year', '<=', (int) $v))
+                  ->when($this->filters['season']    ?? null, fn ($q2, $v) => $q2->where('season', 'like', "%{$v}%"))
+                  ->when($this->filters['status']    ?? null, fn ($q2, $v) => $q2->where('status', $v))
+                  ->when($this->filters['water_source'] ?? null, fn ($q2, $v) => $q2->where('water_source', $v))
+                  ->when($this->filters['variety_id'] ?? null, fn ($q2, $v) => $q2->where('rice_variety_id', $v))
+                  ->when($this->filters['barangay'] ?? null,  fn ($q2, $v) => $q2->whereHas('farm', fn ($q3) => $q3->where('barangay', $v)))
+                  ->when($this->filters['farmer_id'] ?? null, fn ($q2, $v) => $q2->whereHas('farm', fn ($q3) => $q3->where('user_id', $v)));
+            });
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -41,27 +99,27 @@ class ReportService
         $latest = $this->latestPredictions();
 
         $avgPredicted = $latest->avg('predicted_yield_tons_ha');
-        $avgActual    = FarmRecord::where('status', 'Harvested')
-            ->whereNotNull('actual_yield_tons_ha')
-            ->avg('actual_yield_tons_ha');
 
-        $totalArea = Farm::sum('land_area_ha');
+        $harvestedQuery = $this->farmRecordQuery()
+            ->where('status', 'Harvested')
+            ->whereNotNull('actual_yield_tons_ha');
+        $avgActual = $harvestedQuery->avg('actual_yield_tons_ha');
+
+        $totalArea = $this->farmQuery()->sum('land_area_ha');
 
         return [
-            'total_farmers'       => User::where('role', 'farmer')->count(),
-            'verified_farmers'    => User::where('role', 'farmer')->whereNotNull('verified_by_cao_at')->count(),
-            'pending_farmers'     => User::where('role', 'farmer')->whereNull('verified_by_cao_at')->count(),
-            'total_farms'         => Farm::count(),
+            'total_farmers'       => $this->farmerQuery()->count(),
+            'verified_farmers'    => $this->farmerQuery()->whereNotNull('verified_by_cao_at')->count(),
+            'pending_farmers'     => $this->farmerQuery()->whereNull('verified_by_cao_at')->count(),
+            'total_farms'         => $this->farmQuery()->count(),
             'total_area_ha'       => round($totalArea, 2),
             'total_varieties'     => RiceVariety::count(),
-            'total_farm_records'  => FarmRecord::count(),
-            'vegetative_records'  => FarmRecord::where('status', 'Vegetative')->count(),
-            'harvested_records'   => FarmRecord::where('status', 'Harvested')->count(),
-            'total_predictions'   => Prediction::count(),
+            'total_farm_records'  => $this->farmRecordQuery()->count(),
+            'vegetative_records'  => $this->farmRecordQuery()->where('status', 'Vegetative')->count(),
+            'harvested_records'   => $this->farmRecordQuery()->where('status', 'Harvested')->count(),
+            'total_predictions'   => $this->predictionQuery()->count(),
             'avg_predicted_yield' => $avgPredicted !== null ? round($avgPredicted, 2) : null,
             'avg_actual_yield'    => $avgActual !== null ? round($avgActual, 2) : null,
-
-            // ── Always returns ['High' => n, 'Medium' => n, 'Low' => n] ──
             'yield_class_counts'  => $this->classDistribution($latest),
         ];
     }
@@ -72,7 +130,7 @@ class ReportService
 
     public function farmers(): Collection
     {
-        return User::where('role', 'farmer')
+        return $this->farmerQuery()
             ->withCount('farms')
             ->orderBy('name')
             ->get()
@@ -89,7 +147,8 @@ class ReportService
 
     public function farms(): Collection
     {
-        return Farm::with(['user', 'farmRecords'])
+        return $this->farmQuery()
+            ->with(['user', 'farmRecords'])
             ->withCount('farmRecords')
             ->orderBy('name')
             ->get()
@@ -107,7 +166,8 @@ class ReportService
 
     public function farmRecords(): Collection
     {
-        return FarmRecord::with(['farm', 'riceVariety', 'predictions'])
+        return $this->farmRecordQuery()
+            ->with(['farm', 'riceVariety', 'predictions'])
             ->orderBy('year', 'desc')
             ->orderBy('created_at', 'desc')
             ->get()
@@ -115,20 +175,21 @@ class ReportService
                 $latest = $r->predictions->sortByDesc('created_at')->first();
 
                 return [
-                    'Farm'                => $r->farm->name ?? '—',
-                    'Barangay'            => $r->farm->barangay ?? '—',
-                    'Year'                => $r->year ?? '—',
-                    'Season'              => $r->season ?? '—',
-                    'Variety'             => $r->riceVariety->name ?? '—',
-                    'Seeding Method'      => $r->seeding_method ?? '—',
-                    'Fertilizer (kg/ha)'  => number_format($r->fertilizer_kg_ha, 1),
-                    'Historical Yield'    => $r->historical_yield_tons_ha ? number_format($r->historical_yield_tons_ha, 2) : '—',
-                    'Predicted Yield'     => $latest?->predicted_yield_tons_ha !== null
+                    'Farm'              => $r->farm->name ?? '—',
+                    'Barangay'          => $r->farm->barangay ?? '—',
+                    'Year'              => $r->year ?? '—',
+                    'Season'            => $r->season ?? '—',
+                    'Variety'           => $r->riceVariety->name ?? '—',
+                    'Seeding Method'    => $r->seeding_method ?? '—',
+                    'Water Source'      => $r->water_source ?? '—',
+                    'Fertilizer (kg/ha)' => number_format($r->fertilizer_kg_ha, 1),
+                    'Historical Yield'  => $r->historical_yield_tons_ha ? number_format($r->historical_yield_tons_ha, 2) : '—',
+                    'Predicted Yield'   => $latest?->predicted_yield_tons_ha !== null
                                                 ? number_format($latest->predicted_yield_tons_ha, 2)
                                                 : '—',
-                    'Predicted Class'     => $this->classifyPrediction($latest) ?? '—',
-                    'Actual Yield'        => $r->actual_yield_tons_ha ? number_format($r->actual_yield_tons_ha, 2) : '—',
-                    'Status'              => $r->status,
+                    'Predicted Class'   => $this->classifyPrediction($latest) ?? '—',
+                    'Actual Yield'      => $r->actual_yield_tons_ha ? number_format($r->actual_yield_tons_ha, 2) : '—',
+                    'Status'            => $r->status,
                 ];
             });
     }
@@ -158,22 +219,20 @@ class ReportService
 
     public function byBarangay(): Collection
     {
-        return Farm::select(
-                'barangay',
-                DB::raw('COUNT(*) as farm_count'),
-                DB::raw('SUM(land_area_ha) as total_area')
-            )
+        return $this->farmQuery()
+            ->select('barangay', DB::raw('COUNT(*) as farm_count'), DB::raw('SUM(land_area_ha) as total_area'))
             ->groupBy('barangay')
             ->orderBy('barangay')
             ->get()
             ->map(function ($row) {
-                $farmIds = Farm::where('barangay', $row->barangay)->pluck('id');
-                $records = FarmRecord::whereIn('farm_id', $farmIds)->count();
+                $farmIds = $this->farmQuery()->where('barangay', $row->barangay)->pluck('id');
 
-                $latest = Prediction::whereIn(
-                                'farm_record_id',
-                                FarmRecord::whereIn('farm_id', $farmIds)->pluck('id')
-                            )
+                $recordIds = $this->farmRecordQuery()
+                    ->whereIn('farm_id', $farmIds)
+                    ->pluck('id');
+
+                $latest = Prediction::whereIn('farm_record_id', $recordIds)
+                            ->where('model_type', 'XGBoost')
                             ->orderBy('created_at', 'desc')
                             ->get()
                             ->unique('farm_record_id');
@@ -184,7 +243,7 @@ class ReportService
                     'Barangay'            => $row->barangay,
                     'Farms'               => $row->farm_count,
                     'Total Area (ha)'     => number_format($row->total_area, 2),
-                    'Farm Records'        => $records,
+                    'Farm Records'        => count($recordIds),
                     'Avg Predicted Yield' => $avgYield ? number_format($avgYield, 2) : '—',
                 ];
             });
@@ -192,14 +251,15 @@ class ReportService
 
     public function byVariety(): Collection
     {
-        return RiceVariety::withCount(['farmRecords'])
-            ->orderBy('name')
+        return RiceVariety::orderBy('name')
             ->get()
             ->map(function ($v) {
-                $latest = Prediction::whereIn(
-                                'farm_record_id',
-                                FarmRecord::where('rice_variety_id', $v->id)->pluck('id')
-                            )
+                $recordIds = $this->farmRecordQuery()
+                    ->where('rice_variety_id', $v->id)
+                    ->pluck('id');
+
+                $latest = Prediction::whereIn('farm_record_id', $recordIds)
+                            ->where('model_type', 'XGBoost')
                             ->orderBy('created_at', 'desc')
                             ->get()
                             ->unique('farm_record_id');
@@ -209,57 +269,19 @@ class ReportService
                 return [
                     'Variety'          => $v->name,
                     'Classification'   => $v->classification,
-                    'Records'          => $v->farm_records_count,
+                    'Records'          => count($recordIds),
                     'Avg Yield (t/ha)' => $v->avg_yield_transplanted ? number_format($v->avg_yield_transplanted, 2) : '—',
                     'Max Yield (t/ha)' => $v->max_yield_transplanted ? number_format($v->max_yield_transplanted, 2) : '—',
                     'Avg Predicted'    => $avgYield ? number_format($avgYield, 2) : '—',
                 ];
-            });
+            })
+            ->filter(fn ($v) => $v['Records'] > 0)
+            ->values();
     }
 
     // ═══════════════════════════════════════════════════════════
-    // ACCURACY & RANKINGS
+    // RANKINGS
     // ═══════════════════════════════════════════════════════════
-
-    public function predictionAccuracy(): array
-    {
-        $harvested = FarmRecord::where('status', 'Harvested')
-            ->whereNotNull('actual_yield_tons_ha')
-            ->with(['predictions' => fn ($q) => $q->orderBy('created_at', 'desc')])
-            ->get();
-
-        $matched = 0;
-        $close   = 0;
-        $off     = 0;
-        $errors  = [];
-
-        foreach ($harvested as $r) {
-            $pred = $r->predictions->first();
-            if (!$pred || !$pred->predicted_yield_tons_ha) continue;
-
-            $diff = abs($pred->predicted_yield_tons_ha - $r->actual_yield_tons_ha);
-            $pct  = $r->actual_yield_tons_ha > 0
-                ? ($diff / $r->actual_yield_tons_ha) * 100
-                : 0;
-
-            $errors[] = $pct;
-
-            if ($pct <= 10)      $matched++;
-            elseif ($pct <= 25)  $close++;
-            else                 $off++;
-        }
-
-        $total = count($errors);
-
-        return [
-            'total_compared' => $total,
-            'matched'        => $matched,
-            'close'          => $close,
-            'off'            => $off,
-            'avg_error_pct'  => $total > 0 ? round(array_sum($errors) / $total, 2) : null,
-            'accuracy_pct'   => $total > 0 ? round(($matched / $total) * 100, 1) : null,
-        ];
-    }
 
     public function topFarms(int $limit = 10): Collection
     {
@@ -303,27 +325,16 @@ class ReportService
 
     private function latestPredictions(): Collection
     {
-        return Prediction::with(['farmRecord.farm.user', 'farmRecord.riceVariety'])
+        return $this->predictionQuery()
+            ->with(['farmRecord.farm.user', 'farmRecord.riceVariety'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->unique('farm_record_id');
     }
 
-    /**
-     * Compute the variety-relative yield class for a single prediction.
-     *
-     * Mirrors the logic used in the admin Farm Records view:
-     *   ratio ≥ 1.125  → High
-     *   ratio ≥ 0.875  → Medium
-     *   otherwise      → Low
-     *
-     * Returns null when the class can't be computed (no prediction,
-     * no variety, no variety average, etc.).
-     */
     private function classifyPrediction(?Prediction $p): ?string
     {
         if (!$p) return null;
-
         $yield = $p->predicted_yield_tons_ha;
         if ($yield === null) return null;
 
@@ -335,7 +346,6 @@ class ReportService
         $avg    = $vy->avg ?? ($fr->riceVariety->avg_yield ?? null);
 
         if (!$avg || $avg <= 0) return null;
-
         $ratio = $yield / $avg;
 
         if ($ratio >= 1.125) return 'High';
@@ -343,23 +353,13 @@ class ReportService
         return 'Low';
     }
 
-    /**
-     * Count predictions by variety-relative class.
-     *
-     * Always returns the three keys so the view doesn't fall back to
-     * zeroed placeholders when a class has no members.
-     */
     private function classDistribution(Collection $predictions): array
     {
         $counts = ['High' => 0, 'Medium' => 0, 'Low' => 0];
-
         foreach ($predictions as $p) {
             $class = $this->classifyPrediction($p);
-            if ($class !== null && isset($counts[$class])) {
-                $counts[$class]++;
-            }
+            if ($class !== null && isset($counts[$class])) $counts[$class]++;
         }
-
         return $counts;
     }
 }

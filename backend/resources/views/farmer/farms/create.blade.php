@@ -53,13 +53,20 @@
                            value="{{ old('longitude') }}">
                 </div>
             </div>
-            <div class="mt-2">
+
+            <div class="mt-2 d-flex gap-2 flex-wrap">
+                <button type="button" id="farmer_useMyLocation" class="btn btn-sm btn-success">
+                    <i class="bi bi-crosshair"></i> Use My Exact Location
+                </button>
                 <button type="button" id="farmer_clearLocation" class="btn btn-sm btn-outline-danger">
                     <i class="bi bi-x-circle"></i> Clear
                 </button>
             </div>
+
             <div id="farmerFarmModalMap"></div>
-            <small class="text-muted">Click on the map to set the exact location. Optional.</small>
+            <small class="text-muted">
+                Tap <strong>"Use My Exact Location"</strong> to auto-fill from your device's GPS — or tap anywhere on the map to set the pin manually.
+            </small>
         </div>
 
         <div class="col-12 d-flex gap-2">

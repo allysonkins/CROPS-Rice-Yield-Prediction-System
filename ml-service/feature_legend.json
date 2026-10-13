@@ -35,5 +35,8 @@
   "season_Dry": "season == 'Dry' (1 = yes, 0 = no)",
   "season_Wet": "season == 'Wet' (1 = yes, 0 = no)",
   "seeding_method_Direct Seeded": "seeding_method == 'Direct Seeded' (1 = yes, 0 = no)",
-  "seeding_method_Transplanted": "seeding_method == 'Transplanted' (1 = yes, 0 = no)"
+  "seeding_method_Transplanted": "seeding_method == 'Transplanted' (1 = yes, 0 = no)",
+  "water_source_Both": "water_source == 'Both' (1 = yes, 0 = no)",
+  "water_source_Irrigated": "water_source == 'Irrigated' (1 = yes, 0 = no)",
+  "water_source_Rainfed": "water_source == 'Rainfed' (1 = yes, 0 = no)"
 }

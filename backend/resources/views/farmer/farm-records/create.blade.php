@@ -77,6 +77,17 @@
         </div>
 
         <div class="col-md-6">
+    <label class="form-label fw-semibold">Pinagmulan ng Tubig</label>
+    <select name="water_source" class="form-select">
+        <option value="">Piliin...</option>
+        <option value="Rainfed"   {{ old('water_source') == 'Rainfed'   ? 'selected' : '' }}>Ulan lamang (Rainfed)</option>
+        <option value="Irrigated" {{ old('water_source') == 'Irrigated' ? 'selected' : '' }}>Nagsasagawa ng irigasyon</option>
+        <option value="Both"      {{ old('water_source') == 'Both'      ? 'selected' : '' }}>Pareho (ulan at irigasyon)</option>
+    </select>
+    <small class="text-muted">Paano nadiligan ang pananim?</small>
+</div>
+
+        <div class="col-md-6">
             <label class="form-label fw-semibold">Status <span class="text-danger">*</span></label>
             <select name="status" class="form-select" required>
                 <option value="Vegetative" {{ old('status') == 'Vegetative' ? 'selected' : '' }}>🌱 Still growing</option>

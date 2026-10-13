@@ -34,12 +34,43 @@
                         </td>
                     </tr>
                     <tr><td><strong>Seeding Method:</strong></td><td>{{ $farmRecord->seeding_method ?? 'N/A' }}</td></tr>
-                    <tr><td><strong>Status:</strong></td>
+
+                    {{-- Water Source --}}
+                    <tr><td><strong>Water Source:</strong></td>
                         <td>
-                            <span class="badge {{ $farmRecord->status_badge_class }}">
-                                <i class="bi {{ $farmRecord->status_icon }}"></i>
-                                {{ $farmRecord->status ?? 'N/A' }}
-                            </span>
+                            @if($farmRecord->water_source === 'Rainfed')
+                                <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-gold);"></span> Rainfed
+                                </span>
+                            @elseif($farmRecord->water_source === 'Irrigated')
+                                <span class="badge-status" style="background: #dbeafe; color: #1e40af; border-color: #bfdbfe; font-size: 11px;">
+                                    <span class="dot" style="background: #1d4ed8;"></span> Irrigated
+                                </span>
+                            @elseif($farmRecord->water_source === 'Both')
+                                <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-green);"></span> Both
+                                </span>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
+                    </tr>
+
+                                        <tr><td><strong>Status:</strong></td>
+                        <td>
+                            @if($farmRecord->status === 'Harvested')
+                                <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-green);"></span>
+                                    Harvested
+                                </span>
+                            @elseif($farmRecord->status === 'Vegetative')
+                                <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-gold);"></span>
+                                    Growing
+                                </span>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
                         </td>
                     </tr>
                 </table>
@@ -89,11 +120,6 @@
     $ratio      = $farmRecord->predicted_yield_ratio;
     $avgYield   = $farmRecord->variety_avg_yield;
 
-    if ($confidence === null)    $tier = 'secondary';
-    elseif ($confidence >= 0.90) $tier = 'success';
-    elseif ($confidence >= 0.70) $tier = 'primary';
-    elseif ($confidence >= 0.50) $tier = 'warning';
-    else                         $tier = 'danger';
 @endphp
 
 <div class="row g-3 mt-2">
@@ -128,15 +154,29 @@
                             </div>
                         @endif
 
-                        @if($confidence !== null)
+                                                @if($confidence !== null)
+                            @php
+                                if ($confidence >= 0.90) {
+                                    $pillStyle = 'background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2;';
+                                    $dotColor  = 'var(--brand-green)';
+                                } elseif ($confidence >= 0.70) {
+                                    $pillStyle = 'background: #dbeafe; color: #1e40af; border-color: #bfdbfe;';
+                                    $dotColor  = '#1d4ed8';
+                                } elseif ($confidence >= 0.50) {
+                                    $pillStyle = 'background: var(--brand-gold-light); color: #92400e; border-color: #fde68a;';
+                                    $dotColor  = 'var(--brand-gold)';
+                                } else {
+                                    $pillStyle = 'background: var(--brand-danger-light); color: #991b1b; border-color: #fecaca;';
+                                    $dotColor  = 'var(--brand-danger)';
+                                }
+                            @endphp
                             <div>
-                                <span class="badge bg-{{ $tier }}" style="font-size: 12px; padding: 6px 14px;">
-                                    <i class="bi bi-activity"></i>
+                                <span class="badge-status" style="{{ $pillStyle }} font-size: 12px; padding: 6px 14px;">
+                                    <span class="dot" style="background: {{ $dotColor }};"></span>
                                     {{ number_format($confidence * 100, 1) }}% confidence
                                 </span>
                             </div>
                         @endif
-                    </div>
 
                     @if($confidence !== null)
                         <div class="mt-3 text-muted" style="font-size: 11px; line-height: 1.5;">

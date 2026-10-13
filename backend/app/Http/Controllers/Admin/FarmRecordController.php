@@ -15,7 +15,15 @@ use Illuminate\Database\QueryException;
 
 class FarmRecordController extends Controller
 {
-       public function index(Request $request)
+    /**
+     * Canonical allowed values — kept in sync with the create/edit forms
+     * and with what the ML pipeline was trained on.
+     */
+    private const SEASONS         = ['Dry Season', 'Wet Season', 'Off-Season'];
+    private const SEEDING_METHODS = ['Transplanted', 'Direct-Seeded'];
+    private const WATER_SOURCES   = ['Rainfed', 'Irrigated', 'Both'];
+
+    public function index(Request $request)
     {
         $user = auth()->user();
 
@@ -50,8 +58,6 @@ class FarmRecordController extends Controller
             ->filter()
             ->map(fn ($y) => (int) $y);
 
-        // Ensure the current year always shows in the dropdown,
-        // even if no records exist for it yet.
         if (!$availableYears->contains($currentYear)) {
             $availableYears->prepend($currentYear);
             $availableYears = $availableYears->sortDesc()->values();
@@ -62,7 +68,6 @@ class FarmRecordController extends Controller
         }
 
         // ── Growing seasons first, Harvested last ──
-        // Then apply the requested sort within each group.
         $statusPriority = "CASE WHEN farm_records.status = 'Vegetative' THEN 0 ELSE 1 END";
 
         $baseQuery
@@ -97,8 +102,6 @@ class FarmRecordController extends Controller
         ));
     }
 
-    // ─── Everything below is unchanged ──────────────────────────────
-
     public function create()
     {
         if (auth()->user()->role === 'farmer') abort(403);
@@ -117,20 +120,38 @@ class FarmRecordController extends Controller
 
         try {
             $validated = $request->validate([
-                'farm_id' => 'required|exists:farms,id',
-                'rice_variety_id' => 'required|exists:rice_varieties,id',
-                'season' => 'required|string|max:255',
-                'year' => 'required|integer|min:2000|max:' . (now()->year + 5),
-                'fertilizer_kg_ha' => 'required|numeric|min:0',
-                'historical_yield_tons_ha' => 'nullable|numeric|min:0',
-                'actual_yield_tons_ha' => 'nullable|numeric|min:0',
-                'seeding_method' => 'nullable|string|max:255',
-                'status' => 'required|in:Vegetative,Harvested',
+                'farm_id'                  => 'required|exists:farms,id',
+                'rice_variety_id'          => 'required|exists:rice_varieties,id',
+                'season'                   => 'required|string|in:' . implode(',', self::SEASONS),
+                'year'                     => 'required|integer|min:2000|max:' . (now()->year + 5),
+                'fertilizer_kg_ha'         => 'required|numeric|min:0|max:250',
+                'historical_yield_tons_ha' => 'nullable|numeric|min:0|max:20',
+                'seeding_method'           => 'nullable|string|in:' . implode(',', self::SEEDING_METHODS),
+                'water_source'             => 'nullable|in:' . implode(',', self::WATER_SOURCES),
+                'status'                   => 'required|in:Vegetative',
             ]);
 
-            if ($validated['status'] === 'Vegetative') {
-                $validated['actual_yield_tons_ha'] = null;
+            // ── Reject duplicates on the same farm / variety / season / year ──
+            $duplicate = $this->findDuplicateFarmRecord(
+                (int) $validated['farm_id'],
+                (int) $validated['rice_variety_id'],
+                $validated['season'],
+                (int) $validated['year']
+            );
+
+            if ($duplicate) {
+                $msg = "This farm already has a {$validated['season']} record for the "
+                     . "selected variety in {$validated['year']}. Edit the existing record instead.";
+
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'error' => $msg], 422);
+                }
+                return back()->withErrors(['season' => $msg])->withInput();
             }
+
+            // ── Newly created records are always Vegetative ──
+            $validated['status']               = 'Vegetative';
+            $validated['actual_yield_tons_ha'] = null;
 
             try {
                 $weather = app(WeatherService::class)->getWeather();
@@ -144,31 +165,30 @@ class FarmRecordController extends Controller
 
             $record = FarmRecord::create($validated);
 
-            if ($record->status === 'Vegetative') {
-                try {
-                    app(PredictionService::class)->predict($record);
-                } catch (\Exception $e) {
-                    \Log::warning('Auto-prediction failed on farm record create', ['error' => $e->getMessage()]);
-                }
+            try {
+                app(PredictionService::class)->predict($record);
+            } catch (\Exception $e) {
+                \Log::warning('Auto-prediction failed on farm record create', ['error' => $e->getMessage()]);
             }
 
             log_activity('created', 'Farm record created', $record, [
-                'farm' => $record->farm->name,
-                'variety' => $record->riceVariety->name,
-                'season' => $record->season,
-                'year' => $record->year,
-                'status' => $record->status,
+                'farm'    => $record->farm->name ?? 'N/A',
+                'variety' => $record->riceVariety->name ?? 'N/A',
+                'season'  => $record->season,
+                'year'    => $record->year,
+                'status'  => $record->status,
             ]);
 
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
-                    'message' => '✅ Farm record created' . ($record->status === 'Vegetative' ? ' and prediction generated!' : '!'),
-                    'data' => $record
+                    'message' => '✅ Farm record created and prediction generated!',
+                    'data'    => $record,
                 ], 201);
             }
 
-            return redirect()->route('admin.farm-records.index')->with('success', 'Farm record created successfully!');
+            return redirect()->route('admin.farm-records.index')
+                ->with('success', 'Farm record created successfully!');
 
         } catch (ValidationException $e) {
             if ($request->ajax()) {
@@ -210,15 +230,45 @@ class FarmRecordController extends Controller
         try {
             $farmRecord = FarmRecord::findOrFail($id);
 
+            // ── Lock status and actual yield: they can only change via markHarvested ──
+            if ($request->filled('status') || $request->filled('actual_yield_tons_ha')) {
+                $msg = 'Status and actual yield are locked. Use the Harvest button to record the harvest.';
+
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'error' => $msg], 422);
+                }
+                return back()->withErrors(['status' => $msg])->withInput();
+            }
+
             $validated = $request->validate([
-                'farm_id' => 'required|exists:farms,id',
-                'rice_variety_id' => 'required|exists:rice_varieties,id',
-                'season' => 'required|string|max:255',
-                'year' => 'required|integer|min:2000|max:' . (now()->year + 5),
-                'fertilizer_kg_ha' => 'required|numeric|min:0',
-                'historical_yield_tons_ha' => 'nullable|numeric|min:0',
-                'seeding_method' => 'nullable|string|max:255',
+                'farm_id'                  => 'required|exists:farms,id',
+                'rice_variety_id'          => 'required|exists:rice_varieties,id',
+                'season'                   => 'required|string|in:' . implode(',', self::SEASONS),
+                'year'                     => 'required|integer|min:2000|max:' . (now()->year + 5),
+                'fertilizer_kg_ha'         => 'required|numeric|min:0|max:250',
+                'historical_yield_tons_ha' => 'nullable|numeric|min:0|max:20',
+                'seeding_method'           => 'nullable|string|in:' . implode(',', self::SEEDING_METHODS),
+                'water_source'             => 'nullable|in:' . implode(',', self::WATER_SOURCES),
             ]);
+
+            // ── Reject duplicates (excluding self) ──
+            $duplicate = $this->findDuplicateFarmRecord(
+                (int) $validated['farm_id'],
+                (int) $validated['rice_variety_id'],
+                $validated['season'],
+                (int) $validated['year'],
+                $farmRecord->id
+            );
+
+            if ($duplicate) {
+                $msg = "Another record already uses the same farm, variety, "
+                     . "{$validated['season']}, and {$validated['year']} combination.";
+
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'error' => $msg], 422);
+                }
+                return back()->withErrors(['season' => $msg])->withInput();
+            }
 
             if ($farmRecord->weather_captured_at === null || $farmRecord->weather_captured_at->diffInDays(now()) >= 7) {
                 try {
@@ -243,12 +293,13 @@ class FarmRecordController extends Controller
             if ($request->ajax()) {
                 return response()->json([
                     'success' => true,
-                    'message' => '✅ Farm record updated!',
-                    'data' => $farmRecord
+                    'message' => 'Farm record updated!',
+                    'data'    => $farmRecord,
                 ]);
             }
 
-            return redirect()->route('admin.farm-records.index')->with('success', 'Farm record updated successfully!');
+            return redirect()->route('admin.farm-records.index')
+                ->with('success', 'Farm record updated successfully!');
 
         } catch (ValidationException $e) {
             if ($request->ajax()) {
@@ -317,10 +368,10 @@ class FarmRecordController extends Controller
             $farmRecord->update($updateData);
 
             log_activity('updated', 'Farm record marked as harvested', $farmRecord, [
-                'farm'          => $farmRecord->farm->name ?? 'N/A',
-                'variety'       => $farmRecord->riceVariety->name ?? 'N/A',
-                'year'          => $farmRecord->year,
-                'actual_yield'  => $validated['actual_yield_tons_ha'],
+                'farm'                     => $farmRecord->farm->name ?? 'N/A',
+                'variety'                  => $farmRecord->riceVariety->name ?? 'N/A',
+                'year'                     => $farmRecord->year,
+                'actual_yield'             => $validated['actual_yield_tons_ha'],
                 'harvest_weather_captured' => $farmRecord->harvest_weather_captured_at !== null,
             ]);
 
@@ -385,5 +436,29 @@ class FarmRecordController extends Controller
     {
         $farmRecord = FarmRecord::with(['farm', 'riceVariety'])->findOrFail($id);
         return view('admin.farm-records.partials.detail', compact('farmRecord'));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Return an existing farm record with the same farm, variety, season,
+     * and year — or null if none exists. Pass $excludeId on update to skip self.
+     */
+    private function findDuplicateFarmRecord(
+        int $farmId,
+        int $varietyId,
+        string $season,
+        int $year,
+        ?int $excludeId = null
+    ): ?FarmRecord {
+        return FarmRecord::query()
+            ->where('farm_id', $farmId)
+            ->where('rice_variety_id', $varietyId)
+            ->where('season', $season)
+            ->where('year', $year)
+            ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
+            ->first();
     }
 }

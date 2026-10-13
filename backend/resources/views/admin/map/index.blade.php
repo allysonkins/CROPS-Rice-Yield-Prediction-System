@@ -112,6 +112,19 @@
             color: var(--brand-green-dark);
             text-decoration: none;
         }
+
+        /* Farm name (clickable to zoom on map) */
+        .farm-name-link {
+            cursor: pointer;
+            color: var(--brand-green);
+            text-decoration: none;
+            font-weight: 700;
+            transition: color 0.15s;
+        }
+        .farm-name-link:hover {
+            color: var(--brand-green-dark);
+            text-decoration: underline;
+        }
     </style>
 
     <!-- Controls row -->
@@ -257,7 +270,10 @@
                                     data-search="{{ $searchText }}"
                                     data-barangay="{{ $farm['barangay'] ?? '' }}"
                                     data-farmer="{{ $farmerName }}"
-                                    data-class="{{ $classKey }}">
+                                    data-class="{{ $classKey }}"
+                                    data-lat="{{ $farm['lat'] }}"
+                                    data-lng="{{ $farm['lng'] }}"
+                                    data-farm-id="{{ $farm['id'] }}">
                                     <td>
                                         @if($isAssigned)
                                             <span class="farmer-name-link"
@@ -274,7 +290,13 @@
                                             </span>
                                         @endif
                                     </td>
-                                    <td><strong>{{ $farm['name'] }}</strong></td>
+                                    <td>
+                                        <strong class="farm-name-link"
+                                                onclick="focusFarmOnMap({{ $farm['id'] }})"
+                                                title="Click to show this farm on the map">
+                                            {{ $farm['name'] }}
+                                        </strong>
+                                    </td>
                                     <td>{{ $farm['barangay'] }}</td>
                                     <td>{{ $farm['land_area'] ?? 'N/A' }}</td>
                                     <td>
@@ -401,6 +423,12 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+    // ============================================================
+    // GLOBAL MAP + MARKER REGISTRY
+    // ============================================================
+    var mainMap = null;
+    var farmMarkers = {};   // farm.id  →  L.circleMarker
+
     // ─── Tooltips ──────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
@@ -418,6 +446,27 @@
                 sel.dispatchEvent(new Event('change'));
                 return;
             }
+        }
+    }
+
+    // ─── Zoom the main map to a specific farm's pin ────────────
+    function focusFarmOnMap(farmId) {
+        if (!mainMap || !farmMarkers[farmId]) return;
+
+        var marker = farmMarkers[farmId];
+        var latlng = marker.getLatLng();
+
+        mainMap.setView(latlng, 17, { animate: true });
+
+        // Slight delay so the pan finishes before the popup opens
+        setTimeout(function () {
+            marker.openPopup();
+        }, 260);
+
+        // Bring the map into view when clicking from the table
+        var mapEl = document.getElementById('farmMap');
+        if (mapEl) {
+            mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }
 
@@ -675,7 +724,8 @@
     // MAIN PAGE MAP
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
-        var map = L.map('farmMap').setView([16.6889, 121.5484], 13);
+        mainMap = L.map('farmMap').setView([16.6889, 121.5484], 13);
+        var map = mainMap;   // local alias for the rest of this block
 
         var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
@@ -769,10 +819,12 @@
                 </div>
             `;
 
-            L.circleMarker([farm.lat, farm.lng], {
+            var marker = L.circleMarker([farm.lat, farm.lng], {
                 radius: 10, fillColor: color, color: '#fff',
                 weight: 2, opacity: 1, fillOpacity: 0.8
             }).addTo(map).bindPopup(popup);
+
+            farmMarkers[farm.id] = marker;
         });
 
         if (hasCoords.length > 1) {

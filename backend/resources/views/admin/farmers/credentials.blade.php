@@ -10,6 +10,11 @@
     $farmersWithoutPin = \App\Models\User::where('role', 'farmer')
         ->whereNull('pin_encrypted')
         ->count();
+
+    // Group farmers by barangay for the dropdown + counts
+    $barangayGroups = $farmers->filter(fn($f) => !empty($f->barangay))
+        ->groupBy('barangay')
+        ->sortKeys();
 @endphp
 
 <style>
@@ -19,7 +24,17 @@
         .main-content { padding: 0 !important; }
         .card-custom { box-shadow: none !important; border: none !important; padding: 0 !important; }
         body { background: white !important; }
+
+        /* Show the print-only header when printing */
+        .print-only { display: block !important; }
+
+        /* Avoid cutting slips in half across pages */
+        .cred-card { page-break-inside: avoid; }
     }
+
+    /* Hidden by default; only shown in print */
+    .print-only { display: none; }
+
     .cred-slip {
         border: 1.5px dashed var(--brand-green);
         padding: 14px;
@@ -46,7 +61,40 @@
         letter-spacing: 4px;
         color: var(--brand-green);
     }
+
+    /* Print header — clean and simple */
+    .print-header {
+        border-bottom: 2px solid #165b33;
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+    }
+    .print-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: #165b33;
+        font-weight: 800;
+    }
+    .print-header .meta {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 4px;
+    }
+    .print-header .meta strong {
+        color: #0f172a;
+    }
 </style>
+
+{{-- Print-only header --}}
+<div class="print-only print-header">
+    <h2>CROPS — Farmer Login Credentials</h2>
+    <div class="meta">
+        Barangay: <strong id="printHeaderBarangay">All Barangays</strong>
+        &nbsp;·&nbsp;
+        Farmers: <strong id="printHeaderCount">0</strong>
+        &nbsp;·&nbsp;
+        Generated: <strong>{{ now()->format('F d, Y') }}</strong>
+    </div>
+</div>
 
 {{-- Flash: new PIN just generated --}}
 @if(session('reset_pin'))
@@ -75,7 +123,7 @@
             Farmer Login Credentials
         </h5>
         <p style="font-size: 13px; color: var(--slate-500); margin: 4px 0 0;">
-            All farmers with their current PIN. Print or reprint any time.
+            All farmers with their current PIN. Filter by barangay, then print for distribution.
         </p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -85,8 +133,8 @@
                 Generate {{ number_format($farmersWithoutPin) }} Missing PIN{{ $farmersWithoutPin !== 1 ? 's' : '' }}
             </button>
         @endif
-        <button onclick="window.print()" class="btn btn-success">
-            <i class="bi bi-printer"></i> Print All
+        <button onclick="window.print()" class="btn btn-success" id="printBtn">
+            <i class="bi bi-printer"></i> <span id="printBtnLabel">Print All</span>
         </button>
     </div>
 </div>
@@ -94,11 +142,24 @@
 {{-- Filters --}}
 <div class="card-custom mb-3 no-print">
     <div class="d-flex flex-wrap align-items-center gap-3">
+        {{-- Search --}}
         <div style="flex: 1; min-width: 200px;">
             <input type="text" id="credSearch" class="form-control"
                    placeholder="Search by name, phone, or RSBSA number..."
                    style="font-size: 13px;">
         </div>
+
+        {{-- Barangay filter --}}
+        <div style="min-width: 220px;">
+            <select id="credBarangay" class="form-select" style="font-size: 13px;">
+                <option value="all">All Barangays ({{ $farmers->count() }})</option>
+                @foreach($barangayGroups as $brgy => $group)
+                    <option value="{{ $brgy }}">{{ $brgy }} ({{ $group->count() }})</option>
+                @endforeach
+            </select>
+        </div>
+
+        {{-- Quick links --}}
         <div>
             <a href="{{ route('admin.farmers.credentials', ['filter' => 'with_pin']) }}"
                class="btn btn-sm {{ request('filter') === 'with_pin' ? 'btn-success' : 'btn-outline-success' }}">
@@ -114,10 +175,12 @@
                 </a>
             @endif
         </div>
+
         <span class="badge-status"
-              style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2;">
+              style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2;"
+              id="credVisibleCount">
             <span class="dot" style="background: var(--brand-green);"></span>
-            {{ $farmers->count() }} Farmers
+            <span id="credVisibleCountText">{{ $farmers->count() }} Farmers</span>
         </span>
     </div>
 </div>
@@ -142,6 +205,7 @@
                 $pin = $farmer->pin;
             @endphp
             <div class="col-md-4 col-sm-6 cred-card"
+                 data-barangay="{{ $farmer->barangay ?? '' }}"
                  data-search="{{ strtolower($farmer->name . ' ' . $farmer->phone . ' ' . $farmer->rsbsa_number) }}">
                 <div class="cred-slip h-100">
                     <div class="d-flex justify-content-between align-items-start">
@@ -208,6 +272,15 @@
                 </div>
             </div>
         @endforeach
+    </div>
+
+    {{-- Empty state when filters hide everything --}}
+    <div id="credNoResults" class="card-custom text-center py-5" style="display: none;">
+        <i class="bi bi-search" style="font-size: 42px; color: var(--slate-300);"></i>
+        <h6 class="mt-3 mb-1" style="color: var(--slate-700); font-weight: 700;">No farmers match your filters</h6>
+        <p style="font-size: 13px; color: var(--slate-500); margin: 0;">
+            Try a different barangay or clear the search.
+        </p>
     </div>
 @endif
 
@@ -281,16 +354,92 @@
 
 @push('scripts')
 <script>
-    // ─── Live search filter ─────────────────────────────────
-    document.getElementById('credSearch')?.addEventListener('input', function() {
-        const q = this.value.toLowerCase().trim();
-        document.querySelectorAll('.cred-card').forEach(card => {
-            const haystack = card.dataset.search || '';
-            card.style.display = haystack.includes(q) ? '' : 'none';
-        });
-    });
+    // ═══════════════════════════════════════════════════════════
+    // BARANGAY + SEARCH FILTERING
+    // ═══════════════════════════════════════════════════════════
+    const credSearchInput   = document.getElementById('credSearch');
+    const credBarangayInput = document.getElementById('credBarangay');
+    const credCards         = document.querySelectorAll('.cred-card');
+    const credNoResults     = document.getElementById('credNoResults');
+    const printBtnLabel     = document.getElementById('printBtnLabel');
+    const visibleCountText  = document.getElementById('credVisibleCountText');
 
-    // ─── Chunked PIN generation ─────────────────────────────
+    function applyCredFilters() {
+        const q     = (credSearchInput?.value || '').toLowerCase().trim();
+        const brgy  = credBarangayInput?.value || 'all';
+
+        let visible = 0;
+
+        credCards.forEach(card => {
+            const haystack = card.dataset.search   || '';
+            const cardBrgy = card.dataset.barangay || '';
+
+            const matchesSearch = haystack.includes(q);
+            const matchesBrgy   = (brgy === 'all' || cardBrgy === brgy);
+
+            if (matchesSearch && matchesBrgy) {
+                card.style.display = '';
+                visible++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // Empty state
+        if (credNoResults) {
+            credNoResults.style.display = (visible === 0 && credCards.length > 0) ? '' : 'none';
+        }
+
+        // Update the visible count badge
+        if (visibleCountText) {
+            visibleCountText.textContent = visible + ' Farmer' + (visible === 1 ? '' : 's');
+        }
+
+        // Dynamic print button label
+        if (printBtnLabel) {
+            if (brgy === 'all') {
+                printBtnLabel.textContent = 'Print All';
+            } else {
+                printBtnLabel.textContent = 'Print ' + brgy;
+            }
+        }
+
+        // Update print-only header
+        const printHeaderBarangay = document.getElementById('printHeaderBarangay');
+        const printHeaderCount    = document.getElementById('printHeaderCount');
+        if (printHeaderBarangay) {
+            printHeaderBarangay.textContent = (brgy === 'all') ? 'All Barangays' : brgy;
+        }
+        if (printHeaderCount) {
+            printHeaderCount.textContent = visible;
+        }
+    }
+
+    // Wire up
+    credSearchInput?.addEventListener('input', applyCredFilters);
+    credBarangayInput?.addEventListener('change', applyCredFilters);
+
+    // ─── URL param: ?barangay=Calao+West ────────────────────
+    (function preselectBarangayFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const brgy = params.get('barangay');
+        if (!brgy || !credBarangayInput) return;
+
+        // Only preselect if that barangay exists in the dropdown
+        for (const opt of credBarangayInput.options) {
+            if (opt.value === brgy) {
+                credBarangayInput.value = brgy;
+                break;
+            }
+        }
+    })();
+
+    // Run once on load (picks up the URL param too)
+    applyCredFilters();
+
+    // ═══════════════════════════════════════════════════════════
+    // CHUNKED PIN GENERATION
+    // ═══════════════════════════════════════════════════════════
     let generatingAllPins = false;
 
     function openGenerateAllPinsModal() {

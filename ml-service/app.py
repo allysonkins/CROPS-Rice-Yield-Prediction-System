@@ -38,6 +38,7 @@ CAT_PREFIXES = {
     'soil_type':      'soil_type',
     'season':         'season',
     'seeding_method': 'seeding_method',
+    'water_source':   'water_source', 
 }
 
 SEASON_MAP  = {'dry season':'Dry','wet season':'Wet','dry':'Dry','wet':'Wet'}

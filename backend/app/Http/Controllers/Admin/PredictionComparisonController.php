@@ -11,25 +11,91 @@ use Illuminate\Http\Request;
 
 class PredictionComparisonController extends Controller
 {
+    /*
+    |--------------------------------------------------------------------------
+    | Dropdown fallbacks
+    |--------------------------------------------------------------------------
+    |
+    | Only values that are actually used by the application:
+    |   - seeding_method : 'Transplanted' | 'Direct Seeded'   (confirmed)
+    |   - water_source   : enum in DB schema
+    |   - soil_type      : enforced by FarmController validation
+    |
+    | DB values are merged on top so any custom value still appears.
+    */
+    private const SEEDING_METHOD_FALLBACK = ['Transplanted', 'Direct-Seeded'];
+    private const WATER_SOURCE_FALLBACK   = ['Rainfed', 'Irrigated', 'Both'];
+    private const SOIL_TYPE_FALLBACK      = ['Clay Loam', 'Silty Clay', 'Sandy Loam', 'Clay', 'Loam'];
+
     public function index()
     {
         $user = auth()->user();
 
+        $farmIdsForUser = fn () => Farm::where('user_id', $user->id)->pluck('id');
+
+        // ── Years ──
         $years = FarmRecord::query()
-            ->when($user->role === 'farmer', function ($q) use ($user) {
-                $q->whereIn('farm_id', Farm::where('user_id', $user->id)->pluck('id'));
-            })
+            ->when($user->role === 'farmer', fn ($q) => $q->whereIn('farm_id', $farmIdsForUser()))
             ->select('year')->distinct()->orderBy('year', 'desc')
             ->pluck('year')->filter()->values();
 
+        // ── Varieties ──
         $varieties = RiceVariety::orderBy('name')->get(['id', 'name']);
 
+        // ── Barangays ──
         $barangays = Farm::query()
             ->when($user->role === 'farmer', fn ($q) => $q->where('user_id', $user->id))
             ->select('barangay')->distinct()->orderBy('barangay')
             ->pluck('barangay')->filter()->values();
 
-        return view('admin.predictions.compare', compact('years', 'varieties', 'barangays'));
+        // ── Seeding methods : DB values + confirmed fallback ──
+        $seedingMethods = FarmRecord::query()
+            ->when($user->role === 'farmer', fn ($q) => $q->whereIn('farm_id', $farmIdsForUser()))
+            ->select('seeding_method')->distinct()
+            ->pluck('seeding_method')
+            ->filter()
+            ->merge(self::SEEDING_METHOD_FALLBACK)
+            ->unique()
+            ->sort()
+            ->values();
+
+        // ── Water sources : DB values + enum fallback ──
+        $waterSources = FarmRecord::query()
+            ->when($user->role === 'farmer', fn ($q) => $q->whereIn('farm_id', $farmIdsForUser()))
+            ->select('water_source')->distinct()
+            ->pluck('water_source')
+            ->filter()
+            ->merge(self::WATER_SOURCE_FALLBACK)
+            ->unique()
+            ->sort()
+            ->values();
+
+        // ── Soil types : DB values + validation-rule fallback ──
+        $soilTypes = Farm::query()
+            ->when($user->role === 'farmer', fn ($q) => $q->where('user_id', $user->id))
+            ->select('soil_type')->distinct()
+            ->pluck('soil_type')
+            ->filter()
+            ->merge(self::SOIL_TYPE_FALLBACK)
+            ->unique()
+            ->sort()
+            ->values();
+
+        // ── Farms ──
+        $farms = Farm::query()
+            ->when($user->role === 'farmer', fn ($q) => $q->where('user_id', $user->id))
+            ->orderBy('name')
+            ->get(['id', 'name', 'barangay']);
+
+        return view('admin.predictions.compare', compact(
+            'years',
+            'varieties',
+            'barangays',
+            'seedingMethods',
+            'waterSources',
+            'soilTypes',
+            'farms'
+        ));
     }
 
     public function data(Request $request)
@@ -37,21 +103,27 @@ class PredictionComparisonController extends Controller
         $user = auth()->user();
 
         $request->validate([
-            'years'    => 'required|array|min:2|max:10',
-            'years.*'  => 'integer|min:2000|max:2100',
-            'farmer'   => 'nullable|string|max:255',
-            'farm'     => 'nullable|string|max:255',
-            'variety'  => 'nullable|integer|exists:rice_varieties,id',
-            'season'   => 'nullable|string|max:255',
-            'barangay' => 'nullable|string|max:255',
+            'years'          => 'required|array|min:2|max:10',
+            'years.*'        => 'integer|min:2000|max:2100',
+            'farmer'         => 'nullable|string|max:255',
+            'variety'        => 'nullable|integer|exists:rice_varieties,id',
+            'season'         => 'nullable|string|max:255',
+            'barangay'       => 'nullable|string|max:255',
+            'seeding_method' => 'nullable|in:Transplanted,Direct-Seeded',
+            'water_source'   => 'nullable|in:Rainfed,Irrigated,Both',
+            'soil_type'      => 'nullable|in:Clay Loam,Silty Clay,Sandy Loam,Clay,Loam',
+            'farm_id'        => 'nullable|integer|exists:farms,id',
         ]);
 
-        $years    = array_map('intval', $request->input('years'));
-        $farmer   = trim((string) $request->input('farmer', ''));
-        $farm     = trim((string) $request->input('farm', ''));
-        $variety  = $request->input('variety');
-        $season   = $request->input('season');
-        $barangay = $request->input('barangay');
+        $years         = array_map('intval', $request->input('years'));
+        $farmer        = trim((string) $request->input('farmer', ''));
+        $variety       = $request->input('variety');
+        $season        = $request->input('season');
+        $barangay      = $request->input('barangay');
+        $seedingMethod = $request->input('seeding_method');
+        $waterSource   = $request->input('water_source');
+        $soilType      = $request->input('soil_type');
+        $farmId        = $request->input('farm_id');
 
         $records = FarmRecord::query()
             ->with(['farm.user', 'riceVariety'])
@@ -65,20 +137,22 @@ class PredictionComparisonController extends Controller
                        ->orWhere('rsbsa_number', 'like', "%{$farmer}%");
                 });
             })
-            ->when($farm !== '', function ($q) use ($farm) {
-                $q->whereHas('farm', function ($q2) use ($farm) {
-                    $q2->where('name', 'like', "%{$farm}%")
-                       ->orWhere('id', $farm);
-                });
-            })
             ->when($variety, fn ($q) => $q->where('rice_variety_id', $variety))
             ->when($season, function ($q) use ($season) {
-                $q->where(function ($q2) use ($season) {
-                    $q2->where('season', 'like', "%{$season}%")
-                       ->orWhere('season', $season . ' Season');
-                });
+                if ($season === 'Off-Season') {
+                    $q->where(function ($q2) {
+                        $q2->where('season', 'Off-Season')
+                           ->orWhere('season', 'Off Season');
+                    });
+                } else {
+                    $q->where('season', 'like', "%{$season}%");
+                }
             })
             ->when($barangay, fn ($q) => $q->whereHas('farm', fn ($q2) => $q2->where('barangay', $barangay)))
+            ->when($seedingMethod, fn ($q) => $q->where('seeding_method', $seedingMethod))
+            ->when($waterSource, fn ($q) => $q->where('water_source', $waterSource))
+            ->when($soilType, fn ($q) => $q->whereHas('farm', fn ($q2) => $q2->where('soil_type', $soilType)))
+            ->when($farmId, fn ($q) => $q->where('farm_id', $farmId))
             ->get();
 
         if ($records->isEmpty()) {
@@ -88,6 +162,8 @@ class PredictionComparisonController extends Controller
                 'predicted'    => [],
                 'actual'       => [],
                 'meta'         => [],
+                'perYear'      => [],
+                'overall'      => null,
                 'missingYears' => $years,
                 'message'      => 'No farm records match the selected criteria.',
             ]);
@@ -108,7 +184,12 @@ class PredictionComparisonController extends Controller
         $predicted    = [];
         $actual       = [];
         $meta         = [];
+        $perYear      = [];
         $missingYears = [];
+
+        $totalMatched = 0;
+        $totalAbsErr  = 0.0;
+        $totalPctErr  = 0.0;
 
         foreach ($years as $year) {
             $yearRecords = $grouped->get($year);
@@ -119,6 +200,12 @@ class PredictionComparisonController extends Controller
                 $predicted[]    = null;
                 $actual[]       = null;
                 $meta[]         = null;
+                $perYear[]      = [
+                    'year' => $year, 'records' => 0,
+                    'predicted' => 0, 'actual' => 0, 'matched' => 0,
+                    'avgPred' => null, 'avgAct' => null,
+                    'delta' => null, 'mae' => null, 'mape' => null,
+                ];
                 continue;
             }
 
@@ -131,18 +218,66 @@ class PredictionComparisonController extends Controller
                 ->pluck('actual_yield_tons_ha')
                 ->filter(fn ($v) => $v !== null);
 
+            $avgPred = $yearPred->isNotEmpty() ? round($yearPred->avg(), 2) : null;
+            $avgAct  = $yearActual->isNotEmpty() ? round($yearActual->avg(), 2) : null;
+
+            $matched = 0; $sumAbs = 0.0; $sumPct = 0.0;
+            foreach ($yearRecords as $r) {
+                $pred    = $predictions->get($r->id)?->predicted_yield_tons_ha;
+                $actual_ = $r->actual_yield_tons_ha;
+
+                if ($pred !== null && $actual_ !== null && (float) $actual_ > 0) {
+                    $absErr  = abs($pred - $actual_);
+                    $sumAbs += $absErr;
+                    $sumPct += ($absErr / (float) $actual_) * 100;
+                    $matched++;
+                }
+            }
+
+            $mae  = $matched > 0 ? round($sumAbs / $matched, 2) : null;
+            $mape = $matched > 0 ? round($sumPct / $matched, 1) : null;
+
+            $totalMatched += $matched;
+            $totalAbsErr  += $sumAbs;
+            $totalPctErr  += $sumPct;
+
             $labels[]    = (string) $year;
-            $predicted[] = $yearPred->isNotEmpty() ? round($yearPred->avg(), 2) : null;
-            $actual[]    = $yearActual->isNotEmpty() ? round($yearActual->avg(), 2) : null;
+            $predicted[] = $avgPred;
+            $actual[]    = $avgAct;
+
+            $delta = ($avgPred !== null && $avgAct !== null)
+                ? round($avgAct - $avgPred, 2)
+                : null;
 
             $meta[] = [
                 'records'   => $yearRecords->count(),
                 'predicted' => $yearPred->count(),
                 'actual'    => $yearActual->count(),
+                'matched'   => $matched,
                 'farmer'    => $yearRecords->first()->farm->user->name ?? null,
                 'variety'   => $yearRecords->first()->riceVariety->name ?? null,
             ];
+
+            $perYear[] = [
+                'year'      => $year,
+                'records'   => $yearRecords->count(),
+                'predicted' => $yearPred->count(),
+                'actual'    => $yearActual->count(),
+                'matched'   => $matched,
+                'avgPred'   => $avgPred,
+                'avgAct'    => $avgAct,
+                'delta'     => $delta,
+                'mae'       => $mae,
+                'mape'      => $mape,
+            ];
         }
+
+        $overall = [
+            'matched' => $totalMatched,
+            'mae'     => $totalMatched > 0 ? round($totalAbsErr / $totalMatched, 2) : null,
+            'mape'    => $totalMatched > 0 ? round($totalPctErr / $totalMatched, 1) : null,
+            'years'   => count($years),
+        ];
 
         return response()->json([
             'success'      => true,
@@ -150,6 +285,8 @@ class PredictionComparisonController extends Controller
             'predicted'    => $predicted,
             'actual'       => $actual,
             'meta'         => $meta,
+            'perYear'      => $perYear,
+            'overall'      => $overall,
             'missingYears' => $missingYears,
         ]);
     }

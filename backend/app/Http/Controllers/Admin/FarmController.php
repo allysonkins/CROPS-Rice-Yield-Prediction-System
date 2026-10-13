@@ -49,6 +49,24 @@ class FarmController extends Controller
             'longitude'    => 'nullable|numeric|between:121.48,121.63',
         ]);
 
+        // ── Reject duplicate coordinates ──────────────────────
+        if (!empty($validated['latitude']) && !empty($validated['longitude'])) {
+            $dup = $this->findDuplicateCoordinateFarm(
+                (float) $validated['latitude'],
+                (float) $validated['longitude']
+            );
+
+            if ($dup) {
+                $msg = "Another farm ('{$dup->name}') is already registered at these coordinates. "
+                     . "Please choose a different location on the map.";
+
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'error' => $msg], 422);
+                }
+                return back()->withErrors(['latitude' => $msg])->withInput();
+            }
+        }
+
         $farm = Farm::create($validated);
         $farm->load('user');
 
@@ -105,6 +123,25 @@ class FarmController extends Controller
             'longitude'    => 'nullable|numeric|between:121.48,121.63',
         ]);
 
+        // ── Reject duplicate coordinates (excluding self) ─────
+        if (!empty($validated['latitude']) && !empty($validated['longitude'])) {
+            $dup = $this->findDuplicateCoordinateFarm(
+                (float) $validated['latitude'],
+                (float) $validated['longitude'],
+                $farm->id
+            );
+
+            if ($dup) {
+                $msg = "Another farm ('{$dup->name}') is already registered at these coordinates. "
+                     . "Please choose a different location on the map.";
+
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'error' => $msg], 422);
+                }
+                return back()->withErrors(['latitude' => $msg])->withInput();
+            }
+        }
+
         $oldData = $farm->only(['name', 'barangay', 'land_area_ha', 'soil_type', 'user_id']);
         $farm->update($validated);
 
@@ -148,5 +185,27 @@ class FarmController extends Controller
 
         return redirect()->route('admin.farms.index')
             ->with('success', 'Farm deleted successfully!');
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Return an existing farm that already occupies the given coordinates,
+     * or null if the spot is free. Uses a ~11 m tolerance to catch
+     * accidental duplicates (centroid fallbacks, GPS re-reads, etc.).
+     */
+    private function findDuplicateCoordinateFarm(float $lat, float $lng, ?int $excludeFarmId = null): ?Farm
+    {
+        $tolerance = 0.0001; // ≈ 11 m
+
+        return Farm::query()
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->when($excludeFarmId, fn ($q) => $q->where('id', '!=', $excludeFarmId))
+            ->whereBetween('latitude',  [$lat - $tolerance, $lat + $tolerance])
+            ->whereBetween('longitude', [$lng - $tolerance, $lng + $tolerance])
+            ->first();
     }
 }

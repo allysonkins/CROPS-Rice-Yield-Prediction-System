@@ -643,6 +643,111 @@
         }
     });
 
+        // ─── "Use My Exact Location" — browser geolocation ──────────
+    // Rule: only coordinates inside Santiago City, Isabela are accepted.
+    // If the device reports a position outside those bounds, the pin
+    // is NOT placed and the inputs are NOT touched.
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('#farmer_useMyLocation');
+        if (!btn) return;
+
+        e.preventDefault();
+
+        // Helper: is a coordinate inside Santiago City bounds?
+        const isInsideSantiago = (lat, lng) =>
+            lat >= FSANTIAGO_BOUNDS.minLat &&
+            lat <= FSANTIAGO_BOUNDS.maxLat &&
+            lng >= FSANTIAGO_BOUNDS.minLng &&
+            lng <= FSANTIAGO_BOUNDS.maxLng;
+
+        // Status banner (created lazily, right under the button row)
+        const statusEl = () => {
+            let el = document.getElementById('farmer_locationStatus');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'farmer_locationStatus';
+                el.className = 'mt-2';
+                const row = btn.parentElement;
+                row.parentElement.insertBefore(el, row.nextSibling);
+            }
+            return el;
+        };
+
+        if (!navigator.geolocation) {
+            statusEl().innerHTML =
+                '<div class="alert alert-warning py-2 px-3 mb-0" style="font-size: 12px;">' +
+                '<i class="bi bi-exclamation-triangle-fill"></i> ' +
+                'Your browser does not support geolocation. Please tap the map to set your location.' +
+                '</div>';
+            return;
+        }
+
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Locating...';
+
+        const reset = () => {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        };
+
+        navigator.geolocation.getCurrentPosition(
+            function (pos) {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const accuracy = Math.round(pos.coords.accuracy || 0);
+
+                // ── ENFORCE SANTIAGO CITY BOUNDARY ──
+                if (!isInsideSantiago(lat, lng)) {
+                    statusEl().innerHTML =
+                        '<div class="alert alert-danger py-2 px-3 mb-0" style="font-size: 12px;">' +
+                        '<i class="bi bi-geo-alt-fill"></i> ' +
+                        '<strong>Your current location is outside Santiago City, Isabela.</strong><br>' +
+                        'Detected: ' + lat.toFixed(5) + ', ' + lng.toFixed(5) +
+                        ' &middot; accuracy &plusmn;' + accuracy + ' m.<br>' +
+                        'Only farms inside Santiago City can be mapped. ' +
+                        'If you are already on-site, tap the map to drop the pin manually.' +
+                        '</div>';
+                    reset();
+                    return; // Do NOT set the marker, do NOT fill the inputs
+                }
+
+                // ── Accepted: inside Santiago ──
+                fSetModalMarker(lat, lng, true);
+
+                let msg = '<i class="bi bi-check-circle-fill"></i> ' +
+                          'Location captured inside Santiago City &middot; accuracy &plusmn;' +
+                          accuracy + ' m';
+                if (accuracy > 100) {
+                    msg += ' <br><span style="opacity:0.85;">' +
+                           'Reading is rough (common on PCs and laptops). ' +
+                           'Tap the map to fine-tune if needed.</span>';
+                }
+
+                statusEl().innerHTML =
+                    '<div class="alert alert-success py-2 px-3 mb-0" style="font-size: 12px;">' +
+                    msg +
+                    '</div>';
+
+                reset();
+            },
+            function (err) {
+                let msg = 'Unable to get your location.';
+                if (err.code === 1)      msg = 'Location permission denied. Allow location access in your browser, or tap the map instead.';
+                else if (err.code === 2) msg = 'Location unavailable. Try moving to an open area, or tap the map instead.';
+                else if (err.code === 3) msg = 'Location request timed out. Please try again or tap the map.';
+
+                statusEl().innerHTML =
+                    '<div class="alert alert-danger py-2 px-3 mb-0" style="font-size: 12px;">' +
+                    '<i class="bi bi-exclamation-circle-fill"></i> ' + msg +
+                    '</div>';
+
+                reset();
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    });
+
     document.addEventListener('hidden.bs.modal', function (e) {
         if (e.target.id === 'farmerFarmModal') {
             if (fModalMap) { try { fModalMap.off(); fModalMap.remove(); } catch (ex) {} fModalMap = null; fModalMarker = null; }

@@ -10,10 +10,15 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class OverviewSheet implements FromArray, WithTitle, WithStyles
 {
     protected array $data;
+    protected array $sections;
+    protected array $rows         = [];
+    protected array $sectionRows  = [];
 
-    public function __construct(array $data)
+    public function __construct(array $data, array $sections = [])
     {
-        $this->data = $data;
+        $this->data     = $data;
+        $this->sections = $sections;
+        $this->buildRows();
     }
 
     public function title(): string
@@ -23,36 +28,60 @@ class OverviewSheet implements FromArray, WithTitle, WithStyles
 
     public function array(): array
     {
+        return $this->rows;
+    }
+
+    protected function buildRows(): void
+    {
         $o = $this->data['overview'];
 
-        return [
+        $includeOverview = empty($this->sections) || in_array('overview', $this->sections, true);
+        $includeClass    = empty($this->sections) || in_array('class_distribution', $this->sections, true);
+
+        $rows = [
             ['CROPS — Rice Yield Prediction Report'],
             ['Santiago City Agriculture Office'],
             ['Generated', $this->data['generated_at']->format('F d, Y h:i A')],
             [],
-            ['FARMER METRICS'],
-            ['Total Farmers',           $o['total_farmers']],
-            ['Verified Farmers',        $o['verified_farmers']],
-            ['Pending Verification',    $o['pending_farmers']],
-            [],
-            ['LAND METRICS'],
-            ['Total Farms',             $o['total_farms']],
-            ['Total Area (ha)',         $o['total_area_ha']],
-            ['Farm Records',            $o['total_farm_records']],
-            ['  Vegetative (growing)',  $o['vegetative_records']],
-            ['  Harvested',             $o['harvested_records']],
-            [],
-            ['VARIETY METRICS'],
-            ['Rice Varieties in DB',    $o['total_varieties']],
-            [],
-            ['PREDICTION METRICS'],
-            ['Total Predictions',       $o['total_predictions']],
-            [],
-            ['PREDICTION CLASS DISTRIBUTION'],
-            ['High',    $o['yield_class_counts']['High']   ?? 0],
-            ['Medium',  $o['yield_class_counts']['Medium'] ?? 0],
-            ['Low',     $o['yield_class_counts']['Low']    ?? 0],
         ];
+
+        if ($includeOverview) {
+            $this->sectionRows[] = count($rows) + 1;
+            $rows[] = ['FARMER METRICS'];
+            $rows[] = ['Total Farmers',        $o['total_farmers']];
+            $rows[] = ['Verified Farmers',     $o['verified_farmers']];
+            $rows[] = ['Pending Verification', $o['pending_farmers']];
+            $rows[] = [];
+
+            $this->sectionRows[] = count($rows) + 1;
+            $rows[] = ['LAND METRICS'];
+            $rows[] = ['Total Farms',            $o['total_farms']];
+            $rows[] = ['Total Area (ha)',        $o['total_area_ha']];
+            $rows[] = ['Farm Records',           $o['total_farm_records']];
+            $rows[] = ['  Vegetative (growing)', $o['vegetative_records']];
+            $rows[] = ['  Harvested',            $o['harvested_records']];
+            $rows[] = [];
+
+            $this->sectionRows[] = count($rows) + 1;
+            $rows[] = ['VARIETY METRICS'];
+            $rows[] = ['Rice Varieties in DB', $o['total_varieties']];
+            $rows[] = [];
+
+            $this->sectionRows[] = count($rows) + 1;
+            $rows[] = ['PREDICTION METRICS'];
+            $rows[] = ['Total Predictions', $o['total_predictions']];
+        }
+
+        if ($includeClass) {
+            $rows[] = [];
+            $this->sectionRows[] = count($rows) + 1;
+            $rows[] = ['PREDICTION CLASS DISTRIBUTION'];
+            $rows[] = ['High',   $o['yield_class_counts']['High']   ?? 0];
+            $rows[] = ['Medium', $o['yield_class_counts']['Medium'] ?? 0];
+            $rows[] = ['Low',    $o['yield_class_counts']['Low']    ?? 0];
+        }
+
+        $this->rows = $rows;
     }
 
     public function styles(Worksheet $sheet): ?array
@@ -70,9 +99,8 @@ class OverviewSheet implements FromArray, WithTitle, WithStyles
         ]);
         $sheet->getRowDimension(1)->setRowHeight(26);
 
-        // Section header rows
-        $sectionRows = [5, 10, 17, 20, 23];
-        foreach ($sectionRows as $r) {
+        // Section header rows (dynamic)
+        foreach ($this->sectionRows as $r) {
             $sheet->mergeCells("A{$r}:B{$r}");
             $sheet->getStyle("A{$r}:B{$r}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
@@ -82,13 +110,10 @@ class OverviewSheet implements FromArray, WithTitle, WithStyles
             $sheet->getRowDimension($r)->setRowHeight(20);
         }
 
-        // Soft value alignment for KPI rows
-        $kpiRows = [6, 7, 8, 11, 12, 13, 14, 15, 18, 21, 24, 25, 26];
-        foreach ($kpiRows as $r) {
-            $sheet->getStyle("B{$r}")->getAlignment()->setHorizontal('left');
-        }
+        // Left-align all values in column B
+        $sheet->getStyle('B1:B' . max(1, count($this->rows)))
+              ->getAlignment()->setHorizontal('left');
 
-        // Column widths
         $sheet->getColumnDimension('A')->setWidth(38);
         $sheet->getColumnDimension('B')->setWidth(28);
 

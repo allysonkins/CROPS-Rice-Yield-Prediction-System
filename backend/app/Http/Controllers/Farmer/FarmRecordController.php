@@ -74,6 +74,7 @@ class FarmRecordController extends Controller
                 'fertilizer_kg_ha'         => 'required|numeric|min:0',
                 'historical_yield_tons_ha' => 'nullable|numeric|min:0',
                 'seeding_method'           => 'nullable|string|max:255',
+                'water_source'             => 'nullable|in:Rainfed,Irrigated,Both',   // ← new
                 'status'                   => 'required|in:Vegetative,Harvested',
                 'actual_yield_tons_ha'     => 'nullable|numeric|min:0',
             ]);
@@ -160,6 +161,8 @@ class FarmRecordController extends Controller
             $farmIds    = Farm::where('user_id', auth()->id())->pluck('id');
             $farmRecord = FarmRecord::whereIn('farm_id', $farmIds)->findOrFail($id);
 
+            // NOTE: no `status` rule here — the edit form doesn't have a status
+            // dropdown. Status changes go through markHarvested() only.
             $validated = $request->validate([
                 'rice_variety_id'          => 'required|exists:rice_varieties,id',
                 'season'                   => 'required|string|max:255',
@@ -167,6 +170,7 @@ class FarmRecordController extends Controller
                 'fertilizer_kg_ha'         => 'required|numeric|min:0',
                 'historical_yield_tons_ha' => 'nullable|numeric|min:0',
                 'seeding_method'           => 'nullable|string|max:255',
+                'water_source'             => 'nullable|in:Rainfed,Irrigated,Both',   // ← new
             ]);
 
             if ($farmRecord->weather_captured_at === null || $farmRecord->weather_captured_at->diffInDays(now()) >= 7) {
@@ -179,7 +183,7 @@ class FarmRecordController extends Controller
                 } catch (\Exception $e) {}
             }
 
-            $oldData = $farmRecord->only(['season', 'year', 'fertilizer_kg_ha', 'rice_variety_id', 'seeding_method']);
+            $oldData = $farmRecord->only(['season', 'year', 'fertilizer_kg_ha', 'rice_variety_id', 'seeding_method', 'water_source']);
             $farmRecord->update($validated);
 
             if ($farmRecord->status === 'Vegetative') {
@@ -192,7 +196,7 @@ class FarmRecordController extends Controller
 
             log_activity('updated', 'Farm record updated by farmer', $farmRecord, [
                 'old' => $oldData,
-                'new' => $farmRecord->only(['season', 'year', 'fertilizer_kg_ha', 'rice_variety_id', 'seeding_method']),
+                'new' => $farmRecord->only(['season', 'year', 'fertilizer_kg_ha', 'rice_variety_id', 'seeding_method', 'water_source']),
             ]);
 
             if ($request->ajax()) {

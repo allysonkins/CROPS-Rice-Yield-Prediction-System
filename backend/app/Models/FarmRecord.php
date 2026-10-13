@@ -18,6 +18,7 @@ class FarmRecord extends Model
         'historical_yield_tons_ha',
         'actual_yield_tons_ha',
         'seeding_method',
+        'water_source',
         'status',
 
         'weather_temperature',
@@ -51,7 +52,10 @@ class FarmRecord extends Model
         return $this->hasMany(Prediction::class);
     }
 
-    // ── NEW ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // PREDICTION HELPERS
+    // ═══════════════════════════════════════════════════════════
+
     /** Latest XGBoost prediction (already eager-loaded in the controller). */
     public function getLatestXgboostPredictionAttribute()
     {
@@ -107,25 +111,55 @@ class FarmRecord extends Model
         };
     }
 
-    // ── Existing helpers ────────────────────────────────
-    public function getStatusBadgeClassAttribute()
+    // ═══════════════════════════════════════════════════════════
+    // DISPLAY HELPERS
+    // ═══════════════════════════════════════════════════════════
+
+    /** Short season label used for filtering and pills. */
+public function getSeasonLabelAttribute(): string
+{
+    $raw = trim((string) ($this->season ?? ''));
+
+    return match (true) {
+        str_contains($raw, 'Dry') => 'Dry',
+        str_contains($raw, 'Wet') => 'Wet',
+        str_contains($raw, 'Off') => 'Off',
+        default                   => $raw !== '' ? $raw : '—',
+    };
+}
+
+    /** Colour token for the season pill ('dry' / 'wet' / 'off'). */
+    public function getSeasonBadgeAttribute(): ?string
     {
-        return match ($this->status) {
-            'Harvested'  => 'bg-success',
-            'Vegetative' => 'bg-warning text-dark',
-            default      => 'bg-secondary',
+        return match ($this->season) {
+            'Dry Season' => 'dry',
+            'Wet Season' => 'wet',
+            'Off-Season' => 'off',
+            default      => null,
         };
     }
 
-    public function getStatusIconAttribute()
+    /** Colour token for the status pill ('growing' / 'harvested'). */
+    public function getStatusBadgeAttribute(): ?string
     {
         return match ($this->status) {
-            'Harvested'  => 'bi-check-circle-fill',
-            'Vegetative' => 'bi-tree-fill',
-            default      => 'bi-question-circle',
+            'Vegetative' => 'growing',
+            'Harvested'  => 'harvested',
+            default      => null,
         };
     }
 
+    /** Human-readable status label. */
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'Vegetative' => 'Growing',
+            'Harvested'  => 'Harvested',
+            default      => $this->status ?? '—',
+        };
+    }
+
+    /** Yield to display on cards/tables (actual if harvested, historical otherwise). */
     public function getDisplayYieldAttribute()
     {
         if ($this->status === 'Harvested') {
@@ -134,7 +168,8 @@ class FarmRecord extends Model
         return $this->historical_yield_tons_ha;
     }
 
-    public function getYieldLabelAttribute()
+    /** Column label that matches display yield. */
+    public function getYieldLabelAttribute(): string
     {
         return $this->status === 'Harvested' ? 'Actual Yield' : 'Historical Yield';
     }

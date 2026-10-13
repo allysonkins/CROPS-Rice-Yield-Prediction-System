@@ -33,13 +33,15 @@ VARIETIES = {
     'NSIC Rc204H (Mestiso 20)':        {'cls':'Hybrid','gp':(111,111),'avg':(6.40,6.40),'max':(11.70,11.70)},
 }
 
-SOILS   = ['Clay Loam', 'Silty Clay', 'Sandy Loam', 'Clay']
-SEASONS = ['Wet', 'Dry']
-SEEDING = ['Transplanted', 'Direct Seeded']
+SOILS          = ['Clay Loam', 'Silty Clay', 'Sandy Loam', 'Clay']
+SEASONS        = ['Wet', 'Dry']
+SEEDING        = ['Transplanted', 'Direct Seeded']
+WATER_SOURCES  = ['Rainfed', 'Irrigated', 'Both']        # ← new
 
 
 def compute_clean_yield(avg_y, max_y, soil, season, seeding,
-                        fertilizer, temp, rain, humid, land, historical):
+                        fertilizer, temp, rain, humid, land, historical,
+                        water_source):                    # ← new param
     y = avg_y
 
     # ── Linear terms (LR baseline captures these) ──
@@ -49,6 +51,11 @@ def compute_clean_yield(avg_y, max_y, soil, season, seeding,
     y += 0.30 if seeding == 'Transplanted' else 0.0
     y += {'Clay Loam': 0.30, 'Silty Clay': 0.20,
           'Sandy Loam': -0.35, 'Clay': 0.10}[soil]
+
+    # ── Water source baseline effect (linear) ──          # ← new
+    y += {'Rainfed':   -0.30,
+          'Both':       0.10,
+          'Irrigated':  0.50}[water_source]
 
     # ── Nonlinear / interaction terms (only trees capture these) ──
 
@@ -88,6 +95,16 @@ def compute_clean_yield(avg_y, max_y, soil, season, seeding,
     # 9. Small plots managed more intensively (decreasing returns)
     y += 0.15 * float(np.exp(-land / 2.0))
 
+    # 10. Irrigation helps most in Dry season (interaction)   # ← new
+    if water_source == 'Irrigated' and season == 'Dry':
+        y += 0.30
+    if water_source == 'Rainfed' and season == 'Dry':
+        y -= 0.25
+
+    # 11. Rainfed suffers when rainfall is low (interaction)  # ← new
+    if water_source == 'Rainfed' and rain < 150:
+        y -= 0.40
+
     return float(np.clip(y, 2.0, max_y))
 
 
@@ -114,9 +131,16 @@ for _ in range(POOL_SIZE):
     humid      = np.random.normal(78, 10)
     historical = np.random.normal(avg_y, 0.70)
 
+    # Water source — realistic Philippine distribution          # ← new
+    water_source = np.random.choice(
+        WATER_SOURCES,
+        p=[0.45, 0.35, 0.20],   # 45% rainfed, 35% irrigated, 20% both
+    )
+
     clean_y = compute_clean_yield(
         avg_y, max_y, soil, season, seeding,
-        fertilizer, temp, rain, humid, land, historical
+        fertilizer, temp, rain, humid, land, historical,
+        water_source                                            # ← new
     )
 
     rows.append({
@@ -125,6 +149,7 @@ for _ in range(POOL_SIZE):
         'soil_type':                soil,
         'season':                   season,
         'seeding_method':           seeding,
+        'water_source':             water_source,               # ← new
         'variety_maturity_days':    maturity,
         'variety_max_yield':        max_y,
         'variety_avg_yield':        avg_y,
@@ -146,7 +171,15 @@ df['yield_tons_ha'] = np.clip(
 
 df = df.drop(columns=['_clean_y'])
 
-CAT_COLS = ['variety', 'classification', 'soil_type', 'season', 'seeding_method']
+# ← new: added 'water_source' to the categorical list
+CAT_COLS = [
+    'variety',
+    'classification',
+    'soil_type',
+    'season',
+    'seeding_method',
+    'water_source',
+]
 df_encoded = pd.get_dummies(df, columns=CAT_COLS, prefix=CAT_COLS, dtype=int)
 
 legend = {}
@@ -172,3 +205,9 @@ print(f"   Rows    : {len(df_encoded)}")
 print(f"   Columns : {len(df_encoded.columns)}")
 print(f"   Yield range : {df['yield_tons_ha'].min():.2f} – {df['yield_tons_ha'].max():.2f} t/ha")
 print(f"   Avg yield   : {df['yield_tons_ha'].mean():.2f} t/ha")
+
+# ── Per-water-source summary                                   # ← new
+print(f"\n   Samples by water source:")
+print(df['water_source'].value_counts().to_string())
+print(f"\n   Avg yield by water source (t/ha):")
+print(df.groupby('water_source')['yield_tons_ha'].mean().round(2).to_string())
