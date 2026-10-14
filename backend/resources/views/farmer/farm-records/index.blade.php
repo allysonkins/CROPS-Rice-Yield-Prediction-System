@@ -79,7 +79,6 @@
                 How to read your yields
             </div>
             <div style="font-size: 12px; color: var(--slate-600); line-height: 1.6;">
-                <strong>Predicted</strong> is the estimated yield from the XGBoost model.
                 <strong>Actual</strong> is the real yield you recorded after harvest.
                 All yields are shown in <strong>cavan per hectare</strong> (1 cavan ≈ 50 kg · 1 ton = 20 cavan).
                 Tap a variety name to see its full details.
@@ -169,6 +168,7 @@
                         <button class="filter-btn season-btn active" data-season="all" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--slate-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
                         <button class="filter-btn season-btn"        data-season="Dry" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">Dry</button>
                         <button class="filter-btn season-btn"        data-season="Wet" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">Wet</button>
+                        <button class="filter-btn season-btn"        data-season="Off" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">Off-Season</button>
                     </div>
                 </div>
 
@@ -185,17 +185,6 @@
                 </div>
 
                 <div style="width: 1px; height: 28px; background: var(--slate-200);"></div>
-
-                {{-- PREDICTION FILTER --}}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Prediction</span>
-                    <select id="filterPrediction" class="form-select" title="Filter by prediction availability"
-                            style="border-radius: 10px; border: 1px solid var(--slate-200); background: var(--slate-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; width: auto; min-width: 130px;">
-                        <option value="all">Any</option>
-                        <option value="with">Available</option>
-                        <option value="without">Missing</option>
-                    </select>
-                </div>
 
                 {{-- ACTUAL YIELD FILTER --}}
                 <div class="d-flex align-items-center gap-2">
@@ -239,7 +228,7 @@
                 @if($activeYear !== 'all')
                     Try switching to a different year or clearing the filter.
                 @else
-                    Record your first planting season to get a yield prediction.
+                    Record your first planting season to track your farm's progress.
                 @endif
             </p>
             @if($isVerified && $activeYear === 'all')
@@ -258,22 +247,6 @@
                         <th>Variety</th>
                         <th>Season / Year</th>
                         <th>Water</th>
-                        <th>
-                            Predicted
-                            <i class="bi bi-question-circle-fill"
-                               style="font-size: 12px; color: var(--slate-400); cursor: help;"
-                               data-bs-toggle="tooltip"
-                               data-bs-placement="top"
-                               data-bs-html="true"
-                               title="<div style='text-align:left; font-size:12px; line-height:1.5;'>
-                                   <strong>XGBoost prediction</strong><br>
-                                   Point yield estimated by the ML model.<br><br>
-                                   <strong>Class is variety-relative</strong> — compared against the variety's own average yield for the chosen seeding method.<br><br>
-                                   • <strong>High</strong> — ≥ 112.5% of variety average<br>
-                                   • <strong>Medium</strong> — 87.5% – 112.5%<br>
-                                   • <strong>Low</strong> — below 87.5%
-                               </div>"></i>
-                        </th>
                         <th>Actual</th>
                         <th>Status</th>
                         @if($isVerified)
@@ -287,35 +260,15 @@
                             $latest = $record->predictions->sortByDesc('created_at')->first();
                             $predTons  = $latest?->predicted_yield_tons_ha;
                             $predCavan = $predTons !== null ? t_ha_to_cavan_ha((float) $predTons) : null;
-                            $conf      = $latest?->confidence;
 
                             $actualTons  = $record->actual_yield_tons_ha;
                             $actualCavan = $actualTons !== null ? t_ha_to_cavan_ha((float) $actualTons) : null;
-
-                            // Variety-relative class
-                            $class = null;
-                            if ($latest && $record->riceVariety && $predTons !== null) {
-                                $methodYield = $record->riceVariety->getYieldForMethod($record->seeding_method ?? 'Transplanted');
-                                $avgTons = $methodYield->avg ?? $record->riceVariety->avg_yield;
-                                if ($avgTons && $avgTons > 0) {
-                                    $ratio = $predTons / $avgTons;
-                                    if     ($ratio >= 1.125) $class = 'High';
-                                    elseif ($ratio >= 0.875) $class = 'Medium';
-                                    else                     $class = 'Low';
-                                }
-                            }
-                            $badge = match($class) {
-                                'High' => 'high',
-                                'Low'  => 'low',
-                                'Medium' => 'medium',
-                                default => null,
-                            };
 
                             $hasPrediction = $predCavan !== null;
                             $hasActual     = $actualTons !== null && $actualTons > 0;
 
                             $barangay   = $record->farm->barangay ?? '';
-                            $seasonNorm = str_replace(' Season', '', $record->season ?? '');
+                            $seasonNorm = $record->season_label;
 
                             $searchData = strtolower(
                                 ($record->farm->name ?? '') . ' ' .
@@ -369,29 +322,6 @@
                                     <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
                                         <span class="dot" style="background: var(--brand-green);"></span> Both
                                     </span>
-                                @else
-                                    <span class="text-muted">—</span>
-                                @endif
-                            </td>
-                            <td>
-                                @if($predCavan !== null)
-                                    <span class="fw-bold" style="color: var(--brand-green);">
-                                        {{ number_format($predCavan, 0) }}
-                                    </span>
-                                    <small class="text-muted">cavan/ha</small>
-                                    <br>
-                                    <small class="text-muted" style="font-size: 10px;">
-                                        ({{ number_format($predTons, 2) }} t/ha)
-                                    </small>
-                                    @if($badge)
-                                        <br>
-                                        <span class="badge-status {{ $badge }}" style="font-size: 10px; margin-top: 4px;">
-                                            <span class="dot"></span> {{ $class }}
-                                            @if($conf)
-                                                · {{ number_format($conf * 100, 0) }}%
-                                            @endif
-                                        </span>
-                                    @endif
                                 @else
                                     <span class="text-muted">—</span>
                                 @endif
@@ -459,7 +389,7 @@
                     @endforeach
 
                     <tr id="noFilterResults" style="display: none;">
-                        <td colspan="{{ $isVerified ? 9 : 8 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ $isVerified ? 8 : 7 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-search" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">No seasons match your filters.</p>
                         </td>
@@ -610,7 +540,6 @@
      ═══════════════════════════════════════════════════════════ --}}
 <script>
     // ── Execute <script> tags inside HTML injected via innerHTML ──
-    // Browsers do not run scripts inserted this way, so we clone them.
     window.executeInjectedScripts = function(container) {
         if (!container) return;
         container.querySelectorAll('script').forEach(oldScript => {
@@ -678,7 +607,6 @@
         const searchInput      = document.getElementById('searchFarmRecord');
         const farmSelect       = document.getElementById('filterFarm');
         const barangaySelect   = document.getElementById('filterBarangay');
-        const predictionSelect = document.getElementById('filterPrediction');
         const actualSelect     = document.getElementById('filterActual');
         const statusBtns       = document.querySelectorAll('.status-btn');
         const seasonBtns       = document.querySelectorAll('.season-btn');
@@ -703,7 +631,6 @@
                 searchInput.value.trim() !== '' ||
                 (farmSelect && farmSelect.value !== 'all') ||
                 barangaySelect.value !== 'all' ||
-                (predictionSelect && predictionSelect.value !== 'all') ||
                 (actualSelect && actualSelect.value !== 'all') ||
                 (activeStatus && activeStatus.dataset.status !== 'all') ||
                 (activeSeason && activeSeason.dataset.season !== 'all')
@@ -714,7 +641,6 @@
             const search     = searchInput.value.toLowerCase().trim();
             const farm       = farmSelect ? farmSelect.value : 'all';
             const barangay   = barangaySelect.value;
-            const predFilter = predictionSelect ? predictionSelect.value : 'all';
             const actFilter  = actualSelect ? actualSelect.value : 'all';
             const activeStatus = document.querySelector('.status-btn.active');
             const status = activeStatus ? activeStatus.dataset.status : 'all';
@@ -727,7 +653,6 @@
                 const rb  = row.dataset.barangay || '';
                 const rs  = row.dataset.status || '';
                 const rsn = row.dataset.season || '';
-                const hp  = row.dataset.hasPrediction || '0';
                 const ha  = row.dataset.hasActual || '0';
 
                 const matchesSearch   = sd.includes(search);
@@ -736,16 +661,12 @@
                 const matchesStatus   = (status === 'all' || rs === status);
                 const matchesSeason   = (season === 'all' || rsn === season);
 
-                let matchesPrediction = true;
-                if (predFilter === 'with')    matchesPrediction = (hp === '1');
-                if (predFilter === 'without') matchesPrediction = (hp === '0');
-
                 let matchesActual = true;
                 if (actFilter === 'with')    matchesActual = (ha === '1');
                 if (actFilter === 'without') matchesActual = (ha === '0');
 
                 return matchesSearch && matchesFarm && matchesBarangay && matchesStatus
-                    && matchesSeason && matchesPrediction && matchesActual;
+                    && matchesSeason && matchesActual;
             });
         }
 
@@ -839,7 +760,6 @@
         searchInput.addEventListener('input', resetAndRender);
         farmSelect?.addEventListener('change', resetAndRender);
         barangaySelect.addEventListener('change', resetAndRender);
-        predictionSelect?.addEventListener('change', resetAndRender);
         actualSelect?.addEventListener('change', resetAndRender);
 
         statusBtns.forEach(btn => {
@@ -883,7 +803,6 @@
             searchInput.value = '';
             if (farmSelect) farmSelect.value = 'all';
             barangaySelect.value = 'all';
-            if (predictionSelect) predictionSelect.value = 'all';
             if (actualSelect) actualSelect.value = 'all';
 
             statusBtns.forEach(b => {
@@ -951,7 +870,6 @@
                 content.style.display = 'block';
                 content.innerHTML = html;
 
-                // ← Run the inline <script> from the injected partial
                 executeInjectedScripts(content);
 
                 const form = document.getElementById('farmerFarmRecordForm');
@@ -979,7 +897,6 @@
                 content.style.display = 'block';
                 content.innerHTML = html;
 
-                // ← Run the inline <script> from the injected partial
                 executeInjectedScripts(content);
 
                 const form = document.getElementById('farmerFarmRecordForm');
@@ -997,8 +914,6 @@
         e.preventDefault();
         const form = e.target;
 
-        // ── Belt-and-suspenders: sync cavan → tons right before submit ──
-        // (In case the inline listener didn't attach for any reason.)
         const syncPairs = [
             ['farmerHistoricalCavan', 'farmerHistoricalTons'],
             ['farmerActualCavan',     'farmerActualTons'],
@@ -1129,7 +1044,6 @@
         }
     }
 
-    // Live conversion preview
     document.addEventListener('DOMContentLoaded', function() {
         const cavanInput = document.getElementById('farmerActualYieldInput');
         const tonsHidden = document.getElementById('farmerActualYieldTons');

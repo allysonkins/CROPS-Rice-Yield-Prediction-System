@@ -60,8 +60,9 @@
                     <label class="form-label" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--slate-500);">Season</label>
                     <select name="season" class="form-select form-select-sm">
                         <option value="">All Seasons</option>
-                        <option value="Dry" {{ request('season') === 'Dry' ? 'selected' : '' }}>Dry</option>
-                        <option value="Wet" {{ request('season') === 'Wet' ? 'selected' : '' }}>Wet</option>
+                        <option value="Dry"        {{ request('season') === 'Dry'        ? 'selected' : '' }}>Dry</option>
+                        <option value="Wet"        {{ request('season') === 'Wet'        ? 'selected' : '' }}>Wet</option>
+                        <option value="Off-Season" {{ request('season') === 'Off-Season' ? 'selected' : '' }}>Off-Season</option>
                     </select>
                 </div>
 

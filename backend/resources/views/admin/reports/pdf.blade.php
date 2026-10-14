@@ -106,9 +106,16 @@
                     <span class="filter-chip">Year: {{ $filters['year_from'] ?? '—' }} → {{ $filters['year_to'] ?? '—' }}</span>
                 @endif
                 @if(!empty($filters['season']))
-                    <span class="filter-chip">Season: {{ $filters['season'] }}</span>
-                @endif
-                @if(!empty($filters['status']))
+                    @php
+                        $seasonLabel = match ($filters['season']) {
+                            'Dry'        => 'Dry Season',
+                            'Wet'        => 'Wet Season',
+                            'Off-Season' => 'Off-Season',
+                            default      => $filters['season'],
+                        };
+                    @endphp
+                    <span class="filter-chip">Season: {{ $seasonLabel }}</span>
+                @endify($filters['status']))
                     <span class="filter-chip">Status: {{ $filters['status'] === 'Vegetative' ? 'Growing' : $filters['status'] }}</span>
                 @endif
                 @if(!empty($filters['water_source']))

@@ -52,7 +52,7 @@ class ReportService
         return FarmRecord::query()
             ->when($this->filters['year_from'] ?? null,   fn ($q, $v) => $q->where('year', '>=', (int) $v))
             ->when($this->filters['year_to']   ?? null,   fn ($q, $v) => $q->where('year', '<=', (int) $v))
-            ->when($this->filters['season']    ?? null,   fn ($q, $v) => $q->where('season', 'like', "%{$v}%"))
+            ->when($this->filters['season']    ?? null,   fn ($q, $v) => $this->applySeasonFilter($q, $v))
             ->when($this->filters['status']    ?? null,   fn ($q, $v) => $q->where('status', $v))
             ->when($this->filters['water_source'] ?? null, fn ($q, $v) => $q->where('water_source', $v))
             ->when($this->filters['variety_id'] ?? null,  fn ($q, $v) => $q->where('rice_variety_id', $v))
@@ -81,13 +81,29 @@ class ReportService
             ->whereHas('farmRecord', function ($q) {
                 $q->when($this->filters['year_from'] ?? null, fn ($q2, $v) => $q2->where('year', '>=', (int) $v))
                   ->when($this->filters['year_to']   ?? null, fn ($q2, $v) => $q2->where('year', '<=', (int) $v))
-                  ->when($this->filters['season']    ?? null, fn ($q2, $v) => $q2->where('season', 'like', "%{$v}%"))
+                  ->when($this->filters['season']    ?? null, fn ($q2, $v) => $this->applySeasonFilter($q2, $v))
                   ->when($this->filters['status']    ?? null, fn ($q2, $v) => $q2->where('status', $v))
                   ->when($this->filters['water_source'] ?? null, fn ($q2, $v) => $q2->where('water_source', $v))
                   ->when($this->filters['variety_id'] ?? null, fn ($q2, $v) => $q2->where('rice_variety_id', $v))
                   ->when($this->filters['barangay'] ?? null,  fn ($q2, $v) => $q2->whereHas('farm', fn ($q3) => $q3->where('barangay', $v)))
                   ->when($this->filters['farmer_id'] ?? null, fn ($q2, $v) => $q2->whereHas('farm', fn ($q3) => $q3->where('user_id', $v)));
             });
+    }
+
+    /**
+     * Apply a season filter. Dry/Wet match any variant containing the word;
+     * Off-Season matches both hyphenated and spaced forms explicitly.
+     */
+    protected function applySeasonFilter($query, string $season)
+    {
+        if ($season === 'Off-Season') {
+            return $query->where(function ($q) {
+                $q->where('season', 'Off-Season')
+                  ->orWhere('season', 'Off Season');
+            });
+        }
+
+        return $query->where('season', 'like', "%{$season}%");
     }
 
     // ═══════════════════════════════════════════════════════════

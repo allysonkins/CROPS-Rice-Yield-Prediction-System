@@ -8,6 +8,21 @@
     </div>
 @else
 
+    @if(stripos($farmRecord->season, 'off') !== false)
+        <div class="card-custom" style="background: #fffbeb; border: 1px solid #fde68a; padding: 14px 18px; margin-bottom: 16px;">
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-exclamation-triangle-fill" style="color: var(--brand-gold); font-size: 18px; flex-shrink: 0; margin-top: 2px;"></i>
+                <div style="font-size: 12px; color: #78350f; line-height: 1.5;">
+                    <strong>Off-Season estimate.</strong>
+                    These predictions use the <strong>Wet Season</strong> model as a proxy
+                    because Off-Season is not yet part of the training data.
+                    Off-Season crops mature during peak typhoon months — treat these
+                    numbers with extra caution.
+                </div>
+            </div>
+        </div>
+    @endif
+
     @php
         // Convert every yield in the collection once, so we don't repeat the helper
         $yieldsCavan = $predictions->map(fn($p) => t_ha_to_cavan_ha((float) $p->predicted_yield_tons_ha))->values();

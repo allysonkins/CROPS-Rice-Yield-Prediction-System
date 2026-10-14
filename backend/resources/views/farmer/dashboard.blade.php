@@ -261,6 +261,16 @@
             ito ang tatlong pinakamainam na variety para sa susunod na panahon.
         </p>
 
+                @if($thisSeason && $thisSeason->season === 'Off-Season')
+            <div style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; margin-bottom: 16px; font-size: 12px; color: #78350f; line-height: 1.5;">
+                <i class="bi bi-exclamation-triangle-fill" style="color: var(--brand-gold);"></i>
+                <strong>Kasalukuyang Off-Season.</strong>
+                Ang rekomendasyon sa ibaba ay para sa <strong>{{ $nextSeason }}</strong> —
+                hindi kami nagrerekomenda para sa Off-Season dahil hindi pa ito kasama sa
+                aming model (masyadong mataas ang panganib ng bagyo sa panahong ito).
+            </div>
+        @endif
+
         <div class="row g-2">
             @foreach($recommendations as $idx => $rec)
                 @php
@@ -374,6 +384,17 @@
                                 <span class="dot"></span> {{ $class }}
                             </span>
                         @endif
+
+                                        @if($thisSeason->season === 'Off-Season')
+                        <div style="padding: 8px 10px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; font-size: 11px; color: #78350f; line-height: 1.4; margin-bottom: 10px;">
+                            <i class="bi bi-info-circle-fill"></i>
+                            Ang tantyang ito ay gumagamit ng <strong>Wet Season</strong> na modelo
+                            dahil hindi pa kasama ang Off-Season sa training data.
+                            Mas mataas ang kawalan ng katiyakan kaysa karaniwan.
+                        </div>
+                    @endif
+
+
                     </div>
 
                     <div class="row g-2 mt-3">

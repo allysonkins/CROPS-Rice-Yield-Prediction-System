@@ -34,7 +34,9 @@
                 <option value="">Select Season...</option>
                 <option value="Dry Season" {{ old('season') == 'Dry Season' ? 'selected' : '' }}>Dry Season</option>
                 <option value="Wet Season" {{ old('season') == 'Wet Season' ? 'selected' : '' }}>Wet Season</option>
+                <option value="Off-Season" {{ old('season') == 'Off-Season' ? 'selected' : '' }}>Off-Season</option>
             </select>
+            <small class="text-muted">Predictions are calibrated for Dry and Wet seasons.</small>
         </div>
 
         <div class="col-md-6">

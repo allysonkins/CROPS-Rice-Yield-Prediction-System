@@ -37,6 +37,8 @@
     </div>
 </div>
 
+
+
 {{-- The full history content --}}
 @include('farmer.prediction-history')
 

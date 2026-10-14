@@ -25,7 +25,6 @@ class DashboardController extends Controller
         $palayPricePerKg = (int) config('santiago.palay_price_per_kg', 20);
 
         // ── Weather (OpenWeatherMap — Santiago City) ────────────
-        // Fetched once, used in both the empty-state and the main view.
         $weather = null;
         try {
             $weather = app(WeatherService::class)->getWeather();
@@ -105,7 +104,7 @@ class DashboardController extends Controller
             ? round($thisPred->predicted_yield_tons_ha * $focusFarm->land_area_ha, 2)
             : null;
 
-        // ── Next season target ──────────────────────────────────
+        // ── Next season target (never Off-Season) ───────────────
         $nextSeason = $this->nextSeasonFor($thisSeason);
 
         // ── Season-wide tantyang kita (across ALL farms) ────────
@@ -140,6 +139,8 @@ class DashboardController extends Controller
         }
 
         // ── Recommendations (cached per farm + season + global version) ──
+        // Off-Season is intentionally never requested — the recommendation
+        // engine only supports Dry and Wet. See nextSeasonFor() below.
         $cacheKey = RecommendationCache::key($focusFarm->id, $nextSeason)
             . '.g' . RecommendationCache::globalVersion();
 
@@ -195,12 +196,36 @@ class DashboardController extends Controller
         ));
     }
 
+    /**
+     * Determine the "next season" to recommend varieties for.
+     *
+     * Off-Season is intentionally never returned — the ML model was
+     * never trained on it, and it's the highest-risk planting window
+     * (peak of the typhoon season). Recommendations always target
+     * Dry or Wet Season.
+     *
+     * Rotation used:
+     *   Dry Season  → Wet Season     (natural rotation)
+     *   Wet Season  → Dry Season     (skip Off-Season)
+     *   Off-Season  → Dry Season     (Off harvest lands in the Dry window)
+     *   (no record) → month-based guess
+     */
     private function nextSeasonFor(?FarmRecord $currentSeason): string
     {
-        if ($currentSeason && in_array($currentSeason->season, ['Dry Season', 'Wet Season'], true)) {
-            return $currentSeason->season === 'Dry Season' ? 'Wet Season' : 'Dry Season';
+        if ($currentSeason) {
+            return match ($currentSeason->season) {
+                'Dry Season' => 'Wet Season',
+                'Wet Season' => 'Dry Season',
+                'Off-Season' => 'Dry Season',
+                default      => $this->seasonFromMonth(),
+            };
         }
 
+        return $this->seasonFromMonth();
+    }
+
+    private function seasonFromMonth(): string
+    {
         $month = (int) now()->month;
         return ($month >= 5 && $month <= 10) ? 'Dry Season' : 'Wet Season';
     }

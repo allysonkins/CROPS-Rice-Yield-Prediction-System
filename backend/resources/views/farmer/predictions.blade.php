@@ -122,7 +122,7 @@
             {{-- ROW 2: Pills --}}
             <div class="d-flex flex-wrap align-items-center gap-3 pt-3" style="border-top: 1px dashed var(--slate-200);">
 
-                {{-- SEASON GROUP --}}
+                                {{-- SEASON GROUP --}}
                 <div class="d-flex align-items-center gap-2">
                     <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Season</span>
                     <div class="d-flex" style="background: var(--slate-100); border-radius: 12px; padding: 4px; gap: 2px;">
@@ -130,12 +130,18 @@
                                 style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--slate-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">
                             All
                         </button>
-                        @foreach($predictions->pluck('farmRecord.season')->filter()->map(fn($s) => str_replace(' Season', '', $s))->unique()->values() as $seasonOpt)
-                            <button class="filter-btn season-btn" data-season="{{ $seasonOpt }}"
-                                    style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
-                                {{ $seasonOpt }}
-                            </button>
-                        @endforeach
+                        <button class="filter-btn season-btn" data-season="Dry"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                            Dry
+                        </button>
+                        <button class="filter-btn season-btn" data-season="Wet"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                            Wet
+                        </button>
+                        <button class="filter-btn season-btn" data-season="Off"
+                                style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--slate-600); white-space: nowrap;">
+                            Off-Season
+                        </button>
                     </div>
                 </div>
 
@@ -221,7 +227,10 @@
                                 $barangay   = $prediction->farmRecord->farm->barangay ?? 'N/A';
                                 $variety    = $prediction->farmRecord->riceVariety->name ?? 'N/A';
                                 $season     = $prediction->farmRecord->season ?? 'N/A';
-                                $seasonNorm = str_replace(' Season', '', $season);
+                                if (stripos($season, 'off') !== false)      $seasonNorm = 'Off';
+                                elseif (stripos($season, 'dry') !== false)  $seasonNorm = 'Dry';
+                                elseif (stripos($season, 'wet') !== false)  $seasonNorm = 'Wet';
+                                else                                        $seasonNorm = $season;
                                 $yieldTons  = $prediction->predicted_yield_tons_ha;
                                 $yieldCavan = $yieldTons !== null ? t_ha_to_cavan_ha((float) $yieldTons) : null;
                                 $conf       = $prediction->confidence;
@@ -300,7 +309,23 @@
                                         {{ $variety }}
                                     @endif
                                 </td>
-                                <td>{{ $season }}</td>
+                                <td>
+                                    @if(stripos($season, 'off') !== false)
+                                        <span class="badge-status" style="background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; font-size: 11px;">
+                                            <span class="dot" style="background: #4f46e5;"></span> Off-Season
+                                        </span>
+                                    @elseif(stripos($season, 'dry') !== false)
+                                        <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                            <span class="dot" style="background: var(--brand-gold);"></span> Dry
+                                        </span>
+                                    @elseif(stripos($season, 'wet') !== false)
+                                        <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                            <span class="dot" style="background: var(--brand-green);"></span> Wet
+                                        </span>
+                                    @else
+                                        {{ $season }}
+                                    @endif
+                                </td>
                                 <td>
                                     <strong style="color: var(--brand-green-dark);">{{ number_format($yieldCavan, 0) }}</strong>
                                     <small style="color: var(--slate-500);">cavan/ha</small>

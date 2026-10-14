@@ -144,6 +144,17 @@
                 <h6 class="mb-3" style="color: var(--brand-green-dark); font-weight: 700;">
                     <i class="bi bi-cpu" style="color: #4f46e5;"></i> Yield Estimates
                 </h6>
+
+                                @if($farmRecord->season === 'Off-Season' && $predictedCavan !== null)
+                    <div style="padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; margin-bottom: 16px; font-size: 12px; color: #78350f; line-height: 1.5;">
+                        <i class="bi bi-exclamation-triangle-fill" style="color: var(--brand-gold);"></i>
+                        <strong>Off-Season estimate.</strong>
+                        This prediction uses the <strong>Wet Season</strong> model as a proxy because Off-Season
+                        is not yet part of the training data. Treat it with extra caution — Off-Season crops
+                        mature during peak typhoon months.
+                    </div>
+                @endif
+
                 <div class="row g-3">
                     <div class="col-md-4">
                         <div style="font-size: 11px; text-transform: uppercase; color: var(--slate-500); font-weight: 600;">

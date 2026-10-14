@@ -26,7 +26,9 @@
             <select name="season" class="form-select" required>
                 <option value="Dry Season" {{ old('season', $farmRecord->season) == 'Dry Season' ? 'selected' : '' }}>Dry Season</option>
                 <option value="Wet Season" {{ old('season', $farmRecord->season) == 'Wet Season' ? 'selected' : '' }}>Wet Season</option>
+                <option value="Off-Season" {{ old('season', $farmRecord->season) == 'Off-Season' ? 'selected' : '' }}>Off-Season</option>
             </select>
+            <small class="text-muted">Predictions are calibrated for Dry and Wet seasons.</small>
         </div>
 
         <div class="col-md-6">
