@@ -10,8 +10,8 @@
         </div>
 
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Barangay</label>
-            <select name="barangay" class="form-select">
+            <label class="form-label fw-semibold">Barangay <span class="text-danger">*</span></label>
+            <select name="barangay" class="form-select searchable-select" required>
                 <option value="">Select barangay...</option>
                 <option value="Abra" {{ old('barangay', $farm->barangay) == 'Abra' ? 'selected' : '' }}>Abra</option>
                 <option value="Ambalatungan" {{ old('barangay', $farm->barangay) == 'Ambalatungan' ? 'selected' : '' }}>Ambalatungan</option>
@@ -70,7 +70,7 @@
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Assigned Farmer</label>
-            <select name="user_id" class="form-select">
+            <select name="user_id" class="form-select searchable-select">
                 <option value="">Unassigned</option>
                 @foreach($farmers as $farmer)
                     <option value="{{ $farmer->id }}" {{ old('user_id', $farm->user_id) == $farmer->id ? 'selected' : '' }}>
@@ -108,3 +108,9 @@
         </div>
     </div>
 </form>
+
+<script>
+    if (window.initSearchableSelects) {
+        window.initSearchableSelects(document.getElementById('farmForm'));
+    }
+</script>

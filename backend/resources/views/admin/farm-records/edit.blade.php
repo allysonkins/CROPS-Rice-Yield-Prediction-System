@@ -6,7 +6,7 @@
     <div class="row g-3">
         <div class="col-md-6">
             <label class="form-label fw-semibold">Farm <span class="text-danger">*</span></label>
-            <select name="farm_id" class="form-select" required>
+            <select name="farm_id" class="form-select searchable-select" required>
                 <option value="">Select a farm...</option>
                 @foreach($farms as $farm)
                     <option value="{{ $farm->id }}" {{ old('farm_id', $farmRecord->farm_id) == $farm->id ? 'selected' : '' }}>
@@ -18,7 +18,7 @@
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Rice Variety <span class="text-danger">*</span></label>
-            <select name="rice_variety_id" class="form-select" required>
+            <select name="rice_variety_id" class="form-select searchable-select" required>
                 <option value="">Select a variety...</option>
                 @foreach($varieties as $variety)
                     <option value="{{ $variety->id }}" {{ old('rice_variety_id', $farmRecord->rice_variety_id) == $variety->id ? 'selected' : '' }}>
@@ -174,6 +174,10 @@
 
             varietySelect.addEventListener('change', updateYieldPreview);
             methodSelect.addEventListener('change', updateYieldPreview);
+        }
+
+        if (window.initSearchableSelects) {
+            window.initSearchableSelects(document.getElementById('farmRecordForm'));
         }
     })();
 </script>

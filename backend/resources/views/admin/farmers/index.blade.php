@@ -44,7 +44,6 @@
 <div class="page-header">
     <div>
         <h4 class="page-header-title">
-            <i class="bi bi-people-fill"></i> Farmers Directory
         </h4>
         <p class="page-header-desc">
             Registered farmers in Santiago City with RSBSA records and linked farm data.

@@ -12,7 +12,7 @@
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Rice Variety <span class="text-danger">*</span></label>
-            <select name="rice_variety_id" class="form-select" required>
+            <select name="rice_variety_id" class="form-select searchable-select" required>
                 @foreach($varieties as $variety)
                     <option value="{{ $variety->id }}" {{ old('rice_variety_id', $farmRecord->rice_variety_id) == $variety->id ? 'selected' : '' }}>
                         {{ $variety->name }} ({{ $variety->classification }})
@@ -201,5 +201,9 @@
     }
     varietySelect.addEventListener('change', updatePreview);
     methodSelect.addEventListener('change', updatePreview);
+
+    if (window.initSearchableSelects) {
+        window.initSearchableSelects(form);
+    }
 })();
 </script>

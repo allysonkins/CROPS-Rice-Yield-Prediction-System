@@ -84,8 +84,6 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h5 style="font-weight: 800; color: var(--slate-900); margin: 0; letter-spacing: -0.3px;">
-            <i class="bi bi-geo-alt-fill" style="color: var(--brand-green);"></i>
-            My Farms
         </h5>
         <p style="font-size: 13px; color: var(--slate-500); margin: 4px 0 0;">
             All farms registered under your name.
@@ -479,9 +477,12 @@
         fetch('{{ route("farmer.farms.create") }}', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => {
+                const content = document.getElementById('farmerFarmModalContent');
                 document.getElementById('farmerFarmModalLoading').style.display = 'none';
-                document.getElementById('farmerFarmModalContent').style.display = 'block';
-                document.getElementById('farmerFarmModalContent').innerHTML = html;
+                content.style.display = 'block';
+                content.innerHTML = html;
+                window.executeInjectedScripts && window.executeInjectedScripts(content);
+                window.initSearchableSelects && window.initSearchableSelects(content);
                 const form = document.getElementById('farmerFarmForm');
                 if (form) form.addEventListener('submit', handleFarmerFarmSubmit);
                 setTimeout(initFarmerFarmModalMap, 300);
@@ -502,9 +503,12 @@
         fetch('/farmer/farms/' + id + '/edit', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
             .then(r => r.text())
             .then(html => {
+                const content = document.getElementById('farmerFarmModalContent');
                 document.getElementById('farmerFarmModalLoading').style.display = 'none';
-                document.getElementById('farmerFarmModalContent').style.display = 'block';
-                document.getElementById('farmerFarmModalContent').innerHTML = html;
+                content.style.display = 'block';
+                content.innerHTML = html;
+                window.executeInjectedScripts && window.executeInjectedScripts(content);
+                window.initSearchableSelects && window.initSearchableSelects(content);
                 const form = document.getElementById('farmerFarmForm');
                 if (form) form.addEventListener('submit', handleFarmerFarmSubmit);
                 setTimeout(initFarmerFarmModalMap, 300);

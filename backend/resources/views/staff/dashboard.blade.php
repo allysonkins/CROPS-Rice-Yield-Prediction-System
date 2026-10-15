@@ -30,7 +30,7 @@
         ? $uniquePredictions->whereNotNull('confidence')->avg('confidence')
         : null;
 
-    // ── Variety-relative yield class (computed app-side, not a model output) ──
+    // ── Variety-relative yield class ──
     $yieldClassOf = function ($prediction) {
         $yield = $prediction->predicted_yield_tons_ha;
         if ($yield === null) return null;
@@ -51,8 +51,6 @@
     };
 
     // ── LOW YIELD IDENTIFICATION ──
-    // Farms producing < 87.5% of their variety's own average yield.
-    // Sorted worst-first so the staff sees the most critical cases immediately.
     $lowYieldPredictions = collect();
     foreach ($uniquePredictions as $p) {
         $yield = $p->predicted_yield_tons_ha;
@@ -81,27 +79,36 @@
     $lowYieldCount = $lowYieldPredictions->count();
     $lowYieldPct   = $totalPred > 0 ? round(($lowYieldCount / $totalPred) * 100, 1) : 0;
 
-    // ── Temporal trend (weekly, last 12 weeks) ──
-    $trendLabels = []; $trendData = [];
-    for ($i = 11; $i >= 0; $i--) {
-        $start = now()->subWeeks($i)->startOfWeek();
-        $end   = now()->subWeeks($i)->endOfWeek();
-        $weekPreds = $uniquePredictions->filter(fn($p) => $p->created_at >= $start && $p->created_at <= $end);
-        $trendLabels[] = $start->format('M d');
-        $trendData[]   = $weekPreds->count() > 0
-            ? round($weekPreds->avg('predicted_yield_tons_ha'), 2)
-            : null;
-    }
+    // ═══════════════════════════════════════════════════════════
+    // YEARLY OVERVIEW — for the Compare Years widget
+    // ═══════════════════════════════════════════════════════════
+    $yearlyData = $uniquePredictions
+        ->filter(fn ($p) => $p->farmRecord && $p->farmRecord->year)
+        ->groupBy(fn ($p) => (int) $p->farmRecord->year)
+        ->map(function ($group, $year) {
+            $preds = $group->pluck('predicted_yield_tons_ha')->filter();
+            $actuals = $group
+                ->map(fn ($p) => $p->farmRecord?->actual_yield_tons_ha)
+                ->filter();
 
-    // ── Spatial aggregation by barangay ──
-    $barangayData = $uniquePredictions
-        ->groupBy(fn($p) => $p->farmRecord->farm->barangay ?? 'Unknown')
-        ->map(fn($g) => [
-            'avg'   => round($g->avg('predicted_yield_tons_ha'), 2),
-            'count' => $g->count(),
-        ])
-        ->filter(fn($d) => $d['avg'] !== null)
-        ->sortByDesc('avg');
+            return [
+                'year'      => (int) $year,
+                'records'   => $group->count(),
+                'avgPred'   => $preds->count() > 0 ? round($preds->avg(), 2) : null,
+                'avgAct'    => $actuals->count() > 0 ? round($actuals->avg(), 2) : null,
+                'delta'     => ($preds->count() > 0 && $actuals->count() > 0)
+                    ? round($actuals->avg() - $preds->avg(), 2)
+                    : null,
+            ];
+        })
+        ->sortKeys()
+        ->values();
+
+    $yearlyRecent = $yearlyData->slice(-5)->values();
+
+    $yearLabels    = $yearlyRecent->pluck('year')->map(fn ($y) => (string) $y);
+    $yearPredicted = $yearlyRecent->pluck('avgPred');
+    $yearActual    = $yearlyRecent->pluck('avgAct');
 
     $recent = $uniquePredictions->sortByDesc('created_at')->take(5);
 @endphp
@@ -122,13 +129,12 @@
     }
 @endphp
 
-<!-- WELCOME BANNER + WEATHER -->
+<!-- ═════════ WELCOME BANNER + WEATHER ═════════ -->
 <div class="row g-2 mb-3">
     <div class="col-12">
         <div class="card-custom" style="border-left: 4px solid var(--gold); background: linear-gradient(135deg, #f9fafb 0%, #f0f4f2 100%); padding: 16px 22px;">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
 
-                {{-- LEFT: Welcome --}}
                 <div class="d-flex flex-wrap align-items-center gap-2">
                     <i class="bi bi-person-badge" style="color: var(--gold); font-size: 20px;"></i>
                     <span style="font-size: 15px; font-weight: 700; color: var(--green);">
@@ -137,7 +143,6 @@
                     <span class="text-muted small">· Staff Account</span>
                 </div>
 
-                {{-- RIGHT: Weather + Date --}}
                 <div class="d-flex flex-wrap align-items-center gap-2">
 
                     @if($weather)
@@ -180,7 +185,7 @@
     </div>
 </div>
 
-<!-- STATS ROW -->
+<!-- ═════════ STATS ROW ═════════ -->
 <div class="row g-2 mb-3">
     <div class="col-6 col-lg-4 col-xl">
         <div class="stat-card" style="padding: 14px 18px;">
@@ -258,44 +263,137 @@
     </div>
 </div>
 
-<!-- PRIMARY PANEL — SPATIAL & TEMPORAL -->
+<!-- ═════════ YEARLY YIELD TREND — COMPARE YEARS WIDGET ═════════ -->
 <div class="row g-2 mb-3">
     <div class="col-12">
-        <div class="card-custom" style="border-top: 3px solid var(--green); padding: 16px 20px;">
-            <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="card-custom" style="border-top: 3px solid var(--gold); padding: 16px 20px;">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-map" style="color: var(--green); font-size: 18px;"></i>
-                    <span style="font-size: 14px; font-weight: 700;">Spatial & Temporal Yield Mapping</span>
+                    <i class="bi bi-calendar-range" style="color: var(--gold); font-size: 18px;"></i>
+                    <span style="font-size: 14px; font-weight: 700;">Yearly Yield Trend</span>
+                    <span class="text-muted" style="font-size: 11px;">
+                        · last {{ $yearlyRecent->count() }} year{{ $yearlyRecent->count() !== 1 ? 's' : '' }}
+                    </span>
                 </div>
-                <span class="text-muted" style="font-size: 11px;">{{ $totalPred }} prediction{{ $totalPred !== 1 ? 's' : '' }}</span>
+                <a href="{{ route('admin.predictions.compare') }}" class="btn btn-sm btn-outline-success" style="font-size: 12px;">
+                    <i class="bi bi-bar-chart-line"></i> Compare Years in Detail →
+                </a>
             </div>
 
-            <div class="row g-2">
-                <div class="col-12 col-lg-6">
-                    <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; padding: 10px 14px;">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="bi bi-clock-history" style="color: var(--green); font-size: 14px;"></i>
-                            <span style="font-size: 12px; font-weight: 700;">Temporal — Yield Trend</span>
+            @if($yearlyRecent->isEmpty())
+                <div class="text-center py-4">
+                    <i class="bi bi-bar-chart" style="font-size: 38px; color: var(--slate-300);"></i>
+                    <p class="mt-2 mb-0" style="font-size: 13px; color: var(--slate-500);">
+                        No year data available yet.
+                    </p>
+                    <p class="mb-0" style="font-size: 11px; color: var(--slate-400);">
+                        Add farm records across different years to see the trend.
+                    </p>
+                </div>
+            @else
+                <div class="row g-3">
+                    {{-- Mini trend chart --}}
+                    <div class="col-12 col-lg-8">
+                        <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px 14px;">
+                            <div style="height: 220px; position: relative;">
+                                <canvas id="yearlyChart"></canvas>
+                            </div>
                         </div>
-                        <div style="height: 190px;"><canvas id="trendChart"></canvas></div>
+                    </div>
+
+                    {{-- Compact year table --}}
+                    <div class="col-12 col-lg-4">
+                        <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; padding: 12px 14px;">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-list-ul" style="color: var(--green); font-size: 13px;"></i>
+                                <span style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--slate-600);">
+                                    Year Summary
+                                </span>
+                            </div>
+                            <table class="table table-sm align-middle mb-0" style="font-size: 11.5px;">
+                                <thead>
+                                    <tr>
+                                        <th style="padding: 5px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--slate-500);">Year</th>
+                                        <th style="padding: 5px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--slate-500); text-align: right;">Predicted</th>
+                                        <th style="padding: 5px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--slate-500); text-align: right;">Actual</th>
+                                        <th style="padding: 5px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--slate-500); text-align: right;">Δ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($yearlyRecent as $row)
+                                        @php
+                                            $isCurrent = (int) $row['year'] === (int) now()->year;
+                                        @endphp
+                                        <tr>
+                                            <td style="padding: 6px;">
+                                                <strong style="color: {{ $isCurrent ? 'var(--green)' : 'var(--slate-800)' }};">
+                                                    {{ $row['year'] }}
+                                                </strong>
+                                                @if($isCurrent)
+                                                    <span style="font-size: 9px; background: var(--brand-green-light); color: var(--brand-green-dark); padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-left: 3px;">
+                                                        NOW
+                                                    </span>
+                                                @endif
+                                                <br>
+                                                <small style="color: var(--slate-400); font-size: 10px;">
+                                                    {{ $row['records'] }} record{{ $row['records'] !== 1 ? 's' : '' }}
+                                                </small>
+                                            </td>
+                                            <td style="padding: 6px; text-align: right;">
+                                                @if($row['avgPred'] !== null)
+                                                    <strong style="color: var(--brand-green);">{{ number_format($row['avgPred'], 2) }}</strong>
+                                                @else
+                                                    <span class="text-muted">—</span>
+                                                @endif
+                                            </td>
+                                            <td style="padding: 6px; text-align: right;">
+                                                @if($row['avgAct'] !== null)
+                                                    <strong style="color: var(--brand-gold-dark);">{{ number_format($row['avgAct'], 2) }}</strong>
+                                                @else
+                                                    <span class="text-muted" style="font-size: 10px;">pending</span>
+                                                @endif
+                                            </td>
+                                            <td style="padding: 6px; text-align: right;">
+                                                @if($row['delta'] !== null)
+                                                    @php
+                                                        $deltaColor = $row['delta'] > 0.05 ? '#15803d'
+                                                            : ($row['delta'] < -0.05 ? '#b91c1c' : 'var(--slate-500)');
+                                                        $deltaIcon = $row['delta'] > 0.05 ? 'arrow-up'
+                                                            : ($row['delta'] < -0.05 ? 'arrow-down' : 'dash');
+                                                    @endphp
+                                                    <span style="color: {{ $deltaColor }}; font-weight: 700; font-size: 11px;">
+                                                        <i class="bi bi-{{ $deltaIcon }}"></i>
+                                                        {{ $row['delta'] > 0 ? '+' : '' }}{{ number_format($row['delta'], 2) }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-muted">—</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
-                <div class="col-12 col-lg-6">
-                    <div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 10px; padding: 10px 14px;">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="bi bi-geo-alt" style="color: var(--gold-dark); font-size: 14px;"></i>
-                            <span style="font-size: 12px; font-weight: 700;">Spatial — Yield by Barangay</span>
-                        </div>
-                        <div style="height: 190px;"><canvas id="barangayChart"></canvas></div>
-                    </div>
+                {{-- Legend --}}
+                <div class="d-flex gap-3 flex-wrap mt-3 justify-content-center" style="font-size: 11px; color: var(--slate-500);">
+                    <span>
+                        <span style="display: inline-block; width: 14px; height: 3px; background: #165b33; border-radius: 2px; vertical-align: middle;"></span>
+                        Predicted Yield
+                    </span>
+                    <span>
+                        <span style="display: inline-block; width: 14px; height: 3px; background: #d97706; border-radius: 2px; vertical-align: middle; border-bottom: 1px dashed #d97706;"></span>
+                        Actual Harvest
+                    </span>
                 </div>
-            </div>
+            @endif
         </div>
     </div>
 </div>
 
-<!-- LOW YIELD IDENTIFICATION + RECENT -->
+<!-- ═════════ LOW YIELD IDENTIFICATION + RECENT ═════════ -->
 <div class="row g-2">
     <div class="col-12 col-lg-5">
         <div class="card-custom" style="padding: 16px 20px; height: 100%;">
@@ -502,54 +600,74 @@ document.addEventListener('DOMContentLoaded', function() {
     const GRAY_L = '#e5e7eb';
     Chart.defaults.font.size = 10;
 
-    // ── Temporal Trend ──
-    const tc = document.getElementById('trendChart');
-    if (tc) new Chart(tc, {
-        type: 'line',
-        data: {
-            labels: @json($trendLabels),
-            datasets: [{
-                data: @json($trendData),
-                borderColor: GREEN,
-                backgroundColor: 'rgba(27, 94, 58, 0.10)',
-                borderWidth: 2.5, pointRadius: 4,
-                pointBackgroundColor: GREEN,
-                pointBorderColor: 'white', pointBorderWidth: 2,
-                tension: 0.35, fill: true, spanGaps: true,
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-                y: { beginAtZero: false, grid: { color: GRAY_L }, ticks: { font: { size: 10 } } },
-                x: { grid: { display: false }, ticks: { font: { size: 9 } } }
-            }
-        }
-    });
+    // ── Yearly Trend (Compare Years widget) ──
+    const yc = document.getElementById('yearlyChart');
+    if (yc) {
+        const yearLabels = @json($yearLabels);
+        const predData   = @json($yearPredicted);
+        const actData    = @json($yearActual);
 
-    // ── Spatial Barangay Bar ──
-    const bc = document.getElementById('barangayChart');
-    if (bc) {
-        const values = @json($barangayData->pluck('avg'));
-        new Chart(bc, {
-            type: 'bar',
+        new Chart(yc, {
+            type: 'line',
             data: {
-                labels: @json($barangayData->keys()),
-                datasets: [{
-                    data: values,
-                    backgroundColor: values.map(v => v >= 4.5 ? GREEN : (v >= 3.5 ? GOLD : '#c0392b')),
-                    borderRadius: 5,
-                }]
+                labels: yearLabels,
+                datasets: [
+                    {
+                        label: 'Predicted',
+                        data: predData,
+                        borderColor: '#165b33',
+                        backgroundColor: 'rgba(22, 91, 51, 0.10)',
+                        borderWidth: 3,
+                        pointRadius: 6,
+                        pointBackgroundColor: '#165b33',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        tension: 0.25,
+                        spanGaps: true,
+                        fill: true,
+                    },
+                    {
+                        label: 'Actual',
+                        data: actData,
+                        borderColor: '#d97706',
+                        backgroundColor: 'rgba(217, 119, 6, 0.08)',
+                        borderWidth: 3,
+                        borderDash: [6, 4],
+                        pointRadius: 6,
+                        pointBackgroundColor: '#d97706',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        tension: 0.25,
+                        spanGaps: false,
+                        fill: false,
+                    },
+                ]
             },
             options: {
-                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y ?? '—'} t/ha`,
+                        },
+                    },
+                },
                 scales: {
-                    x: { beginAtZero: true, grid: { color: GRAY_L }, ticks: { font: { size: 10 } } },
-                    y: { grid: { display: false }, ticks: { font: { size: 10, weight: '600' } } }
-                }
-            }
+                    y: {
+                        beginAtZero: false,
+                        grid: { color: GRAY_L },
+                        ticks: { font: { size: 10 } },
+                        title: { display: true, text: 't/ha', font: { size: 10 } },
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11, weight: '600' } },
+                    },
+                },
+            },
         });
     }
 });

@@ -405,7 +405,7 @@
                         <h5 class="modal-title"><i class="bi bi-geo-alt-fill"></i> <span id="modalTitle">Add Farm</span></h5>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body" style="overflow: hidden;">
+                    <div class="modal-body">
                         <div class="text-center py-4" id="modalLoading">
                             <div class="spinner-border text-success" role="status"></div>
                             <p class="mt-2">Loading form...</p>
@@ -503,9 +503,13 @@
         })
         .then(r => r.text())
         .then(html => {
+            const content = document.getElementById('modalContent');
             document.getElementById('modalLoading').style.display = 'none';
-            document.getElementById('modalContent').style.display = 'block';
-            document.getElementById('modalContent').innerHTML = html;
+            content.style.display = 'block';
+            content.innerHTML = html;
+
+            window.executeInjectedScripts && window.executeInjectedScripts(content);
+            window.initSearchableSelects && window.initSearchableSelects(content);
 
             const form = document.getElementById('farmForm');
             if (form) form.addEventListener('submit', handleSubmit);
@@ -528,9 +532,13 @@
         })
         .then(r => r.text())
         .then(html => {
+            const content = document.getElementById('modalContent');
             document.getElementById('modalLoading').style.display = 'none';
-            document.getElementById('modalContent').style.display = 'block';
-            document.getElementById('modalContent').innerHTML = html;
+            content.style.display = 'block';
+            content.innerHTML = html;
+
+            window.executeInjectedScripts && window.executeInjectedScripts(content);
+            window.initSearchableSelects && window.initSearchableSelects(content);
 
             const form = document.getElementById('farmForm');
             if (form) form.addEventListener('submit', handleSubmit);

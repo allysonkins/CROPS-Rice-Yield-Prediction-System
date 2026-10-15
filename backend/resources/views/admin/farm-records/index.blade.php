@@ -9,10 +9,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
-        <h4 style="font-weight: 800; color: var(--slate-900); margin: 0;">
-            <i class="bi bi-clipboard-data-fill" style="color: var(--brand-green);"></i>
-            Farm Records
-        </h4>
+        <h4 style="font-weight: 800; color: var(--slate-900); margin: 0;"></h4>
         <p class="text-muted mb-0" style="font-size: 12.5px;">
             Every planting season — what was planted, where, when, and its harvest status.
         </p>
@@ -27,27 +24,29 @@
     </div>
 </div>
 
-<!-- Filter Controls -->
+<!-- ═══════════ FILTER CONTROLS ═══════════ -->
 <div class="row g-2 mb-4">
     <div class="col-12">
-        <div class="card-custom" style="padding: 16px 20px;">
+        <div class="card-custom" style="padding: 16px 20px; overflow-x: hidden;">
 
-            {{-- ROW 1: Search + Location --}}
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            {{-- ROW 1: Search + Year + Barangay + Reset --}}
+            <div class="row g-2 mb-3 align-items-center">
 
                 {{-- SEARCH --}}
-                <div style="flex: 1; min-width: 240px;">
+                <div class="col-12 col-lg-6">
                     <div class="input-group" style="border-radius: 12px; overflow: hidden; border: 1px solid var(--gray-200);">
                         <span class="input-group-text" style="background: var(--gray-50); border: none; color: var(--gray-400);">
                             <i class="bi bi-search"></i>
                         </span>
-                        <input type="text" id="searchFarmRecord" class="form-control" placeholder="Search by farmer, farm, variety, season..." style="border: none; background: var(--gray-50); font-size: 13px;">
+                        <input type="text" id="searchFarmRecord" class="form-control"
+                               placeholder="Search by farmer, farm, variety, season..."
+                               style="border: none; background: var(--gray-50); font-size: 13px;">
                     </div>
                 </div>
 
                 {{-- YEAR --}}
-                <div style="min-width: 140px;">
-                    <select id="filterYear" class="form-select"
+                <div class="col-6 col-lg-3">
+                    <select id="filterYear" class="form-select w-100"
                             onchange="window.location.href = this.value"
                             title="Filter by year"
                             style="border-radius: 12px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none;">
@@ -65,10 +64,10 @@
                 </div>
 
                 {{-- BARANGAY --}}
-                <div style="min-width: 160px;">
-                    <select id="filterBarangay" class="form-select"
+                <div class="col-6 col-lg-3">
+                    <select id="filterBarangay" class="form-select w-100"
                             title="Filter by barangay"
-                            style="border-radius: 12px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none; width: auto; min-width: 150px;">
+                            style="border-radius: 12px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 13px; padding: 0.45rem 2rem 0.45rem 1rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.7rem; cursor: pointer; appearance: none;">
                         <option value="all">All Barangays</option>
                         @foreach($farmRecords->pluck('farm.barangay')->unique()->filter()->values() as $barangay)
                             <option value="{{ $barangay }}">{{ $barangay }}</option>
@@ -76,75 +75,81 @@
                     </select>
                 </div>
 
-                {{-- RESET --}}
-                <button type="button" id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary"
-                        style="border-radius: 10px; font-size: 12px; display: none;"
-                        title="Clear all filters">
-                    <i class="bi bi-x-circle"></i> Reset
-                </button>
+                {{-- RESET (only shows when filters are active) --}}
+                <div class="col-12 d-flex justify-content-end" style="min-height: 0;">
+                    <button type="button" id="resetFiltersBtn" class="btn btn-sm btn-outline-secondary"
+                            style="border-radius: 10px; font-size: 12px; display: none;"
+                            title="Clear all filters">
+                        <i class="bi bi-x-circle"></i> Reset
+                    </button>
+                </div>
             </div>
 
             {{-- ROW 2: Pills + Advanced filters --}}
-            <div class="d-flex flex-wrap align-items-center gap-3 pt-3" style="border-top: 1px dashed var(--gray-200);">
+            <div class="row g-2 g-md-3 pt-3" style="border-top: 1px dashed var(--gray-200); align-items: center;">
 
                 {{-- SEASON GROUP --}}
-                <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                <div class="col-12 col-md-auto">
+                    <div class="d-inline-flex flex-wrap" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
                         <button class="filter-btn season-btn active" data-season="all" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
                         <button class="filter-btn season-btn"        data-season="Dry" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Dry</button>
                         <button class="filter-btn season-btn"        data-season="Wet" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Wet</button>
                         <button class="filter-btn season-btn"        data-season="Off" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Off-Season</button>
+                    </div>
                 </div>
-
-                <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
 
                 {{-- STATUS GROUP --}}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Status</span>
-                    <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
-                        <button class="filter-btn status-btn active" data-status="all"        style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
-                        <button class="filter-btn status-btn"        data-status="Vegetative" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Growing</button>
-                        <button class="filter-btn status-btn"        data-status="Harvested"  style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Harvested</button>
+                <div class="col-12 col-md-auto">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;">Status</span>
+                        <div class="d-inline-flex flex-wrap" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                            <button class="filter-btn status-btn active" data-status="all"        style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
+                            <button class="filter-btn status-btn"        data-status="Vegetative" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Growing</button>
+                            <button class="filter-btn status-btn"        data-status="Harvested"  style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Harvested</button>
+                        </div>
                     </div>
                 </div>
-
-                <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
 
                 {{-- WATER SOURCE GROUP --}}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Water</span>
-                    <div class="d-flex" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
-                        <button class="filter-btn water-btn active" data-water="all"       style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
-                        <button class="filter-btn water-btn"        data-water="Rainfed"   style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Rainfed</button>
-                        <button class="filter-btn water-btn"        data-water="Irrigated" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Irrigated</button>
-                        <button class="filter-btn water-btn"        data-water="Both"      style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Both</button>
+                <div class="col-12 col-md-auto">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;">Water</span>
+                        <div class="d-inline-flex flex-wrap" style="background: var(--gray-100); border-radius: 12px; padding: 4px; gap: 2px;">
+                            <button class="filter-btn water-btn active" data-water="all"       style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: white; color: var(--gray-900); box-shadow: 0 1px 2px rgba(0,0,0,0.05); white-space: nowrap;">All</button>
+                            <button class="filter-btn water-btn"        data-water="Rainfed"   style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Rainfed</button>
+                            <button class="filter-btn water-btn"        data-water="Irrigated" style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Irrigated</button>
+                            <button class="filter-btn water-btn"        data-water="Both"      style="padding: 6px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 12px; background: transparent; color: var(--gray-600); white-space: nowrap;">Both</button>
+                        </div>
                     </div>
                 </div>
 
-                <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
-
                 {{-- ACTUAL YIELD FILTER --}}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Actual Yield</span>
-                    <select id="filterActual" class="form-select" title="Filter by actual yield availability"
-                            style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; width: auto; min-width: 130px;">
-                        <option value="all">Any</option>
-                        <option value="with">Recorded</option>
-                        <option value="without">Pending</option>
-                    </select>
+                <div class="col-12 col-sm-6 col-md-auto">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;">Actual Yield</span>
+                        <select id="filterActual" class="form-select flex-grow-1"
+                                title="Filter by actual yield availability"
+                                style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; max-width: 200px;">
+                            <option value="all">Any</option>
+                            <option value="with">Recorded</option>
+                            <option value="without">Pending</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div style="width: 1px; height: 28px; background: var(--gray-200);"></div>
-
                 {{-- PER PAGE --}}
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;">Per Page</span>
-                    <select id="perPageSelect" class="form-select" title="Records per page"
-                            style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; width: auto; min-width: 100px;">
-                        <option value="10">10</option>
-                        <option value="25" selected>25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
+                <div class="col-12 col-sm-6 col-md-auto ms-md-auto">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="text-muted" style="font-size: 10px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap;">Per Page</span>
+                        <select id="perPageSelect" class="form-select flex-grow-1"
+                                title="Records per page"
+                                style="border-radius: 10px; border: 1px solid var(--gray-200); background: var(--gray-50); font-size: 12px; padding: 0.4rem 2rem 0.4rem 0.85rem; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 0.65rem center; background-size: 0.65rem; cursor: pointer; appearance: none; max-width: 120px;">
+                            <option value="10">10</option>
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
                 </div>
 
             </div>
@@ -171,13 +176,11 @@
                     <th>Farm</th>
                     <th>Variety</th>
                     <th>Season / Year</th>
-                    <th>Fertilizer (kg/ha)</th>
                     <th>Water</th>
-                    <th>Actual Yield</th>
-                    <th>Expected Yield (t/ha)</th>
+                    <th>Actual</th>
                     <th>Status</th>
                     @if(auth()->user()->role !== 'farmer')
-                        <th style="white-space: nowrap; min-width: 200px;">Actions</th>
+                        <th class="actions-col">Actions</th>
                     @endif
                 </tr>
             </thead>
@@ -210,9 +213,6 @@
                         $predicted   = $prediction?->predicted_yield_tons_ha;
                         $confidence  = $prediction?->confidence;
                         $yieldClass  = $record->predicted_yield_class;
-                        $badge       = $record->predicted_yield_badge;
-                        $ratio       = $record->predicted_yield_ratio;
-                        $avgYield    = $record->variety_avg_yield;
 
                         $hasPrediction = $predicted !== null;
                         $hasActual     = $record->actual_yield_tons_ha !== null && $record->actual_yield_tons_ha > 0;
@@ -249,7 +249,6 @@
                             </span>
                             <br><small class="text-muted">{{ $record->season ?? '' }}</small>
                         </td>
-                        <td>{{ number_format($record->fertilizer_kg_ha, 2) }}</td>
                         <td>
                             @if($record->water_source === 'Rainfed')
                                 <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
@@ -275,30 +274,22 @@
                             @endif
                         </td>
                         <td>
-                            @if($expected && $expected->avg !== null && $expected->max !== null)
-                                <span class="fw-bold text-success">{{ number_format($expected->avg, 2) }}</span>
-                                <small class="text-muted">(max: {{ number_format($expected->max, 2) }})</small>
+                            @if($record->status === 'Harvested')
+                                <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-green);"></span>
+                                    Harvested
+                                </span>
+                            @elseif($record->status === 'Vegetative')
+                                <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                    <span class="dot" style="background: var(--brand-gold);"></span>
+                                    Growing
+                                </span>
                             @else
-                                <span class="text-muted">N/A</span>
+                                <span class="text-muted">—</span>
                             @endif
                         </td>
-                        <td>
-    @if($record->status === 'Harvested')
-        <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
-            <span class="dot" style="background: var(--brand-green);"></span>
-            Harvested
-        </span>
-    @elseif($record->status === 'Vegetative')
-        <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
-            <span class="dot" style="background: var(--brand-gold);"></span>
-            Growing
-        </span>
-    @else
-        <span class="text-muted">—</span>
-    @endif
-</td>
                         @if(auth()->user()->role !== 'farmer')
-                            <td style="white-space: nowrap;">
+                            <td class="actions-col">
                                 <button type="button" class="btn btn-sm btn-secondary" onclick="viewFarmRecord({{ $record->id }})" title="View Details">
                                     <i class="bi bi-eye"></i>
                                 </button>
@@ -348,7 +339,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
+                        <td colspan="{{ auth()->user()->role !== 'farmer' ? 8 : 7 }}" class="text-center py-4 text-muted">
                             <i class="bi bi-inbox" style="font-size: 28px;"></i>
                             <p class="mt-2 mb-0">
                                 @if($activeYear !== 'all')
@@ -362,7 +353,7 @@
                 @endforelse
 
                 <tr id="noFilterResults" style="display: none;">
-                    <td colspan="{{ auth()->user()->role !== 'farmer' ? 10 : 9 }}" class="text-center py-4 text-muted">
+                    <td colspan="{{ auth()->user()->role !== 'farmer' ? 8 : 7 }}" class="text-center py-4 text-muted">
                         <i class="bi bi-search" style="font-size: 28px;"></i>
                         <p class="mt-2 mb-0">No farm records match your filters.</p>
                     </td>
@@ -564,7 +555,6 @@
                 const matchesStatus   = (status === 'all' || rs === status);
                 const matchesSeason   = (season === 'all' || rsn === season);
                 const matchesWater    = (water === 'all' || rw === water);
-
 
                 let matchesActual = true;
                 if (actFilter === 'with')    matchesActual = (ha === '1');
@@ -789,6 +779,7 @@
             content.style.display = 'block';
             content.innerHTML = html;
             executeInjectedScripts(content);
+            window.initSearchableSelects && window.initSearchableSelects(content);
 
             const form = document.getElementById('farmRecordForm');
             if (form) form.addEventListener('submit', handleFormSubmit);
@@ -818,6 +809,7 @@
             content.style.display = 'block';
             content.innerHTML = html;
             executeInjectedScripts(content);
+            window.initSearchableSelects && window.initSearchableSelects(content);
 
             const form = document.getElementById('farmRecordForm');
             if (form) form.addEventListener('submit', handleFormSubmit);
@@ -1051,15 +1043,60 @@
 
 @push('styles')
 <style>
+    /* Pagination hover */
     #paginationList button:not(:disabled):hover {
         background: var(--brand-green-light) !important;
         border-color: var(--brand-green) !important;
         color: var(--brand-green-dark) !important;
         transform: translateY(-1px);
     }
+
+    /* Don't clip the table card; .table-responsive handles scrolling */
+    .card-custom {
+        max-width: 100%;
+    }
+    .card-custom .row,
+    .card-custom .row > [class*="col-"] {
+        min-width: 0;
+    }
+
+    /* Selects inside filter card never push layout wide */
+    #filterYear,
+    #filterBarangay,
+    #filterActual,
+    #perPageSelect {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    /* Pill groups can shrink and wrap on narrow screens */
+    .filter-btn {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Actions: one row, shrink-to-fit, no forced min-width */
+    .actions-col {
+        width: 1%;
+        white-space: nowrap;
+    }
+
+    /* Tighten pills on small screens so 4 of them fit on one line */
     @media (max-width: 575.98px) {
-        #paginationBar { justify-content: center !important; }
-        #paginationList button { min-width: 30px !important; height: 30px !important; padding: 0 8px !important; font-size: 12px !important; }
+        .filter-btn {
+            padding: 5px 10px !important;
+            font-size: 11px !important;
+        }
+        #paginationBar {
+            justify-content: center !important;
+        }
+        #paginationList button {
+            min-width: 30px !important;
+            height: 30px !important;
+            padding: 0 8px !important;
+            font-size: 12px !important;
+        }
     }
 </style>
 @endpush

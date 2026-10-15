@@ -22,6 +22,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Farmer\FarmController as FarmerFarmController;
 use App\Http\Controllers\Farmer\FarmRecordController as FarmerFarmRecordController;
 use App\Http\Controllers\Farmer\RiceVarietyController as FarmerRiceVarietyController;
+use App\Http\Controllers\Farmer\PredictionComparisonController as FarmerPredictionComparisonController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\ModelTrainingController;
 
@@ -85,19 +86,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ============================================================
     // 2. PREDICTIONS
     // ============================================================
-    Route::get('/admin/predictions/compare', [PredictionComparisonController::class, 'index'])
-    ->name('admin.predictions.compare');
-Route::post('/admin/predictions/compare/data', [PredictionComparisonController::class, 'data'])
-    ->name('admin.predictions.compare.data');
-    Route::get('/admin/predictions', [PredictionController::class, 'index'])->name('admin.predictions.index');
-    Route::get('/admin/predictions/create', [PredictionController::class, 'create'])->name('admin.predictions.create');
-    Route::post('/admin/predictions', [PredictionController::class, 'store'])->name('admin.predictions.store');
-    Route::post('/admin/predictions/generate-all', [PredictionController::class, 'generateAll'])->name('admin.predictions.generate-all');
-    Route::post('/admin/predictions/regenerate-all', [PredictionController::class, 'regenerateAll'])->name('admin.predictions.regenerate-all');
-    Route::get('/admin/predictions/{id}/history', [PredictionController::class, 'history'])->name('admin.predictions.history');
-    Route::put('/admin/predictions/{id}', [PredictionController::class, 'update'])->name('admin.predictions.update');
-    Route::delete('/admin/predictions/{id}', [PredictionController::class, 'destroy'])->name('admin.predictions.destroy');
-    Route::get('/admin/predictions/{id}', [PredictionController::class, 'show'])->name('admin.predictions.show');
+    // Comparison routes MUST come before the wildcard /{id} routes
+    // otherwise /admin/predictions/compare binds as {id} = "compare".
+    Route::get ('/admin/predictions/compare',        [PredictionComparisonController::class, 'index'])
+        ->name('admin.predictions.compare');
+    Route::post('/admin/predictions/compare/data',   [PredictionComparisonController::class, 'data'])
+        ->name('admin.predictions.compare.data');
+    Route::get ('/admin/predictions/compare/export', [PredictionComparisonController::class, 'exportExcel'])
+        ->name('admin.predictions.compare.export');
+
+    Route::get   ('/admin/predictions',                  [PredictionController::class, 'index'])->name('admin.predictions.index');
+    Route::get   ('/admin/predictions/create',           [PredictionController::class, 'create'])->name('admin.predictions.create');
+    Route::post  ('/admin/predictions',                  [PredictionController::class, 'store'])->name('admin.predictions.store');
+    Route::post  ('/admin/predictions/generate-all',     [PredictionController::class, 'generateAll'])->name('admin.predictions.generate-all');
+    Route::post  ('/admin/predictions/regenerate-all',   [PredictionController::class, 'regenerateAll'])->name('admin.predictions.regenerate-all');
+    Route::get   ('/admin/predictions/{id}/history',     [PredictionController::class, 'history'])->name('admin.predictions.history');
+    Route::put   ('/admin/predictions/{id}',             [PredictionController::class, 'update'])->name('admin.predictions.update');
+    Route::delete('/admin/predictions/{id}',             [PredictionController::class, 'destroy'])->name('admin.predictions.destroy');
+    Route::get   ('/admin/predictions/{id}',             [PredictionController::class, 'show'])->name('admin.predictions.show');
 
     // ============================================================
     // 3. RICE VARIETIES
@@ -219,6 +225,11 @@ Route::post('/admin/predictions/compare/data', [PredictionComparisonController::
     // ============================================================
     // 14. FARMER PREDICTIONS
     // ============================================================
+    Route::get ('/farmer/predictions/compare',      [\App\Http\Controllers\Farmer\PredictionComparisonController::class, 'index'])
+        ->name('farmer.predictions.compare');
+    Route::post('/farmer/predictions/compare/data', [\App\Http\Controllers\Farmer\PredictionComparisonController::class, 'data'])
+        ->name('farmer.predictions.compare.data');
+
     Route::get('/farmer/predictions', [FarmerPredictionController::class, 'index'])->name('farmer.predictions.index');
     Route::get('/farmer/predictions/{id}/history', [FarmerPredictionController::class, 'history'])
         ->name('farmer.predictions.history');

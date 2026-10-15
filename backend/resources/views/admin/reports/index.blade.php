@@ -12,7 +12,7 @@
                 <div>
                     <div style="font-size: 15px; font-weight: 700; color: var(--green);">Report Builder</div>
                     <div class="text-muted" style="font-size: 12px;">
-                        Choose what to include and which records to filter — export as PDF or Excel.
+                        Choose what to include and which records to filter. Then export as PDF or Excel.
                     </div>
                 </div>
             </div>
@@ -109,13 +109,20 @@
                     </select>
                 </div>
 
-                {{-- Farmer --}}
+                {{-- Farmer — NOW SEARCHABLE --}}
                 <div class="col-6 col-md-3">
-                    <label class="form-label" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--slate-500);">Farmer</label>
-                    <select name="farmer_id" class="form-select form-select-sm">
+                    <label class="form-label" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--slate-500);">
+                        Farmer
+                        <i class="bi bi-info-circle"
+                           style="font-size: 11px; color: var(--slate-400); cursor: help;"
+                           title="Type to search by name"></i>
+                    </label>
+                    <select name="farmer_id" id="reportFarmerSelect" class="form-select form-select-sm searchable-select">
                         <option value="">All Farmers</option>
                         @foreach($farmers as $f)
-                            <option value="{{ $f->id }}" {{ request('farmer_id') == $f->id ? 'selected' : '' }}>{{ $f->name }}</option>
+                            <option value="{{ $f->id }}" {{ request('farmer_id') == $f->id ? 'selected' : '' }}>
+                                {{ $f->name }}{{ $f->rsbsa_number ? ' · ' . $f->rsbsa_number : '' }}
+                            </option>
                         @endforeach
                     </select>
                 </div>
@@ -193,8 +200,87 @@
 
 @endsection
 
+@push('styles')
+{{-- Tom Select styles --}}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
+<style>
+    /* Tom Select tweaks so it fits alongside the form-select-sm controls */
+    .ts-wrapper.form-select-sm .ts-control {
+        min-height: 31px;
+        padding: 0.25rem 0.5rem;
+        font-size: 12.5px;
+        border-radius: 6px;
+        border-color: var(--slate-200);
+        background: #fff;
+        box-shadow: none;
+    }
+    .ts-wrapper.form-select-sm .ts-control.focus {
+        border-color: var(--brand-green);
+        box-shadow: 0 0 0 3px rgba(22, 91, 51, 0.12);
+    }
+    .ts-wrapper.form-select-sm .ts-control > input {
+        font-size: 12.5px;
+        height: auto;
+        padding: 0;
+        margin: 0;
+    }
+    .ts-wrapper .ts-dropdown {
+        border-radius: 8px;
+        border: 1px solid var(--slate-200);
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.10);
+        font-size: 12.5px;
+        z-index: 1050;
+    }
+    .ts-wrapper .ts-dropdown .option {
+        padding: 6px 10px;
+    }
+    .ts-wrapper .ts-dropdown .option.active {
+        background: var(--brand-green-light);
+        color: var(--brand-green-dark);
+    }
+    .ts-wrapper .ts-dropdown .option:hover {
+        background: var(--slate-50);
+    }
+    .ts-wrapper.form-select-sm .ts-control .item {
+        color: var(--slate-800);
+        font-weight: 500;
+    }
+</style>
+@endpush
+
 @push('scripts')
+{{-- Tom Select library --}}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+
 <script>
+// ═══════════════════════════════════════════════════════════
+// SEARCHABLE DROPDOWNS
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.searchable-select').forEach(function (el) {
+        // Skip if already initialized (protects against double-init)
+        if (el.tomselect) return;
+
+        new TomSelect(el, {
+            allowEmptyOption: true,
+            maxItems: 1,
+            placeholder: el.querySelector('option[value=""]')?.textContent?.trim() || 'Select…',
+            sortField: { field: 'text', direction: 'asc' },
+            // Search across both the name AND the RSBSA suffix
+            searchField: ['text'],
+            render: {
+                option: function (data, escape) {
+                    return '<div>' + escape(data.text) + '</div>';
+                },
+            },
+        });
+    });
+});
+
+// ═══════════════════════════════════════════════════════════
+// SECTION TOGGLES
+// ═══════════════════════════════════════════════════════════
 function toggleAllSections(checked) {
     document.querySelectorAll('.section-toggle').forEach(cb => {
         cb.checked = checked;
@@ -202,7 +288,6 @@ function toggleAllSections(checked) {
     });
 }
 
-// Visual state for each section card
 document.querySelectorAll('.section-toggle').forEach(cb => {
     const card = cb.closest('label');
     if (!card) return;

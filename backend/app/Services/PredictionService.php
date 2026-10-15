@@ -19,6 +19,55 @@ class PredictionService
     }
 
     /**
+     * Map any stored season value to a model-supported one.
+     *
+     * The trained model only understands 'Dry' and 'Wet'. Off-Season records
+     * are proxied to 'Dry' (rice grown under irrigation during the drier
+     * months in Santiago City). Every proxy is flagged so downstream code
+     * can label the prediction honestly.
+     *
+     * @return array{season:string, is_proxy:bool, original:string}|null
+     */
+    protected function resolveSeason(?string $season): ?array
+    {
+        $original = (string) $season;
+        $key      = strtolower(trim($original));
+
+        if ($key === '' || $key === 'null') {
+            return null;
+        }
+
+        // Exact hits first (fast path, keeps behaviour identical to before)
+        $map = [
+            'dry season' => 'Dry',
+            'wet season' => 'Wet',
+            'dry'        => 'Dry',
+            'wet'        => 'Wet',
+        ];
+
+        if (isset($map[$key])) {
+            return [
+                'season'   => $map[$key],
+                'is_proxy' => false,
+                'original' => $original,
+            ];
+        }
+
+        // Off-Season → proxy to Dry.
+        // If your region grows off-season rice in flooded paddies, swap 'Dry' for 'Wet'.
+        if (str_contains($key, 'off')) {
+            return [
+                'season'   => 'Dry',
+                'is_proxy' => true,
+                'original' => $original,
+            ];
+        }
+
+        // Any other unsupported value → reject so callers can surface a clear message.
+        return null;
+    }
+
+    /**
      * Run prediction for a farm record.
      *
      * Every persist (fresh generate or regenerate) creates a new row so the
@@ -32,7 +81,9 @@ class PredictionService
      *     confidence?: float|null,
      *     yield_lower?: float|null,
      *     yield_upper?: float|null,
-     *     prediction?: Prediction|null
+     *     prediction?: Prediction|null,
+     *     season_proxied?: bool,
+     *     original_season?: string|null
      * }
      */
     public function predict(FarmRecord $farmRecord, bool $persist = true, bool $update = false): array
@@ -47,17 +98,21 @@ class PredictionService
             return ['success' => false, 'error' => 'Missing farm or variety data.'];
         }
 
-        $seasonMap = [
-            'Dry Season' => 'Dry',
-            'Wet Season' => 'Wet',
-            'Dry'        => 'Dry',
-            'Wet'        => 'Wet',
-        ];
-        if (!isset($seasonMap[$farmRecord->season])) {
-            return ['success' => false, 'error' => 'Season not supported by model.'];
-        }
-        $season = $seasonMap[$farmRecord->season];
+        // ── Season resolution (with Off-Season proxy support) ─────────────
+        $resolved = $this->resolveSeason($farmRecord->season);
 
+        if ($resolved === null) {
+            return [
+                'success' => false,
+                'error'   => "Season '{$farmRecord->season}' is not supported by the model.",
+            ];
+        }
+
+        $season       = $resolved['season'];       // 'Dry' or 'Wet'
+        $isProxy      = $resolved['is_proxy'];
+        $originalSeas = $resolved['original'];
+
+        // ── Seeding method ────────────────────────────────────────────────
         $seedingMap = [
             'Transplanted'  => 'Transplanted',
             'Direct Seeded' => 'Direct Seeded',
@@ -101,7 +156,6 @@ class PredictionService
             'temperature_avg'          => (float) ($weather['temperature'] ?? 28),
             'rainfall_mm'              => (float) ($weather['rainfall'] ?? 0),
             'humidity_avg'             => (float) ($weather['humidity'] ?? 75),
-
             'water_source'             => $farmRecord->water_source ?? 'Rainfed',
         ];
 
@@ -138,12 +192,15 @@ class PredictionService
                     'input_features'          => json_encode([
                         'input'   => $input,
                         'weather' => $weather,
+                        // Audit trail: was the model input a proxy?
+                        'season_meta' => [
+                            'original'   => $originalSeas,
+                            'used'       => $season,
+                            'is_proxy'   => $isProxy,
+                        ],
                     ]),
                 ];
 
-                // Every persist creates a new row. The history page reads all
-                // rows for a farm record; the main predictions page dedups to
-                // the latest one per record.
                 $prediction = Prediction::create(array_merge(
                     ['farm_record_id' => $farmRecord->id],
                     $payload
@@ -151,12 +208,14 @@ class PredictionService
             }
 
             return [
-                'success'     => true,
-                'yield'       => (float) $yield,
-                'confidence'  => $confidence !== null ? (float) $confidence : null,
-                'yield_lower' => $yieldLow,
-                'yield_upper' => $yieldHigh,
-                'prediction'  => $prediction,
+                'success'         => true,
+                'yield'           => (float) $yield,
+                'confidence'      => $confidence !== null ? (float) $confidence : null,
+                'yield_lower'     => $yieldLow,
+                'yield_upper'     => $yieldHigh,
+                'prediction'      => $prediction,
+                'season_proxied'  => $isProxy,
+                'original_season' => $originalSeas,
             ];
 
         } catch (\Exception $e) {
@@ -175,6 +234,12 @@ class PredictionService
      */
     public function recommendForFarm(Farm $farm, string $season = 'Wet Season', int $limit = 3): array
     {
+        // Fail early if the requested season has no model equivalent —
+        // same rule as predict(), so the two stay in sync.
+        if ($this->resolveSeason($season) === null) {
+            return [];
+        }
+
         $varieties = RiceVariety::whereNull('deleted_at')->orderBy('name')->get();
 
         $lastRecord = $farm->farmRecords()->latest()->first();

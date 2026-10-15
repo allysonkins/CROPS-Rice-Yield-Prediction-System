@@ -871,6 +871,7 @@
                 content.innerHTML = html;
 
                 executeInjectedScripts(content);
+                window.initSearchableSelects && window.initSearchableSelects(content);
 
                 const form = document.getElementById('farmerFarmRecordForm');
                 if (form) form.addEventListener('submit', submitFarmerFarmRecord);
@@ -898,6 +899,7 @@
                 content.innerHTML = html;
 
                 executeInjectedScripts(content);
+                window.initSearchableSelects && window.initSearchableSelects(content);
 
                 const form = document.getElementById('farmerFarmRecordForm');
                 if (form) form.addEventListener('submit', submitFarmerFarmRecord);

@@ -98,43 +98,52 @@
             || !empty($filters['variety_name'])
             || !empty($filters['farmer_name']);
     @endphp
-    <div class="filters-box">
-        <div class="filters-title">Filters Applied</div>
-        <div>
-            @if($anyFilterChip)
-                @if($hasYearFilter)
-                    <span class="filter-chip">Year: {{ $filters['year_from'] ?? '—' }} → {{ $filters['year_to'] ?? '—' }}</span>
-                @endif
-                @if(!empty($filters['season']))
-                    @php
-                        $seasonLabel = match ($filters['season']) {
-                            'Dry'        => 'Dry Season',
-                            'Wet'        => 'Wet Season',
-                            'Off-Season' => 'Off-Season',
-                            default      => $filters['season'],
-                        };
-                    @endphp
-                    <span class="filter-chip">Season: {{ $seasonLabel }}</span>
-                @endify($filters['status']))
-                    <span class="filter-chip">Status: {{ $filters['status'] === 'Vegetative' ? 'Growing' : $filters['status'] }}</span>
-                @endif
-                @if(!empty($filters['water_source']))
-                    <span class="filter-chip">Water: {{ $filters['water_source'] }}</span>
-                @endif
-                @if(!empty($filters['barangay']))
-                    <span class="filter-chip">Barangay: {{ $filters['barangay'] }}</span>
-                @endif
-                @if(!empty($filters['variety_name']))
-                    <span class="filter-chip">Variety: {{ $filters['variety_name'] }}</span>
-                @endif
-                @if(!empty($filters['farmer_name']))
-                    <span class="filter-chip">Farmer: {{ $filters['farmer_name'] }}</span>
-                @endif
-            @else
-                <span class="filter-chip">No filters — showing all records</span>
+<div class="filters-box">
+    <div class="filters-title">Filters Applied</div>
+    <div>
+        @if($anyFilterChip)
+            @if($hasYearFilter)
+                <span class="filter-chip">Year: {{ $filters['year_from'] ?? '—' }} → {{ $filters['year_to'] ?? '—' }}</span>
             @endif
-        </div>
+
+            @if(!empty($filters['season']))
+                @php
+                    $seasonLabel = match ($filters['season']) {
+                        'Dry'        => 'Dry Season',
+                        'Wet'        => 'Wet Season',
+                        'Off-Season' => 'Off-Season',
+                        default      => $filters['season'],
+                    };
+                @endphp
+                <span class="filter-chip">Season: {{ $seasonLabel }}</span>
+            @endif
+
+            @if(!empty($filters['status']))
+                <span class="filter-chip">
+                    Status: {{ $filters['status'] === 'Vegetative' ? 'Growing' : $filters['status'] }}
+                </span>
+            @endif
+
+            @if(!empty($filters['water_source']))
+                <span class="filter-chip">Water: {{ $filters['water_source'] }}</span>
+            @endif
+
+            @if(!empty($filters['barangay']))
+                <span class="filter-chip">Barangay: {{ $filters['barangay'] }}</span>
+            @endif
+
+            @if(!empty($filters['variety_name']))
+                <span class="filter-chip">Variety: {{ $filters['variety_name'] }}</span>
+            @endif
+
+            @if(!empty($filters['farmer_name']))
+                <span class="filter-chip">Farmer: {{ $filters['farmer_name'] }}</span>
+            @endif
+        @else
+            <span class="filter-chip">No filters — showing all records</span>
+        @endif
     </div>
+</div>
 @endif
 
 {{-- ═══════════ GROUP A — EXECUTIVE OVERVIEW + CLASS DISTRIBUTION ═══════════ --}}

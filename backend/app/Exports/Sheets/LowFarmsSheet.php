@@ -25,7 +25,32 @@ class LowFarmsSheet implements FromCollection, WithHeadings, WithTitle, WithStyl
 
     public function collection(): Collection
     {
-        return $this->data['low_farms'];
+        $rows = collect($this->data['low_farms'] ?? []);
+
+        // No rows? Return a single "all clear" row so the sheet isn't blank.
+        if ($rows->isEmpty()) {
+            return collect([
+                [
+                    '#'         => '—',
+                    'Farm'      => 'No farms are currently below 87.5% of their variety average.',
+                    'Barangay'  => '—',
+                    'Farmer'    => '—',
+                    'Variety'   => '—',
+                    'Yield'     => '—',
+                    'Class'     => '✓',
+                ],
+            ]);
+        }
+
+        return $rows
+            ->values()
+            ->map(function ($row, $i) {
+                // $row is an array from ReportService. Cast defensively in
+                // case a future refactor returns a Model/Collection instead.
+                $arr = is_array($row) ? $row : (array) $row;
+
+                return array_merge(['#' => $i + 1], $arr);
+            });
     }
 
     public function headings(): array
@@ -36,17 +61,33 @@ class LowFarmsSheet implements FromCollection, WithHeadings, WithTitle, WithStyl
     public function styles(Worksheet $sheet): ?array
     {
         $range = 'A1:G1';
+
         $sheet->getStyle($range)->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 11],
-            'fill' => ['fillType' => 'solid', 'startColor' => ['argb' => 'FFB91C1C']],
-            'alignment' => ['horizontal' => 'left', 'vertical' => 'center'],
+            'font' => [
+                'bold'  => true,
+                'color' => ['argb' => 'FFFFFFFF'],
+                'size'  => 11,
+            ],
+            'fill' => [
+                'fillType'   => 'solid',
+                'startColor' => ['argb' => 'FFB91C1C'],   // red — attention
+            ],
+            'alignment' => [
+                'horizontal' => 'left',
+                'vertical'   => 'center',
+            ],
         ]);
         $sheet->getRowDimension(1)->setRowHeight(24);
 
         $lastRow = $sheet->getHighestRow();
         if ($lastRow > 1) {
             $sheet->getStyle("A2:G{$lastRow}")->applyFromArray([
-                'borders' => ['allBorders' => ['borderStyle' => 'thin', 'color' => ['argb' => 'FFE2E8F0']]],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => 'thin',
+                        'color'       => ['argb' => 'FFE2E8F0'],
+                    ],
+                ],
                 'alignment' => ['vertical' => 'top'],
             ]);
         }

@@ -7,6 +7,7 @@ use App\Models\Farm;
 use App\Models\FarmRecord;
 use App\Models\Prediction;
 use App\Models\RiceVariety;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class PredictionComparisonController extends Controller
@@ -15,15 +16,8 @@ class PredictionComparisonController extends Controller
     |--------------------------------------------------------------------------
     | Dropdown fallbacks
     |--------------------------------------------------------------------------
-    |
-    | Only values that are actually used by the application:
-    |   - seeding_method : 'Transplanted' | 'Direct Seeded'   (confirmed)
-    |   - water_source   : enum in DB schema
-    |   - soil_type      : enforced by FarmController validation
-    |
-    | DB values are merged on top so any custom value still appears.
     */
-    private const SEEDING_METHOD_FALLBACK = ['Transplanted', 'Direct-Seeded'];
+    private const SEEDING_METHOD_FALLBACK = ['Transplanted', 'Direct Seeded', 'Direct-Seeded'];
     private const WATER_SOURCE_FALLBACK   = ['Rainfed', 'Irrigated', 'Both'];
     private const SOIL_TYPE_FALLBACK      = ['Clay Loam', 'Silty Clay', 'Sandy Loam', 'Clay', 'Loam'];
 
@@ -39,8 +33,13 @@ class PredictionComparisonController extends Controller
             ->select('year')->distinct()->orderBy('year', 'desc')
             ->pluck('year')->filter()->values();
 
-        // ── Varieties ──
-        $varieties = RiceVariety::orderBy('name')->get(['id', 'name']);
+        // ── Varieties (only ones actually used in records) ──
+        $varieties = RiceVariety::query()
+            ->whereIn('id', FarmRecord::query()
+                ->when($user->role === 'farmer', fn ($q) => $q->whereIn('farm_id', $farmIdsForUser()))
+                ->select('rice_variety_id')->distinct())
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         // ── Barangays ──
         $barangays = Farm::query()
@@ -48,7 +47,7 @@ class PredictionComparisonController extends Controller
             ->select('barangay')->distinct()->orderBy('barangay')
             ->pluck('barangay')->filter()->values();
 
-        // ── Seeding methods : DB values + confirmed fallback ──
+        // ── Seeding methods ──
         $seedingMethods = FarmRecord::query()
             ->when($user->role === 'farmer', fn ($q) => $q->whereIn('farm_id', $farmIdsForUser()))
             ->select('seeding_method')->distinct()
@@ -59,7 +58,7 @@ class PredictionComparisonController extends Controller
             ->sort()
             ->values();
 
-        // ── Water sources : DB values + enum fallback ──
+        // ── Water sources ──
         $waterSources = FarmRecord::query()
             ->when($user->role === 'farmer', fn ($q) => $q->whereIn('farm_id', $farmIdsForUser()))
             ->select('water_source')->distinct()
@@ -70,7 +69,7 @@ class PredictionComparisonController extends Controller
             ->sort()
             ->values();
 
-        // ── Soil types : DB values + validation-rule fallback ──
+        // ── Soil types ──
         $soilTypes = Farm::query()
             ->when($user->role === 'farmer', fn ($q) => $q->where('user_id', $user->id))
             ->select('soil_type')->distinct()
@@ -87,6 +86,14 @@ class PredictionComparisonController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'barangay']);
 
+        // ── Farmers — only those who own at least one farm ──
+        $farmers = User::query()
+            ->where('role', 'farmer')
+            ->when($user->role === 'farmer', fn ($q) => $q->where('id', $user->id))
+            ->whereIn('id', Farm::query()->select('user_id')->distinct())
+            ->orderBy('name')
+            ->get(['id', 'name', 'rsbsa_number']);
+
         return view('admin.predictions.compare', compact(
             'years',
             'varieties',
@@ -94,7 +101,8 @@ class PredictionComparisonController extends Controller
             'seedingMethods',
             'waterSources',
             'soilTypes',
-            'farms'
+            'farms',
+            'farmers'
         ));
     }
 
@@ -105,18 +113,18 @@ class PredictionComparisonController extends Controller
         $request->validate([
             'years'          => 'required|array|min:2|max:10',
             'years.*'        => 'integer|min:2000|max:2100',
-            'farmer'         => 'nullable|string|max:255',
+            'farmer_id'      => 'nullable|integer|exists:users,id',
             'variety'        => 'nullable|integer|exists:rice_varieties,id',
-            'season'         => 'nullable|string|max:255',
+            'season'         => 'nullable|string|max:50',
             'barangay'       => 'nullable|string|max:255',
-            'seeding_method' => 'nullable|in:Transplanted,Direct-Seeded',
-            'water_source'   => 'nullable|in:Rainfed,Irrigated,Both',
-            'soil_type'      => 'nullable|in:Clay Loam,Silty Clay,Sandy Loam,Clay,Loam',
+            'seeding_method' => 'nullable|string|max:100',
+            'water_source'   => 'nullable|string|max:50',
+            'soil_type'      => 'nullable|string|max:100',
             'farm_id'        => 'nullable|integer|exists:farms,id',
         ]);
 
         $years         = array_map('intval', $request->input('years'));
-        $farmer        = trim((string) $request->input('farmer', ''));
+        $farmerId      = $request->input('farmer_id');
         $variety       = $request->input('variety');
         $season        = $request->input('season');
         $barangay      = $request->input('barangay');
@@ -131,28 +139,26 @@ class PredictionComparisonController extends Controller
             ->when($user->role === 'farmer', function ($q) use ($user) {
                 $q->whereIn('farm_id', Farm::where('user_id', $user->id)->pluck('id'));
             })
-            ->when($farmer !== '', function ($q) use ($farmer) {
-                $q->whereHas('farm.user', function ($q2) use ($farmer) {
-                    $q2->where('name', 'like', "%{$farmer}%")
-                       ->orWhere('rsbsa_number', 'like', "%{$farmer}%");
-                });
+            ->when($farmerId, function ($q) use ($farmerId) {
+                $q->whereHas('farm', fn ($q2) => $q2->where('user_id', $farmerId));
             })
-            ->when($variety, fn ($q) => $q->where('rice_variety_id', $variety))
+            ->when($variety,  fn ($q) => $q->where('rice_variety_id', $variety))
             ->when($season, function ($q) use ($season) {
                 if ($season === 'Off-Season') {
                     $q->where(function ($q2) {
                         $q2->where('season', 'Off-Season')
-                           ->orWhere('season', 'Off Season');
+                           ->orWhere('season', 'Off Season')
+                           ->orWhere('season', 'OffSeason');
                     });
                 } else {
                     $q->where('season', 'like', "%{$season}%");
                 }
             })
-            ->when($barangay, fn ($q) => $q->whereHas('farm', fn ($q2) => $q2->where('barangay', $barangay)))
+            ->when($barangay,      fn ($q) => $q->whereHas('farm', fn ($q2) => $q2->where('barangay', $barangay)))
             ->when($seedingMethod, fn ($q) => $q->where('seeding_method', $seedingMethod))
-            ->when($waterSource, fn ($q) => $q->where('water_source', $waterSource))
-            ->when($soilType, fn ($q) => $q->whereHas('farm', fn ($q2) => $q2->where('soil_type', $soilType)))
-            ->when($farmId, fn ($q) => $q->where('farm_id', $farmId))
+            ->when($waterSource,   fn ($q) => $q->where('water_source', $waterSource))
+            ->when($soilType,      fn ($q) => $q->whereHas('farm', fn ($q2) => $q2->where('soil_type', $soilType)))
+            ->when($farmId,        fn ($q) => $q->where('farm_id', $farmId))
             ->get();
 
         if ($records->isEmpty()) {

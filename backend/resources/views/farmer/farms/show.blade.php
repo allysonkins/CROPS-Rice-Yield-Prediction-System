@@ -98,12 +98,14 @@
     <div class="card-title d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span><i class="bi bi-clipboard-data-fill"></i> Planting Seasons</span>
         @if($isVerified)
-            <button type="button" class="btn btn-sm btn-success" onclick="openFarmerFarmRecordModal({{ $farm->id }})">
-                <i class="bi bi-plus-circle"></i> Add This Season
+            <button type="button" class="btn btn-success btn-sm" onclick="openFarmerFarmRecordModal({{ $farm->id }})">
+                <i class="bi bi-plus-circle-fill"></i> Add This Season
             </button>
         @else
-            <button class="btn btn-sm btn-success" disabled title="Available after CAO verification">
-                <i class="bi bi-lock"></i> Add This Season
+            <button type="button" class="btn btn-success btn-sm" disabled
+                    title="Available after CAO verification"
+                    style="opacity: 0.55; cursor: not-allowed;">
+                <i class="bi bi-lock-fill"></i> Add This Season
             </button>
         @endif
     </div>
@@ -123,12 +125,13 @@
                     <tr>
                         <th>Season</th>
                         <th>Variety</th>
-                        <th>Method</th>
-                        <th>Fertilizer</th>
+                        <th>Water</th>
                         <th>Predicted</th>
                         <th>Actual</th>
                         <th>Status</th>
-                        @if($isVerified)<th style="min-width: 160px;">Actions</th>@endif
+                        @if($isVerified)
+                            <th style="min-width: 160px;">Actions</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -155,10 +158,10 @@
                                 }
                             }
                             $statusClass = match($class) {
-                                'High' => 'high',
-                                'Low'  => 'low',
+                                'High'   => 'high',
+                                'Low'    => 'low',
                                 'Medium' => 'medium',
-                                default => null,
+                                default  => null,
                             };
                         @endphp
                         <tr>
@@ -178,10 +181,21 @@
                                 @endif
                             </td>
                             <td>
-                                <span style="color: var(--slate-600); font-size: 12px;">{{ $record->seeding_method ?? '—' }}</span>
-                            </td>
-                            <td>
-                                <span style="color: var(--slate-600);">{{ number_format($record->fertilizer_kg_ha, 0) }} kg/ha</span>
+                                @if($record->water_source === 'Rainfed')
+                                    <span class="badge-status" style="background: var(--brand-gold-light); color: #92400e; border-color: #fde68a; font-size: 11px;">
+                                        <span class="dot" style="background: var(--brand-gold);"></span> Rainfed
+                                    </span>
+                                @elseif($record->water_source === 'Irrigated')
+                                    <span class="badge-status" style="background: #dbeafe; color: #1e40af; border-color: #bfdbfe; font-size: 11px;">
+                                        <span class="dot" style="background: #1d4ed8;"></span> Irrigated
+                                    </span>
+                                @elseif($record->water_source === 'Both')
+                                    <span class="badge-status" style="background: var(--brand-green-light); color: var(--brand-green-dark); border-color: #c7e6d2; font-size: 11px;">
+                                        <span class="dot" style="background: var(--brand-green);"></span> Both
+                                    </span>
+                                @else
+                                    <span class="muted-text-sm">—</span>
+                                @endif
                             </td>
                             <td>
                                 @if($predCavan !== null)
@@ -472,7 +486,6 @@
         const container = document.getElementById('farmerFarmModalMap');
         if (!container) { setTimeout(initFarmerFarmModalMap, 200); return; }
 
-        // Destroy any previous instance
         if (fModalMap) {
             try { fModalMap.off(); fModalMap.remove(); } catch (e) {}
             fModalMap = null;
@@ -502,7 +515,6 @@
         const satelliteLayer = L.layerGroup([satImg, satLabels]);
         streetLayer.addTo(fModalMap);
 
-        // Street/Satellite toggle button
         const ToggleControl = L.Control.extend({
             options: { position: 'topright' },
             onAdd: function (map) {
@@ -534,7 +546,6 @@
         });
         fModalMap.addControl(new ToggleControl());
 
-        // Existing marker
         if (latInput && latInput.value && lngInput && lngInput.value) {
             fModalMarker = L.marker([lat, lng], { draggable: true }).addTo(fModalMap);
             fModalMarker.on('dragend', function () {
@@ -546,13 +557,11 @@
             });
         }
 
-        // Click to place
         fModalMap.on('click', function (e) {
             const cl = fClampToSantiago(e.latlng.lat, e.latlng.lng);
             fSetModalMarker(cl.lat, cl.lng);
         });
 
-        // Live sync on typing
         if (latInput && lngInput) {
             const sync = () => {
                 const tLat = parseFloat(latInput.value);
@@ -596,7 +605,6 @@
         if (fModalMap && pan) fModalMap.setView([lat, lng], fModalMap.getZoom());
     }
 
-    // Clear-location handler (delegated)
     document.addEventListener('click', function (e) {
         if (e.target.id === 'farmer_clearLocation' || e.target.closest('#farmer_clearLocation')) {
             const latInput = document.getElementById('farmer_latitude');
@@ -610,25 +618,18 @@
         }
     });
 
-
-            // ─── "Use My Exact Location" — browser geolocation ──────────
-    // Rule: only coordinates inside Santiago City, Isabela are accepted.
-    // If the device reports a position outside those bounds, the pin
-    // is NOT placed and the inputs are NOT touched.
     document.addEventListener('click', function (e) {
         const btn = e.target.closest('#farmer_useMyLocation');
         if (!btn) return;
 
         e.preventDefault();
 
-        // Helper: is a coordinate inside Santiago City bounds?
         const isInsideSantiago = (lat, lng) =>
             lat >= FSANTIAGO_BOUNDS.minLat &&
             lat <= FSANTIAGO_BOUNDS.maxLat &&
             lng >= FSANTIAGO_BOUNDS.minLng &&
             lng <= FSANTIAGO_BOUNDS.maxLng;
 
-        // Status banner (created lazily, right under the button row)
         const statusEl = () => {
             let el = document.getElementById('farmer_locationStatus');
             if (!el) {
@@ -665,7 +666,6 @@
                 const lng = pos.coords.longitude;
                 const accuracy = Math.round(pos.coords.accuracy || 0);
 
-                // ── ENFORCE SANTIAGO CITY BOUNDARY ──
                 if (!isInsideSantiago(lat, lng)) {
                     statusEl().innerHTML =
                         '<div class="alert alert-danger py-2 px-3 mb-0" style="font-size: 12px;">' +
@@ -677,10 +677,9 @@
                         'If you are already on-site, tap the map to drop the pin manually.' +
                         '</div>';
                     reset();
-                    return; // Do NOT set the marker, do NOT fill the inputs
+                    return;
                 }
 
-                // ── Accepted: inside Santiago ──
                 fSetModalMarker(lat, lng, true);
 
                 let msg = '<i class="bi bi-check-circle-fill"></i> ' +
@@ -716,8 +715,6 @@
         );
     });
 
-    
-    // Cleanup when the farm modal closes
     document.addEventListener('hidden.bs.modal', function (e) {
         if (e.target.id === 'farmerFarmModal') {
             if (fModalMap) {
@@ -755,6 +752,9 @@
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
                 contentEl.innerHTML = html;
+
+                window.executeInjectedScripts && window.executeInjectedScripts(contentEl);
+                window.initSearchableSelects && window.initSearchableSelects(contentEl);
 
                 const form = document.getElementById('farmerFarmRecordForm');
                 if (form) {
@@ -801,6 +801,9 @@
                 loadingEl.style.display = 'none';
                 contentEl.style.display = 'block';
                 contentEl.innerHTML = html;
+
+                window.executeInjectedScripts && window.executeInjectedScripts(contentEl);
+                window.initSearchableSelects && window.initSearchableSelects(contentEl);
 
                 const form = document.getElementById('farmerFarmRecordForm');
                 if (form) form.addEventListener('submit', submitFarmerFarmRecord);

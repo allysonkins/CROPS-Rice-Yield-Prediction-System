@@ -12,7 +12,7 @@
 
         <div class="col-md-6">
             <label class="form-label fw-semibold">Barangay <span class="text-danger">*</span></label>
-            <select name="barangay" class="form-select" required>
+            <select name="barangay" class="form-select searchable-select" required>
                 @foreach(config('santiago.barangays', []) as $brgy)
                     <option value="{{ $brgy }}" {{ old('barangay', $farm->barangay) == $brgy ? 'selected' : '' }}>
                         {{ $brgy }}
@@ -77,3 +77,9 @@
         </div>
     </div>
 </form>
+
+<script>
+    if (window.initSearchableSelects) {
+        window.initSearchableSelects(document.getElementById('farmerFarmForm'));
+    }
+</script>

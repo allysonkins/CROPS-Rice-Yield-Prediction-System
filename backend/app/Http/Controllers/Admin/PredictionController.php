@@ -18,7 +18,7 @@ class PredictionController extends Controller
 
     public function __construct(WeatherService $weatherService, PredictionService $predictionService)
     {
-        $this->weatherService = $weatherService;
+        $this->weatherService    = $weatherService;
         $this->predictionService = $predictionService;
     }
 
@@ -26,7 +26,6 @@ class PredictionController extends Controller
     {
         $user = auth()->user();
 
-        // ── Base query — eager-load farmer + farm + variety + record ──
         $query = Prediction::query()
             ->with([
                 'farmRecord.farm.user',
@@ -35,22 +34,18 @@ class PredictionController extends Controller
             ->where('model_type', 'XGBoost');
 
         if ($user->role === 'farmer') {
-            $farmIds = Farm::where('user_id', $user->id)->pluck('id');
+            $farmIds       = Farm::where('user_id', $user->id)->pluck('id');
             $farmRecordIds = FarmRecord::whereIn('farm_id', $farmIds)->pluck('id');
             $query->whereIn('farm_record_id', $farmRecordIds);
         }
 
-        // ══════════════════════════════════════════════════════════
-        // SERVER-SIDE FILTERS
-        // ══════════════════════════════════════════════════════════
-
-        // Year — accept 'all' to show every year
+        // ── Year ──
         $yearFilter = $request->input('year', 'all');
         if ($yearFilter !== 'all' && is_numeric($yearFilter)) {
             $query->whereHas('farmRecord', fn ($q) => $q->where('year', (int) $yearFilter));
         }
 
-        // Date range on prediction created_at
+        // ── Date range ──
         if ($from = $request->input('from')) {
             $query->whereDate('created_at', '>=', $from);
         }
@@ -58,7 +53,7 @@ class PredictionController extends Controller
             $query->whereDate('created_at', '<=', $to);
         }
 
-        // Farm name / id
+        // ── Farm name / id ──
         if ($farm = trim((string) $request->input('farm'))) {
             $query->whereHas('farmRecord.farm', function ($q) use ($farm) {
                 $q->where('name', 'like', "%{$farm}%")
@@ -66,12 +61,12 @@ class PredictionController extends Controller
             });
         }
 
-        // Variety
+        // ── Variety ──
         if ($varietyId = $request->input('variety')) {
             $query->whereHas('farmRecord', fn ($q) => $q->where('rice_variety_id', $varietyId));
         }
 
-                // Season — accepts 'Dry' | 'Wet' | 'Off-Season'
+        // ── Season ──
         if ($season = $request->input('season')) {
             $query->whereHas('farmRecord', function ($q) use ($season) {
                 if ($season === 'Off-Season') {
@@ -85,17 +80,17 @@ class PredictionController extends Controller
             });
         }
 
-        // ── Farm record status (Vegetative / Harvested) ──
+        // ── Record status ──
         if ($recordStatus = $request->input('record_status')) {
             $query->whereHas('farmRecord', fn ($q) => $q->where('status', $recordStatus));
         }
 
-        // ── Water source (Rainfed / Irrigated / Both) ──
+        // ── Water source ──
         if ($waterSource = $request->input('water_source')) {
             $query->whereHas('farmRecord', fn ($q) => $q->where('water_source', $waterSource));
         }
 
-        // ── Confidence tier (high >= 0.90 / medium 0.70-0.90 / low < 0.70) ──
+        // ── Confidence tier ──
         if (($conf = $request->input('confidence')) && $conf !== 'all') {
             if ($conf === 'high') {
                 $query->where('confidence', '>=', 0.90);
@@ -107,12 +102,12 @@ class PredictionController extends Controller
             }
         }
 
-        // Barangay
+        // ── Barangay ──
         if ($brgy = $request->input('barangay')) {
             $query->whereHas('farmRecord.farm', fn ($q) => $q->where('barangay', $brgy));
         }
 
-        // Free-text search across everything
+        // ── Free-text search ──
         if ($search = trim((string) $request->input('q'))) {
             $query->where(function ($q) use ($search) {
                 $q->whereHas('farmRecord.farm.user', function ($q2) use ($search) {
@@ -136,7 +131,7 @@ class PredictionController extends Controller
         }
 
         // ── Sort ──
-        $sort = $request->input('sort', 'created_at');
+        $sort      = $request->input('sort', 'created_at');
         $direction = $request->input('direction', 'desc');
         $allowedSorts = ['created_at', 'predicted_yield_tons_ha', 'confidence'];
 
@@ -145,9 +140,7 @@ class PredictionController extends Controller
 
         $perPage = max(10, min((int) $request->input('per_page', 25), 100));
 
-        // ══════════════════════════════════════════════════════════
-        // STATS — computed on the FULL filtered set (deduped), not the page
-        // ══════════════════════════════════════════════════════════
+        // ── Stats on the full filtered set ──
         $statsQuery = clone $query;
         $statsQuery->whereIn('id', function ($sub) {
             $sub->selectRaw('MAX(id)')
@@ -160,11 +153,7 @@ class PredictionController extends Controller
         $avgCityYield     = (clone $statsQuery)->whereNotNull('predicted_yield_tons_ha')->avg('predicted_yield_tons_ha');
         $avgConfidence    = (clone $statsQuery)->whereNotNull('confidence')->avg('confidence');
 
-        // ══════════════════════════════════════════════════════════
-        // PAGINATED RESULTS
-        // Deduped to latest per farm record, and Growing seasons
-        // always sort above Harvested ones.
-        // ══════════════════════════════════════════════════════════
+        // ── Paginated results (deduped + growing-first) ──
         $statusPriority = "(SELECT CASE WHEN farm_records.status = 'Vegetative' THEN 0 ELSE 1 END
                             FROM farm_records WHERE farm_records.id = predictions.farm_record_id)";
 
@@ -180,7 +169,7 @@ class PredictionController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        // ── Aux dropdown data ──
+        // ── Aux ──
         $availableYears = FarmRecord::query()
             ->when($user->role === 'farmer', function ($q) use ($user) {
                 $q->whereIn('farm_id', Farm::where('user_id', $user->id)->pluck('id'));
@@ -244,52 +233,89 @@ class PredictionController extends Controller
         return $this->respondTo($request, $this->predictionService->predict($farmRecord), 'created');
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // BULK GENERATE
+    // ═══════════════════════════════════════════════════════════
     public function generateAll(Request $request)
     {
         if (!in_array(auth()->user()->role, ['admin', 'staff'])) {
             return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
         }
 
-        $farmRecords = FarmRecord::with(['farm', 'riceVariety'])
+        $farmRecords = FarmRecord::with(['farm.user', 'riceVariety'])
             ->where('status', 'Vegetative')
-            ->whereDoesntHave('predictions', fn($q) => $q->where('model_type', 'XGBoost'))
+            ->whereDoesntHave('predictions', fn ($q) => $q->where('model_type', 'XGBoost'))
             ->get();
 
         if ($farmRecords->isEmpty()) {
             return response()->json([
-                'success'   => true,
-                'generated' => 0,
-                'failed'    => 0,
-                'message'   => 'No pending farm records to predict.',
+                'success'         => true,
+                'generated'       => 0,
+                'failed'          => 0,
+                'proxied_count'   => 0,
+                'proxied'         => [],
+                'errors'          => [],
+                'message'         => 'No pending farm records to predict.',
             ]);
         }
 
-        $generated = 0; $failed = 0; $errors = [];
+        $generated = 0;
+        $failed    = 0;
+        $proxied   = [];
+        $errors    = [];
 
         foreach ($farmRecords as $record) {
             $result = $this->predictionService->predict($record);
-            if ($result['success']) {
+
+            if ($result['success'] ?? false) {
                 $generated++;
+
+                if (!empty($result['season_proxied'])) {
+                    $proxied[] = [
+                        'farm'     => $record->farm->name ?? 'Farm #' . $record->farm_id,
+                        'farmer'   => $record->farm->user->name ?? '—',
+                        'original' => $result['original_season'] ?? $record->season,
+                        'used'     => 'Dry',
+                    ];
+                }
             } else {
                 $failed++;
-                $errors[] = ($record->farm->name ?? 'Farm #' . $record->farm_id) . ': ' . $result['error'];
+                $errors[] = [
+                    'farm'   => $record->farm->name ?? 'Farm #' . $record->farm_id,
+                    'farmer' => $record->farm->user->name ?? '—',
+                    'reason' => $result['error'] ?? 'Unknown error',
+                ];
             }
         }
 
         log_activity('prediction', 'Bulk prediction generated', null, [
             'generated' => $generated,
             'failed'    => $failed,
+            'proxied'   => count($proxied),
         ]);
 
+        $message = "Generated {$generated} prediction" . ($generated === 1 ? '' : 's');
+        if (count($proxied) > 0) {
+            $message .= ', ' . count($proxied) . ' used a proxy season';
+        }
+        if ($failed > 0) {
+            $message .= ", {$failed} failed";
+        }
+
         return response()->json([
-            'success'   => true,
-            'generated' => $generated,
-            'failed'    => $failed,
-            'errors'    => $errors,
-            'message'   => "Generated {$generated} prediction(s)" . ($failed > 0 ? ", {$failed} failed" : ''),
+            'success'       => true,
+            'generated'     => $generated,
+            'failed'        => $failed,
+            'proxied_count' => count($proxied),
+            'proxied'       => $proxied,
+            'errors'        => $errors,
+            'message'       => $message,
         ]);
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // BULK REGENERATE
+    // ═══════════════════════════════════════════════════════════
     public function regenerateAll(Request $request)
     {
         if (!in_array(auth()->user()->role, ['admin', 'staff'])) {
@@ -300,43 +326,74 @@ class PredictionController extends Controller
             ->pluck('farm_record_id')
             ->unique();
 
-        $farmRecords = FarmRecord::with(['farm', 'riceVariety'])
+        $farmRecords = FarmRecord::with(['farm.user', 'riceVariety'])
             ->whereIn('id', $farmRecordIds)
             ->where('status', 'Vegetative')
             ->get();
 
         if ($farmRecords->isEmpty()) {
             return response()->json([
-                'success'     => true,
-                'regenerated' => 0,
-                'failed'      => 0,
-                'message'     => 'No farm records available to regenerate.',
+                'success'       => true,
+                'regenerated'   => 0,
+                'failed'        => 0,
+                'proxied_count' => 0,
+                'proxied'       => [],
+                'errors'        => [],
+                'message'       => 'No farm records available to regenerate.',
             ]);
         }
 
-        $regenerated = 0; $failed = 0; $errors = [];
+        $regenerated = 0;
+        $failed      = 0;
+        $proxied     = [];
+        $errors      = [];
 
         foreach ($farmRecords as $record) {
             $result = $this->predictionService->predict($record, persist: true);
-            if ($result['success']) {
+
+            if ($result['success'] ?? false) {
                 $regenerated++;
+
+                if (!empty($result['season_proxied'])) {
+                    $proxied[] = [
+                        'farm'     => $record->farm->name ?? 'Farm #' . $record->farm_id,
+                        'farmer'   => $record->farm->user->name ?? '—',
+                        'original' => $result['original_season'] ?? $record->season,
+                        'used'     => 'Dry',
+                    ];
+                }
             } else {
                 $failed++;
-                $errors[] = ($record->farm->name ?? 'Farm #' . $record->farm_id) . ': ' . $result['error'];
+                $errors[] = [
+                    'farm'   => $record->farm->name ?? 'Farm #' . $record->farm_id,
+                    'farmer' => $record->farm->user->name ?? '—',
+                    'reason' => $result['error'] ?? 'Unknown error',
+                ];
             }
         }
 
         log_activity('prediction', 'Bulk prediction regenerated', null, [
             'regenerated' => $regenerated,
             'failed'      => $failed,
+            'proxied'     => count($proxied),
         ]);
 
+        $message = "Regenerated {$regenerated} prediction" . ($regenerated === 1 ? '' : 's');
+        if (count($proxied) > 0) {
+            $message .= ', ' . count($proxied) . ' used a proxy season';
+        }
+        if ($failed > 0) {
+            $message .= ", {$failed} failed";
+        }
+
         return response()->json([
-            'success'     => true,
-            'regenerated' => $regenerated,
-            'failed'      => $failed,
-            'errors'      => $errors,
-            'message'     => "Regenerated {$regenerated} prediction(s)" . ($failed > 0 ? ", {$failed} failed" : ''),
+            'success'       => true,
+            'regenerated'   => $regenerated,
+            'failed'        => $failed,
+            'proxied_count' => count($proxied),
+            'proxied'       => $proxied,
+            'errors'        => $errors,
+            'message'       => $message,
         ]);
     }
 

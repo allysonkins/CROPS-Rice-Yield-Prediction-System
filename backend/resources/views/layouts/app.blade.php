@@ -16,6 +16,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="icon" type="image/webp" href="{{ asset('images/logo.webp') }}">
 
+    <!-- Tom Select (Searchable Dropdowns) -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
     <style>
         /* ══════════════════════════════════════════════════════════
            1. DESIGN SYSTEM VARIABLES & FOUNDATIONS
@@ -1407,7 +1410,145 @@
                 padding: 0 !important;
             }
         }
+
+        /* ══════════════════════════════════════════════════════════
+           TOM SELECT — SEARCHABLE DROPDOWNS CUSTOM STYLING
+           ══════════════════════════════════════════════════════════ */
+        select.tomselected {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0,0,0,0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+            display: block !important;
+        }
+
+        .ts-wrapper.form-select {
+            padding: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            width: 100% !important;
+        }
+
+        .ts-wrapper .ts-control {
+            border: 1px solid var(--slate-300, #cbd5e1);
+            border-radius: var(--radius-sm, 8px);
+            padding: 0.475rem 2.25rem 0.475rem 0.875rem;
+            font-size: 13.5px;
+            font-family: inherit;
+            color: var(--slate-800, #1e293b);
+            background-color: #ffffff;
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 14px 10px;
+            cursor: pointer;
+        }
+
+        .ts-wrapper.focus .ts-control {
+            border-color: var(--brand-green, #165b33) !important;
+            box-shadow: 0 0 0 3px rgba(22, 91, 51, 0.15) !important;
+            outline: 0;
+        }
+
+        .ts-wrapper.is-invalid .ts-control {
+            border-color: var(--brand-danger, #dc2626) !important;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15) !important;
+        }
+
+        .ts-wrapper.disabled .ts-control {
+            background-color: var(--slate-100, #f1f5f9) !important;
+            opacity: 0.75;
+            cursor: not-allowed;
+        }
+
+        .ts-dropdown {
+            border: 1px solid var(--slate-200, #e2e8f0) !important;
+            border-radius: 10px !important;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.05) !important;
+            padding: 6px !important;
+            background: #ffffff !important;
+            z-index: 1060 !important;
+            margin-top: 4px !important;
+        }
+
+        .ts-dropdown .dropdown-input-wrap {
+            padding: 4px 4px 8px 4px;
+        }
+
+        .ts-dropdown .dropdown-input {
+            border: 1px solid var(--slate-200, #e2e8f0) !important;
+            border-radius: 7px !important;
+            padding: 7px 10px 7px 32px !important;
+            font-size: 13px !important;
+            width: 100% !important;
+            box-shadow: none !important;
+            background-color: var(--slate-50, #f8fafc) !important;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3e%3cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3e%3c/svg%3e") !important;
+            background-repeat: no-repeat !important;
+            background-position: 10px center !important;
+        }
+
+        .ts-dropdown .dropdown-input:focus {
+            border-color: var(--brand-green, #165b33) !important;
+            background-color: #ffffff !important;
+            outline: 0 !important;
+            box-shadow: 0 0 0 2px rgba(22, 91, 51, 0.12) !important;
+        }
+
+        .ts-dropdown .ts-dropdown-content {
+            max-height: 220px !important;
+            padding: 2px 0 !important;
+        }
+
+        .ts-dropdown .option {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+            color: var(--slate-700, #334155) !important;
+            border-radius: 6px !important;
+            transition: background-color 0.12s ease !important;
+            cursor: pointer !important;
+            margin-bottom: 2px !important;
+        }
+
+        .ts-dropdown .option:hover,
+        .ts-dropdown .option.active {
+            background-color: var(--brand-green-light, #eaf6ee) !important;
+            color: var(--brand-green-dark, #0d381f) !important;
+            font-weight: 500 !important;
+        }
+
+        .ts-dropdown .option.selected {
+            background-color: var(--brand-green, #165b33) !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+        }
+
+        @media (max-width: 768px) {
+            .ts-dropdown .dropdown-input {
+                font-size: 16px !important;
+            }
+            .ts-dropdown .option {
+                padding: 10px 12px !important;
+                font-size: 14px !important;
+                min-height: 42px !important;
+                display: flex !important;
+                align-items: center !important;
+            }
+        }
     </style>
+
+ @stack('styles')
 </head>
 <body>
 
@@ -1494,10 +1635,17 @@
 
                 <div class="nav-label">Analysis</div>
 
-                <a href="{{ route('farmer.predictions.index') }}" class="{{ request()->routeIs('farmer.predictions.*') ? 'active' : '' }}">
-                    <i class="bi bi-graph-up-arrow"></i>
-                    <span>My Predictions</span>
-                </a>
+<a href="{{ route('farmer.predictions.index') }}"
+   class="{{ request()->routeIs('farmer.predictions.index') || request()->routeIs('farmer.predictions.show') || request()->routeIs('farmer.predictions.history') ? 'active' : '' }}">
+    <i class="bi bi-graph-up-arrow"></i>
+    <span>My Predictions</span>
+</a>
+
+<a href="{{ route('farmer.predictions.compare') }}"
+   class="{{ request()->routeIs('farmer.predictions.compare') ? 'active' : '' }}">
+    <i class="bi bi-bar-chart-line-fill"></i>
+    <span>Compare My Years</span>
+</a>
 
                 <a href="{{ route('farmer.rice-varieties.index') }}" class="{{ request()->routeIs('farmer.rice-varieties.*') ? 'active' : '' }}">
                     <i class="bi bi-flower1"></i>
@@ -1517,11 +1665,6 @@
                     <i class="bi bi-person-gear"></i>
                     <span>My Profile</span>
                 </a>
-
-                <button type="button" class="sidebar-nav-btn" onclick="showLogoutModal()">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span>Sign Out</span>
-                </button>
             @endif
 
             {{-- ═══════════════ ADMIN & STAFF NAVIGATION ═══════════════ --}}
@@ -1725,8 +1868,115 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.3/dist/js/tom-select.complete.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // ══════════════════════════════════════════════════════════
+        // SEARCHABLE SELECT HELPER (TOM SELECT)
+        // ══════════════════════════════════════════════════════════
+        window.executeInjectedScripts = function(container) {
+            if (!container) return;
+            container.querySelectorAll('script').forEach(oldScript => {
+                const newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(attr => {
+                    newScript.setAttribute(attr.name, attr.value);
+                });
+                newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
+        };
+
+        window.initSearchableSelects = function(container) {
+            if (typeof TomSelect === 'undefined') return;
+            const root = container || document;
+            const selects = root.querySelectorAll('select.searchable-select');
+            selects.forEach(function(select) {
+                if (select.tomselect) return; // Already initialized
+
+                const isReadonly = select.hasAttribute('readonly') || select.disabled;
+                const placeholderText = select.getAttribute('data-placeholder') ||
+                    select.querySelector('option[value=""]')?.textContent.trim() ||
+                    'Search or select...';
+
+                try {
+                    const ts = new TomSelect(select, {
+                        create: false,
+                        maxOptions: null,
+                        allowEmptyOption: true,
+                        placeholder: placeholderText,
+                        plugins: ['dropdown_input'],
+                        dropdownParent: null,
+                        copyClassesToDropdown: false,
+                        render: {
+                            no_results: function(data, escape) {
+                                return '<div class="p-2 text-muted text-center" style="font-size:12.5px;"><i class="bi bi-search me-1"></i> No matching options found</div>';
+                            }
+                        },
+                        onInitialize: function() {
+                            if (isReadonly) {
+                                this.disable();
+                            }
+                        }
+                    });
+
+                    if (ts.dropdown) {
+                        const searchInput = ts.dropdown.querySelector('input.dropdown-input');
+                        if (searchInput) {
+                            searchInput.setAttribute('placeholder', 'Type to search...');
+                            searchInput.setAttribute('aria-label', 'Search options');
+                        }
+                    }
+
+                    // Native HTML5 validation feedback integration
+                    select.addEventListener('invalid', function() {
+                        if (select.tomselect && select.tomselect.wrapper) {
+                            select.tomselect.wrapper.classList.add('is-invalid');
+                            select.tomselect.focus();
+                        }
+                    });
+                    select.addEventListener('change', function() {
+                        if (select.tomselect && select.tomselect.wrapper) {
+                            select.tomselect.wrapper.classList.remove('is-invalid');
+                        }
+                    });
+                } catch (err) {
+                    console.warn('Failed to initialize TomSelect:', err);
+                }
+            });
+        };
+
+        window.destroySearchableSelects = function(container) {
+            if (typeof TomSelect === 'undefined') return;
+            const root = container || document;
+            const selects = root.querySelectorAll('select.searchable-select');
+            selects.forEach(function(select) {
+                if (select.tomselect) {
+                    try {
+                        select.tomselect.destroy();
+                    } catch (e) {}
+                }
+            });
+        };
+
+        // Bootstrap modal integration
+        document.addEventListener('shown.bs.modal', function(e) {
+            if (window.initSearchableSelects) {
+                window.initSearchableSelects(e.target);
+            }
+        });
+        document.addEventListener('hidden.bs.modal', function(e) {
+            if (window.destroySearchableSelects) {
+                window.destroySearchableSelects(e.target);
+            }
+        });
+
+        // Initialize on DOM load if any exists on static pages
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.initSearchableSelects) {
+                window.initSearchableSelects(document);
+            }
+        });
+
         // Responsive Viewport Height Handling (Fix for mobile browsers & Messenger in-app browser)
         function updateAppViewportHeight() {
             const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;

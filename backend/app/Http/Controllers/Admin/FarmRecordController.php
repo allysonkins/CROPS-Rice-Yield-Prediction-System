@@ -15,10 +15,6 @@ use Illuminate\Database\QueryException;
 
 class FarmRecordController extends Controller
 {
-    /**
-     * Canonical allowed values — kept in sync with the create/edit forms
-     * and with what the ML pipeline was trained on.
-     */
     private const SEASONS         = ['Dry Season', 'Wet Season', 'Off-Season'];
     private const SEEDING_METHODS = ['Transplanted', 'Direct-Seeded'];
     private const WATER_SOURCES   = ['Rainfed', 'Irrigated', 'Both'];
@@ -39,14 +35,12 @@ class FarmRecordController extends Controller
             $baseQuery->whereIn('farm_id', $farmIds);
         }
 
-        // ── Sorting ──
         $sort = $request->input('sort', 'created_at');
         $direction = $request->input('direction', 'desc');
         $allowedSorts = ['season', 'year', 'created_at', 'farm_id', 'rice_variety_id', 'fertilizer_kg_ha', 'status'];
         if (!in_array($sort, $allowedSorts)) $sort = 'created_at';
         if (!in_array($direction, ['asc', 'desc'])) $direction = 'desc';
 
-        // ── Year filter — defaults to the CURRENT year ──
         $currentYear = (int) now()->year;
         $yearFilter  = $request->input('year', (string) $currentYear);
 
@@ -67,7 +61,6 @@ class FarmRecordController extends Controller
             $baseQuery->where('year', (int) $yearFilter);
         }
 
-        // ── Growing seasons first, Harvested last ──
         $statusPriority = "CASE WHEN farm_records.status = 'Vegetative' THEN 0 ELSE 1 END";
 
         $baseQuery
@@ -131,17 +124,18 @@ class FarmRecordController extends Controller
                 'status'                   => 'required|in:Vegetative',
             ]);
 
-            // ── Reject duplicates on the same farm / variety / season / year ──
+            // ── Rule: one record per (farm, season, year) ──
             $duplicate = $this->findDuplicateFarmRecord(
                 (int) $validated['farm_id'],
-                (int) $validated['rice_variety_id'],
                 $validated['season'],
                 (int) $validated['year']
             );
 
             if ($duplicate) {
-                $msg = "This farm already has a {$validated['season']} record for the "
-                     . "selected variety in {$validated['year']}. Edit the existing record instead.";
+                $existingVariety = $duplicate->riceVariety->name ?? 'another variety';
+                $msg = "This farm already has a {$validated['season']} record for {$validated['year']} "
+                     . "(currently planted with {$existingVariety}). "
+                     . "Only one record per season is allowed. Edit the existing record instead.";
 
                 if ($request->ajax()) {
                     return response()->json(['success' => false, 'error' => $msg], 422);
@@ -149,7 +143,6 @@ class FarmRecordController extends Controller
                 return back()->withErrors(['season' => $msg])->withInput();
             }
 
-            // ── Newly created records are always Vegetative ──
             $validated['status']               = 'Vegetative';
             $validated['actual_yield_tons_ha'] = null;
 
@@ -230,7 +223,6 @@ class FarmRecordController extends Controller
         try {
             $farmRecord = FarmRecord::findOrFail($id);
 
-            // ── Lock status and actual yield: they can only change via markHarvested ──
             if ($request->filled('status') || $request->filled('actual_yield_tons_ha')) {
                 $msg = 'Status and actual yield are locked. Use the Harvest button to record the harvest.';
 
@@ -251,18 +243,19 @@ class FarmRecordController extends Controller
                 'water_source'             => 'nullable|in:' . implode(',', self::WATER_SOURCES),
             ]);
 
-            // ── Reject duplicates (excluding self) ──
+            // ── Rule: one record per (farm, season, year), excluding self ──
             $duplicate = $this->findDuplicateFarmRecord(
                 (int) $validated['farm_id'],
-                (int) $validated['rice_variety_id'],
                 $validated['season'],
                 (int) $validated['year'],
                 $farmRecord->id
             );
 
             if ($duplicate) {
-                $msg = "Another record already uses the same farm, variety, "
-                     . "{$validated['season']}, and {$validated['year']} combination.";
+                $existingVariety = $duplicate->riceVariety->name ?? 'another variety';
+                $msg = "This farm already has a {$validated['season']} record for {$validated['year']} "
+                     . "(currently planted with {$existingVariety}). "
+                     . "Only one record per season is allowed.";
 
                 if ($request->ajax()) {
                     return response()->json(['success' => false, 'error' => $msg], 422);
@@ -443,22 +436,40 @@ class FarmRecordController extends Controller
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Return an existing farm record with the same farm, variety, season,
-     * and year — or null if none exists. Pass $excludeId on update to skip self.
+     * Return an existing farm record with the same farm, season, and year
+     * — or null if none exists. `rice_variety_id` is deliberately NOT part
+     * of the check: a farm can only have one record per season per year,
+     * regardless of which variety it's planted with.
+     *
+     * Pass $excludeId on update to skip the record being edited.
      */
     private function findDuplicateFarmRecord(
         int $farmId,
-        int $varietyId,
         string $season,
         int $year,
         ?int $excludeId = null
     ): ?FarmRecord {
         return FarmRecord::query()
+            ->with('riceVariety')
             ->where('farm_id', $farmId)
-            ->where('rice_variety_id', $varietyId)
-            ->where('season', $season)
+            ->whereIn('season', $this->normalizeSeason($season))
             ->where('year', $year)
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
             ->first();
+    }
+
+    /**
+     * Return every spelling variant of a season so historical data
+     * like "Dry" and "Dry Season" collide correctly.
+     */
+    private function normalizeSeason(string $season): array
+    {
+        $s = strtolower(trim($season));
+
+        if (str_contains($s, 'off')) return ['Off-Season', 'Off Season', 'OffSeason'];
+        if (str_contains($s, 'dry')) return ['Dry Season', 'Dry'];
+        if (str_contains($s, 'wet')) return ['Wet Season', 'Wet'];
+
+        return [$season];
     }
 }

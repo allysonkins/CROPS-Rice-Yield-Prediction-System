@@ -70,7 +70,6 @@
     <div class="page-header">
         <div>
             <h4 class="page-header-title">
-                <i class="bi bi-grid-3x3-gap-fill"></i> Manage Farms
             </h4>
             <p class="page-header-desc">
                 All registered farms with their assigned farmers, barangays, and land area.
@@ -381,9 +380,13 @@
         })
         .then(r => r.text())
         .then(html => {
+            const content = document.getElementById('modalContent');
             document.getElementById('modalLoading').style.display = 'none';
-            document.getElementById('modalContent').style.display = 'block';
-            document.getElementById('modalContent').innerHTML = html;
+            content.style.display = 'block';
+            content.innerHTML = html;
+
+            window.executeInjectedScripts && window.executeInjectedScripts(content);
+            window.initSearchableSelects && window.initSearchableSelects(content);
 
             const form = document.getElementById('farmForm');
             if (form) form.addEventListener('submit', handleSubmit);
@@ -410,9 +413,13 @@
         })
         .then(r => r.text())
         .then(html => {
+            const content = document.getElementById('modalContent');
             document.getElementById('modalLoading').style.display = 'none';
-            document.getElementById('modalContent').style.display = 'block';
-            document.getElementById('modalContent').innerHTML = html;
+            content.style.display = 'block';
+            content.innerHTML = html;
+
+            window.executeInjectedScripts && window.executeInjectedScripts(content);
+            window.initSearchableSelects && window.initSearchableSelects(content);
 
             const form = document.getElementById('farmForm');
             if (form) form.addEventListener('submit', handleSubmit);
